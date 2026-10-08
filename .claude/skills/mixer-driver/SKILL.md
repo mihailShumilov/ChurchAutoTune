@@ -15,7 +15,7 @@ class MixerDriver(Protocol):
     def infer_topology(self, snap: ConsoleSnapshot) -> TopologyGuess: ...       # pure, uses snapshot only
     def usb_audio_map(self, snap: ConsoleSnapshot) -> UsbAudioMap: ...          # pure
     def meters(self, which: MeterSet) -> Iterator[MeterFrame]: ...
-    def writer(self, scope: WriteScope, session: Session) -> ScopedWriter: ...  # delegated to safety
+    def writer(self, auth: WriteAuthorization) -> ScopedWriter: ...  # auth issued by safety.authorize()
 ```
 - `Capabilities` declares what this model/firmware supports per scope: `full` (verified write+readback),
   `suggest_only` (addresses UNVERIFIED → the wizard shows instructions instead of writing), `none`.

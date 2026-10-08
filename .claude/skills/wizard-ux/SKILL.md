@@ -23,7 +23,7 @@ Every screen must be understandable in 5 seconds without audio knowledge.
 - Footer always shows the available keys. Works at 80×24; scrolls inside panels, never the whole screen.
 
 ## Patterns
-- **Detected value → confirm, don't ask.** "Found: X32 Producer at 192.168.0.80 (firmware 4.09). [Enter] Correct · [E] Edit".
+- **Detected value → confirm, don't ask.** "Found: X32 Producer at 192.0.2.80 (firmware 4.09). [Enter] Correct · [E] Edit".
   Mark auto-detected values with "detected" so trust is explicit.
 - **Physical task:** imperative + where + how + why in one short block, then "[Enter] Done".
   "Put mic 2 at point 5 — centre aisle, row 6. Capsule at ear height (1.2 m), pointing at the stage. Step back 2 m."

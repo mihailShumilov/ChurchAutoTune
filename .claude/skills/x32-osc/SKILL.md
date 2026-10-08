@@ -4,20 +4,22 @@ description: Behringer X32 / Midas M32 OSC protocol reference — addresses, mes
 ---
 
 
-# X32 OSC (fw 4.09, X32 Producer @ 192.168.0.80:10023)
+# X32 OSC (fw 4.09, X32 Producer, UDP port 10023)
 
 Source of truth for formulas: Patrick-Gilles Maillot, "Unofficial X32/M32 OSC Remote Protocol".
-Everything below was cross-checked against the real dump `tests/fixtures/x32_dump_2026-09-29.txt`.
+Everything below was cross-checked against the real dump `tests/fixtures/x32/dumps/x32_dump_2026-09-29.txt`
+(anonymized: channel names, console name/id and IP are replaced; see `tests/fixtures/README.md`).
 
 ## Transport
 - UDP, port 10023. The console replies to the sender's address/port.
 - OSC: address (padded to 4), type tags `,sif b` (padded), big-endian args. Blob = BE int32 size + data, padded.
-- Project rule: all socket code lives in `src/churchtune/mixers/x32/client.py`; writes only via `src/churchtune/mixers/x32/writer.py`.
+- Project rule: the only socket lives in `src/churchtune/mixers/x32/transport.py`; `client.py` uses it read-only
+  (allowlist), writes go only via `src/churchtune/mixers/x32/writer.py`.
 
 ## Read-only messages (what X32Client may send)
 | message | reply |
 |---|---|
-| `/xinfo` | `/xinfo ,ssss ip name model fw` (e.g. `192.168.0.80 X32P-04-7C-DF X32P 4.09`) |
+| `/xinfo` | `/xinfo ,ssss ip name model fw` (e.g. `192.0.2.80 X32P-00-00-00 X32P 4.09`) |
 | `/info`, `/status` | version / state strings |
 | `/node ,s main/st/eq/2` | address **`node`** (NO leading slash!), `,s` = `"/main/st/eq/2 PEQ 232.3 -1.75 3.9\n"` |
 | `/main/st/eq/2/f` (no args) | same address, `,f` normalized value |

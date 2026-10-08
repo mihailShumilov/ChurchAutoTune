@@ -73,7 +73,7 @@ channel EQ/dynamics/faders, `/main/st/mix/fader`, `/main/m/mix/fader`, card sett
 - First sound of a session is preceded by the warning screen (SPEC S8/§9.4).
 
 ## 8. Review checklist (safety-reviewer uses it)
-- [ ] No new socket code outside client.py; no write path outside writer.py.
+- [ ] No new socket code outside transport.py; no write path outside writer.py.
 - [ ] Every new allowed path has: regex test (accept + reject neighbours), validator test, emulator readback test.
 - [ ] UNVERIFIED addresses are listed in `docs/hardware-checklist.md` and gated (suggest-only on that model until verified).
 - [ ] Undo written before first write; pending_restore before first mute; both covered by tests with injected failures.

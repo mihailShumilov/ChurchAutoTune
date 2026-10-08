@@ -15,7 +15,8 @@ When a rule and the SPEC disagree, the SPEC wins; record the exception in an ADR
 ## 2. Architecture
 - Respect the layer rule (SPEC §5). `domain`, `analysis`, `design` are pure: no IO, no sockets, no clocks,
   no global state, no randomness without an explicit `numpy.random.Generator` argument.
-- Side effects at the edges: `mixers/*/client.py` (network), `audio/` (devices), `storage/` (files),
+- Side effects at the edges: `mixers/*/transport.py` (the only socket; used by `client.py` and `writer.py`),
+  `audio/` (devices), `storage/` (files),
   `app/` and `cli/` (terminal). Everything else receives data and returns data.
 - Depend on protocols, not implementations (`MixerDriver`, `AudioBackend`, `Prompter`, `Clock`).
   Inject them; no module-level singletons. Configuration is passed as frozen objects.
