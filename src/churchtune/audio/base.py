@@ -24,7 +24,8 @@ def limit(block: npt.ArrayLike) -> Float32Array:
 
     NaN becomes silence, never full scale; infinities are clipped like any other overshoot.
     """
-    samples = np.nan_to_num(np.asarray(block, dtype=np.float32), nan=0.0)
+    with np.errstate(over="ignore"):  # values beyond float32 become inf and are clipped below
+        samples = np.nan_to_num(np.asarray(block, dtype=np.float32), nan=0.0)
     return np.clip(samples, -LIMIT, LIMIT).astype(np.float32)
 
 
