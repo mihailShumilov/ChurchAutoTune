@@ -29,6 +29,7 @@ from churchtune.cli.context import (
     settings_of,
 )
 from churchtune.domain.changes import Change, WriteScope
+from churchtune.domain.console import ConsoleState
 from churchtune.domain.eq import BANDS_PER_EQ, SystemEq
 from churchtune.errors import UnsafeWrite
 from churchtune.mixers.x32 import params
@@ -285,6 +286,25 @@ def _undo_main(
             "Сейчас на пульте:\n" + describe_eq(read_main_eq(console.client), FORMATS, "Main LR EQ")
         )
     return code
+
+
+def with_fresh_polarity(
+    console: Console, state: ConsoleState, matrices: Sequence[int]
+) -> ConsoleState:
+    """The state with the polarity of ``matrices`` read again, parameter by parameter.
+
+    The node read of a matrix counts a lost reply as "not inverted"; a toggle built on that
+    would write the wrong direction and an undo would then really flip the speaker. So a plan
+    that toggles a polarity starts from a direct read, and no answer is a refusal.
+    """
+    fresh = dict(state.matrices)
+    for matrix in matrices:
+        path = f"/mtx/{matrix:02d}/preamp/invert"
+        value = console.client.query(path)
+        if isinstance(value, bool) or not isinstance(value, int) or value not in (0, 1):
+            fail(f"ОТКАЗ: не удалось прочитать {path} — ничего не записано", EXIT_REFUSED)
+        fresh[matrix] = replace(fresh[matrix], invert=bool(value))
+    return replace(state, matrices=fresh)
 
 
 def _matrix_of(path: str) -> int | None:

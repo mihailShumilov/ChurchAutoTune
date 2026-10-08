@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dev-safe guard: with `CTUNE_DEV_SAFE=1` only loopback consoles and the fake audio backend are accepted.
 - Transitional expert CLI (`ctune check | backup | level | measure | analyze | propose | apply | undo | verify |
   export-for-chat | sub`), Russian texts, exit codes per SPEC §12 (ADR 0003).
+- `ctune hwcheck delay | polarity`: one-parameter hardware check of the two writes that were never verified
+  on a console (hardware checklist rows 1 and 2, ADR 0005).
 - Golden tests on the anonymized hall session of 2026-10-02 (`tests/fixtures/golden/`, about 33 MB).
 - Layer-rule test, coverage gates per package, pre-commit and CI configuration.
 

@@ -22,6 +22,7 @@ from typer.testing import CliRunner
 from churchtune.audio.fake.backend import ConsoleRoomBackend
 from churchtune.audio.fake.room import speaker_rooms
 from churchtune.cli import apply as cli_apply
+from churchtune.cli import hwcheck as cli_hwcheck
 from churchtune.cli import main as cli_main
 from churchtune.cli import sub as cli_sub
 from churchtune.cli.context import (
@@ -822,6 +823,208 @@ def test_restore_interrupted_mid_send_keeps_the_pending_file(emu, home, run, mon
 
     assert run(["sub", "restore"], answers=["y"]).exit_code == EXIT_INTERRUPTED
     assert workspace.pending_mutes_file.exists()
+
+
+# ------------------------------------------------------------ hwcheck: one unverified write
+def test_hwcheck_delay_writes_one_output_time_first_and_undo_puts_it_back(emu, home, run):
+    before = copy.deepcopy(emu.out_delay)
+
+    result = run(["hwcheck", "delay", "--output", "6"], answers=["y"])
+
+    assert result.exit_code == EXIT_OK, result.output
+    assert "НЕ ПРОВЕРЕНО НА ЖЕЛЕЗЕ" in result.output
+    assert "строка 1" in result.output
+    assert [address for address, _ in emu.writes] == [
+        "/outputs/main/06/delay/time",
+        "/outputs/main/06/delay/on",
+    ]
+    assert emu.out_delay[6]["on"] == 1
+    assert P.norm_to_delay(emu.out_delay[6]["time"]) == pytest.approx(1.0, abs=0.05)
+    assert {o: d for o, d in emu.out_delay.items() if o != 6} == {
+        o: d for o, d in before.items() if o != 6
+    }
+    undo = sorted((home / "undo").glob("undo_sub_*.json"))[-1]
+    assert f"ctune undo undo/{undo.name} --write-unverified" in result.output
+    assert run(["undo", str(undo)], answers=["y"]).exit_code == EXIT_REFUSED
+    n0 = len(emu.writes)
+
+    assert run(["undo", str(undo), "--write-unverified"], answers=["y"]).exit_code == EXIT_OK
+
+    assert emu.out_delay == before
+    assert [address for address, _ in emu.writes[n0:]] == [
+        "/outputs/main/06/delay/on",
+        "/outputs/main/06/delay/time",
+    ]
+    assert not emu.foreign_writes(SUB_PREFIXES)
+
+
+def test_hwcheck_polarity_flips_one_matrix_and_undo_puts_it_back(emu, home, run):
+    result = run(["hwcheck", "polarity", "--matrix", "3"], answers=["y"])
+
+    assert result.exit_code == EXIT_OK, result.output
+    assert "строка 2" in result.output
+    assert [(address, args) for address, args in emu.writes] == [("/mtx/03/preamp/invert", [1])]
+    undo = sorted((home / "undo").glob("undo_sub_*.json"))[-1]
+
+    assert run(["undo", str(undo), "--write-unverified"], answers=["y"]).exit_code == EXIT_OK
+
+    assert emu.mtx[3]["invert"] == 0
+    assert len(emu.writes) == 2
+
+
+@pytest.mark.parametrize(
+    ("argv", "answers", "code"),
+    [
+        (["hwcheck", "delay", "--output", "6"], ["n"], EXIT_USER),
+        (["hwcheck", "delay", "--output", "6"], [""], EXIT_USER),
+        (["hwcheck", "delay", "--output", "6", "--dry-run"], [], EXIT_OK),
+        (["hwcheck", "polarity", "--matrix", "3", "--dry-run"], [], EXIT_OK),
+        (["hwcheck", "delay"], ["y"], EXIT_USER),
+        (["hwcheck", "polarity"], ["y"], EXIT_USER),
+        (["hwcheck", "fader", "--matrix", "3"], ["y"], EXIT_USER),
+        (["hwcheck", "delay", "--output", "5"], ["y"], EXIT_REFUSED),  # no matrix feeds it
+        (["hwcheck", "delay", "--output", "17"], ["y"], EXIT_REFUSED),
+        (["hwcheck", "delay", "--output", "6", "--ms", "10.5"], ["y"], EXIT_REFUSED),
+        (["hwcheck", "delay", "--output", "6", "--ms", "450"], ["y"], EXIT_REFUSED),
+        (["hwcheck", "delay", "--output", "6", "--ms", "0"], ["y"], EXIT_REFUSED),
+        (["hwcheck", "delay", "--output", "6", "--ms", "nan"], ["y"], EXIT_REFUSED),
+        (["hwcheck", "polarity", "--matrix", "4"], ["y"], EXIT_REFUSED),  # feeds no output
+        (["hwcheck", "polarity", "--matrix", "7"], ["y"], EXIT_REFUSED),
+        (["hwcheck", "delay", "--output", "6", "--matrix", "1"], ["y"], EXIT_USER),
+        (["hwcheck", "polarity", "--matrix", "3", "--ms", "400"], ["y"], EXIT_USER),
+        (["hwcheck", "polarity", "--matrix", "3", "--output", "6"], ["y"], EXIT_USER),
+    ],
+)
+def test_hwcheck_writes_nothing_when_declined_dry_or_out_of_range(
+    emu, home, run, argv, answers, code
+):
+    result = run(argv, answers=answers)
+
+    assert result.exit_code == code, result.output
+    assert emu.writes == []
+    assert not list((home / "undo").glob("*.json"))
+
+
+def test_hwcheck_is_refused_while_mutes_are_pending(emu, home, run):
+    files.write_pending_mutes(Workspace(home), files.PendingMutes(created="t", mtx_on={1: True}))
+
+    assert run(["hwcheck", "delay", "--output", "6"], answers=["y"]).exit_code == EXIT_REFUSED
+    assert emu.writes == []
+
+
+def test_hwcheck_reports_a_delay_the_console_did_not_take(emu, home, run):
+    emu.ignored.add("/outputs/main/06/delay/time")
+
+    result = run(["hwcheck", "delay", "--output", "6"], answers=["y"])
+
+    assert result.exit_code == EXIT_READBACK
+    assert "Запись не подтвердилась" in result.output
+    assert "Теперь сверьте" not in result.output
+    # the writer stops at the first mismatch: the switch is never sent after a failed time
+    assert [address for address, _ in emu.writes] == ["/outputs/main/06/delay/time"]
+    assert emu.out_delay[6]["on"] == 0
+
+
+@pytest.mark.parametrize(
+    ("stored", "message"),
+    [
+        ({"on": 1, "time": 1.0 / 500}, "in use"),  # a live delay line is never moved
+        ({"on": 1, "time": 120.0 / 500}, "in use"),
+        ({"on": 0, "time": 120.0 / 500}, "could not put back"),  # an undo could not restore it
+        ({"on": 0, "time": 0.9}, "could not put back"),
+    ],
+)
+def test_hwcheck_delay_refuses_an_output_it_could_not_give_back(emu, home, run, stored, message):
+    emu.out_delay[6] = dict(stored)
+
+    result = run(["hwcheck", "delay", "--output", "6"], answers=["y"])
+
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert message in result.output
+    assert emu.writes == []
+    assert emu.out_delay[6] == stored
+
+
+def test_hwcheck_polarity_runs_on_the_sub_matrix_only(emu, home, run):
+    for matrix in ("1", "2", "5", "6"):
+        result = run(["hwcheck", "polarity", "--matrix", matrix], answers=["y"])
+
+        assert result.exit_code == EXIT_REFUSED, result.output
+        assert "is not the sub" in result.output
+    assert emu.writes == []
+
+
+@pytest.mark.parametrize("actual", [0, 1])
+def test_hwcheck_polarity_is_refused_when_the_polarity_cannot_be_read(emu, home, run, actual):
+    """A lost reply must never be taken for "not inverted": the undo would flip the sub."""
+    emu.mtx[3]["invert"] = actual
+    emu.silent.add("/mtx/03/preamp/invert")
+
+    result = run(["hwcheck", "polarity", "--matrix", "3"], answers=["y"])
+
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert "не удалось прочитать /mtx/03/preamp/invert" in result.output
+    assert emu.writes == []
+    assert emu.mtx[3]["invert"] == actual
+
+
+def test_hwcheck_polarity_of_an_inverted_sub_goes_back_to_inverted(emu, home, run):
+    emu.mtx[3]["invert"] = 1
+
+    assert run(["hwcheck", "polarity", "--matrix", "3"], answers=["y"]).exit_code == EXIT_OK
+    assert emu.mtx[3]["invert"] == 0
+    undo = sorted((home / "undo").glob("undo_sub_*.json"))[-1]
+    assert run(["undo", str(undo), "--write-unverified"], answers=["y"]).exit_code == EXIT_OK
+
+    assert emu.mtx[3]["invert"] == 1
+
+
+def test_align_refuses_a_polarity_toggle_when_the_polarity_cannot_be_read(
+    emu, home, console_audio, run
+):
+    assert run(["sub", "crossover"], answers=["y"]).exit_code == EXIT_OK
+    assert run(["sub", "measure", "p1"], answers=["y"]).exit_code == EXIT_OK
+    emu.silent.add("/mtx/03/preamp/invert")
+    n0 = len(emu.writes)
+
+    result = run(["sub", "align", "--write-unverified"], answers=["y"])
+
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert "не удалось прочитать /mtx/03/preamp/invert" in result.output
+    assert len(emu.writes) == n0
+
+
+def test_hwcheck_refuses_a_plan_that_leaves_its_own_parameters():
+    foreign = [_change("/outputs/main/06/delay/on", 0, 1), _change("/mtx/03/mix/fader", 0.2, 0.3)]
+
+    with pytest.raises(UnsafeWrite, match="outside its parameters"):
+        cli_hwcheck._only(foreign, {"/outputs/main/06/delay/on"})
+    assert cli_hwcheck._only(foreign[:1], {"/outputs/main/06/delay/on"}) == foreign[:1]
+
+
+def test_hwcheck_polarity_is_refused_when_the_sub_cannot_be_told(emu, home, run, monkeypatch):
+    def unknown(state):
+        raise ValueError("name them explicitly")
+
+    monkeypatch.setattr(cli_hwcheck, "detect_roles", unknown)
+
+    result = run(["hwcheck", "polarity", "--matrix", "3"], answers=["y"])
+
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert "cannot tell which matrix is the sub" in result.output
+    assert emu.writes == []
+
+
+def test_hwcheck_names_the_quantized_time_and_what_will_be_heard(emu, home, run):
+    result = run(["hwcheck", "delay", "--output", "6", "--ms", "9.96", "--dry-run"])
+
+    assert result.exit_code == EXIT_OK
+    assert "hwcheck delay out6 10.0 ms" not in result.output  # dry run asks nothing
+    assert "задержка выхода 6 ВКЛЮЧИТСЯ" in result.output
+    assert "10.0 ms" in result.output
+    polarity = run(["hwcheck", "polarity", "--matrix", "3", "--dry-run"])
+    assert "полярность Mtx3 ПЕРЕВЕРНЁТСЯ" in polarity.output
+    assert "не уходите, не выполнив откат" in polarity.output
 
 
 # ------------------------------------------------------------ mechanisms around a write

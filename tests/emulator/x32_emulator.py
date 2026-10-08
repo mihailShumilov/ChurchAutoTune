@@ -75,6 +75,7 @@ class X32Emulator:
         self.meter_subs = {}  # peer -> expiry
         self.drop_next = 0  # simulate UDP loss
         self.ignored = set()  # addresses whose writes are logged but change nothing
+        self.silent = set()  # addresses whose parameter queries get no reply
         for line in Path(dump_file).read_text(encoding="utf-8").splitlines():
             if line.startswith("/"):
                 self.nodes[line.split(" ", 1)[0].lstrip("/")] = line
@@ -217,6 +218,8 @@ class X32Emulator:
             self._write(addr, args)
 
     def _query(self, addr, peer):
+        if addr in self.silent:
+            return
         m = EQ_PARAM_RE.match(addr)
         if m:
             i, k = int(m.group(1)), m.group(2)

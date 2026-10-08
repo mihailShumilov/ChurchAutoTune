@@ -54,7 +54,7 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 ## Code map
 State after M0. Modules marked (M1+) are in SPEC §5 but not written yet.
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
-  `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`
+  `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`
 - `app/` Textual UI (M3) · `wizard/` UI-agnostic step engine (M3) · `i18n/` catalogues (M3)
 - `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`
 - `mixers/x32/` `transport` (the only socket), `codec`, `client` (read-only allowlist), `params`, `nodes`, `dump`,

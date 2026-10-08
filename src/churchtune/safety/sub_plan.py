@@ -5,12 +5,14 @@ example an output delay while those writes are not verified on hardware) raises 
 and the caller presents it as advice instead.
 """
 
+import math
 from collections.abc import Mapping, Sequence
 
 from churchtune.domain.changes import Change, WriteScope
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.eq import Band
-from churchtune.safety.policy import WritePolicy
+from churchtune.errors import UnsafeWrite
+from churchtune.safety.policy import SUB_DELAY_CEILING_MS, WritePolicy
 
 # Write phases that keep the system quiet while it is switched over.
 PHASE_GAIN_DOWN = 1  # remove boosts first
@@ -166,3 +168,87 @@ def alignment_changes(  # noqa: PLR0913 - one call describes the whole alignment
                 )
             )
     return [policy.checked_change(change, WriteScope.SUB) for change in changes]
+
+
+def delay_check_changes(
+    state: ConsoleState, output: int, delay_ms: float, policy: WritePolicy
+) -> list[Change]:
+    """Writes that set one output delay to an absolute time and switch it on.
+
+    For the hardware check of the delay write: a known value on one output, compared by a human
+    with the console screen.
+
+    Args:
+        state: Console state.
+        output: Physical output number; it must be fed by a matrix.
+        delay_ms: The time to set.
+        policy: Write policy; every change is validated in the ``sub`` scope.
+
+    Returns:
+        The time first, then the switch.
+
+    Raises:
+        UnsafeWrite: The output or the time is not allowed, the delay of the output is in use,
+            its stored time could not be put back by an undo, or the policy refuses the write.
+    """
+    laws = policy.laws
+    fed = {o for matrix in state.matrices.values() for o in matrix.outputs}
+    if output not in fed or output not in state.delays:
+        raise UnsafeWrite(f"output {output} is not fed by a matrix", output=output)
+    # ``not (a <= x <= b)`` also refuses NaN.
+    if not (laws.min_delay_ms <= delay_ms <= policy.limits.sub_max_delay_ms):
+        raise UnsafeWrite(
+            f"delay {delay_ms} ms is outside {laws.min_delay_ms}.."
+            f"{policy.limits.sub_max_delay_ms} ms",
+            delay_ms=delay_ms,
+        )
+    current = state.delays[output]
+    if current.on:
+        # A delay that is on is somebody's setting; the check never moves a live delay line.
+        raise UnsafeWrite(
+            f"the delay of output {output} is in use ({current.delay_ms:.1f} ms, ON); "
+            "choose an output whose delay is off",
+            output=output,
+        )
+    if not (math.isfinite(current.delay_ms) and current.delay_ms <= SUB_DELAY_CEILING_MS):
+        # An undo could not write this time back: it is above the ceiling of every policy.
+        raise UnsafeWrite(
+            f"output {output} stores a delay of {current.delay_ms:.1f} ms, more than "
+            f"{SUB_DELAY_CEILING_MS:.0f} ms, which an undo could not put back; "
+            "choose another output",
+            output=output,
+        )
+    new_norm = laws.delay_wire(delay_ms)
+    current_norm = laws.delay_wire(current.delay_ms)
+    changes = []
+    if abs(new_norm - current_norm) > _SAME_DELAY_NORM:
+        changes.append(
+            Change(
+                f"/outputs/main/{output:02d}/delay/time",
+                current_norm,
+                new_norm,
+                f"{current.delay_ms:.1f} ms",
+                f"{laws.delay_ms(new_norm):.1f} ms",
+            )
+        )
+    changes.append(Change(f"/outputs/main/{output:02d}/delay/on", 0, 1, "OFF", "ON"))
+    return [policy.checked_change(change, WriteScope.SUB) for change in changes]
+
+
+def polarity_check_changes(state: ConsoleState, matrix: int, policy: WritePolicy) -> list[Change]:
+    """The write that flips the polarity of one matrix (hardware check of the polarity write).
+
+    Raises:
+        UnsafeWrite: The matrix feeds no physical output, or the policy refuses the write.
+    """
+    found = state.matrices.get(matrix)
+    if found is None or not found.outputs:
+        raise UnsafeWrite(f"matrix {matrix} feeds no physical output", matrix=matrix)
+    change = Change(
+        f"/mtx/{matrix:02d}/preamp/invert",
+        int(found.invert),
+        int(not found.invert),
+        "INV" if found.invert else "norm",
+        "norm" if found.invert else "INV",
+    )
+    return [policy.checked_change(change, WriteScope.SUB)]

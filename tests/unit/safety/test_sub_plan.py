@@ -14,7 +14,12 @@ from churchtune.domain.console import ConsoleState, MatrixState, OutputDelay, Ro
 from churchtune.domain.eq import Band, EqType, SystemEq
 from churchtune.errors import UnsafeWrite
 from churchtune.mixers.x32 import params as P  # noqa: N812 - short alias kept from the original
-from churchtune.safety.sub_plan import alignment_changes, crossover_changes
+from churchtune.safety.sub_plan import (
+    alignment_changes,
+    crossover_changes,
+    delay_check_changes,
+    polarity_check_changes,
+)
 from tests.fixtures.venues import reference_policy
 
 FS_HZ = 48000.0
@@ -254,3 +259,75 @@ def test_full_alignment_package_is_ordered_delay_polarity_fader():
 def test_delay_and_polarity_are_refused_while_those_writes_are_unverified(delay_ms, polarity):
     with pytest.raises(UnsafeWrite, match="never verified on hardware"):
         alignment_changes(console(), ROLES, POLICY, delay_ms=delay_ms, polarity=polarity)
+
+
+# ------------------------------------------------------------ hardware check of unverified writes
+def test_delay_check_sets_an_absolute_time_then_switches_on():
+    changes = delay_check_changes(console(), 6, 1.0, UNVERIFIED_OK)
+
+    assert [c.path for c in changes] == [
+        "/outputs/main/06/delay/time",
+        "/outputs/main/06/delay/on",
+    ]
+    assert P.norm_to_delay(changes[0].new_value) == pytest.approx(1.0, abs=0.05)
+    assert (changes[0].old_display, changes[0].new_display) == ("0.3 ms", "1.0 ms")
+    assert (changes[1].old_value, changes[1].new_value) == (0, 1)
+
+
+def test_delay_check_refuses_an_output_whose_delay_is_in_use():
+    """A delay that is on is somebody's setting (a balcony line); the check never moves it."""
+    with pytest.raises(UnsafeWrite, match="in use"):
+        delay_check_changes(console(delay_on=True), 6, 1.0, UNVERIFIED_OK)
+
+
+@pytest.mark.parametrize("stored_ms", [50.1, 120.0, 500.0, math.nan, math.inf, -math.inf])
+def test_delay_check_refuses_an_output_whose_stored_time_an_undo_could_not_put_back(stored_ms):
+    state = console()
+    state = replace(state, delays={**state.delays, 6: OutputDelay(6, False, stored_ms)})
+
+    with pytest.raises(UnsafeWrite, match="could not put back"):
+        delay_check_changes(state, 6, 1.0, UNVERIFIED_OK)
+
+
+def test_delay_check_with_the_time_already_stored_writes_only_the_switch():
+    state = console()
+    state = replace(state, delays={**state.delays, 6: OutputDelay(6, False, 1.0)})
+
+    changes = delay_check_changes(state, 6, 1.0, UNVERIFIED_OK)
+
+    assert [c.path for c in changes] == ["/outputs/main/06/delay/on"]
+
+
+@pytest.mark.parametrize("delay_ms", [0.0, 0.2, 50.1, 450.0, math.nan, math.inf, -1.0])
+def test_delay_check_refuses_times_outside_the_range(delay_ms):
+    with pytest.raises(UnsafeWrite, match="outside"):
+        delay_check_changes(console(), 6, delay_ms, UNVERIFIED_OK)
+
+
+@pytest.mark.parametrize("output", [0, 17, 5, 1])
+def test_delay_check_refuses_an_output_that_no_speaker_matrix_feeds(output):
+    """Outputs 3, 4, 6, 7 and 8 carry the matrices of the hall; anything else is not ours."""
+    with pytest.raises(UnsafeWrite, match="not fed by a matrix"):
+        delay_check_changes(console(), output, 1.0, UNVERIFIED_OK)
+
+
+def test_delay_and_polarity_checks_still_need_the_opt_in_of_the_policy():
+    with pytest.raises(UnsafeWrite, match="never verified on hardware"):
+        delay_check_changes(console(), 6, 1.0, POLICY)
+    with pytest.raises(UnsafeWrite, match="never verified on hardware"):
+        polarity_check_changes(console(), 3, POLICY)
+
+
+@pytest.mark.parametrize(("inverted", "new"), [(False, 1), (True, 0)])
+def test_polarity_check_toggles_one_matrix(inverted, new):
+    changes = polarity_check_changes(console(sub_invert=inverted), 3, UNVERIFIED_OK)
+
+    assert [(c.path, c.old_value, c.new_value) for c in changes] == [
+        ("/mtx/03/preamp/invert", int(inverted), new)
+    ]
+
+
+@pytest.mark.parametrize("matrix", [4, 0, 7])
+def test_polarity_check_refuses_a_matrix_that_feeds_no_output(matrix):
+    with pytest.raises(UnsafeWrite, match="feeds no physical output"):
+        polarity_check_changes(console(), matrix, UNVERIFIED_OK)

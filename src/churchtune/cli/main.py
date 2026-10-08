@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from churchtune import __version__
-from churchtune.cli import analyze, apply, check, measure, sub
+from churchtune.cli import analyze, apply, check, hwcheck, measure, sub
 from churchtune.cli.context import EXIT_REFUSED, Settings, load_venue, parse_console, say
 from churchtune.errors import ChurchTuneError, DevSafeViolation
 from churchtune.storage.paths import workspace_from_env
@@ -73,6 +73,7 @@ app.command("export-for-chat")(analyze.export_command)
 app.command("apply")(apply.apply_command)
 app.command("undo")(apply.undo_command)
 app.command("sub")(sub.sub_command)
+app.command("hwcheck")(hwcheck.hwcheck_command)
 
 
 def run() -> None:

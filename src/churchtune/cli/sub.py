@@ -12,7 +12,7 @@ import numpy as np
 import typer
 
 from churchtune.cli import records
-from churchtune.cli.apply import LAWS, send_plan, write_with_undo
+from churchtune.cli.apply import LAWS, send_plan, with_fresh_polarity, write_with_undo
 from churchtune.cli.context import (
     EQ_GRID,
     EXIT_INTERRUPTED,
@@ -48,7 +48,7 @@ from churchtune.report.markdown import alignment_summary
 from churchtune.report.texts import crossover_note_text
 from churchtune.safety.authorize import is_confirmation
 from churchtune.safety.policy import WritePolicy
-from churchtune.safety.sub_plan import alignment_changes, crossover_changes
+from churchtune.safety.sub_plan import INVERTED_POLARITY, alignment_changes, crossover_changes
 from churchtune.storage import files
 from churchtune.storage.models import (
     JunctionMeta,
@@ -378,6 +378,8 @@ def _align(
             return EXIT_OK
         delay_ms, polarity = 0.0, 1
     policy = _policy(roles, write_unverified)
+    if write_unverified and polarity == INVERTED_POLARITY:
+        state = with_fresh_polarity(console, state, roles.sub)
     try:
         changes = alignment_changes(
             state, roles, policy, delay_ms=delay_ms, polarity=polarity, fader_change_db=fader_change
