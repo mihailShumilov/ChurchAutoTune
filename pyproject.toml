@@ -79,6 +79,7 @@ convention = "google"
     "PLR2004",  # literal expected values are the point of a test
     "E501",     # tables of test cases read better on one line
     "S104",     # addresses appear as values under test; nothing binds to them
+    "PERF",     # clarity over speed in tests
     "ARG",      # fixtures requested for their side effect; fakes implement interfaces they ignore
 ]
 "scripts/**" = [
