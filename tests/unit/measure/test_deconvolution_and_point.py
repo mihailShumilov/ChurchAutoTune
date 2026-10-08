@@ -73,6 +73,30 @@ def test_deconvolution_is_linear():
     np.testing.assert_allclose(summed, separate, atol=1e-9)
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_deconvolve_rejects_non_finite_samples(bad):
+    ref = np.ones(64)
+    rec = np.ones(64)
+    rec[3] = bad
+
+    with pytest.raises(ValueError, match="finite"):
+        deconvolve(rec, ref, FS_HZ, 20.0, 20000.0)
+    with pytest.raises(ValueError, match="finite"):
+        deconvolve(ref, rec, FS_HZ, 20.0, 20000.0)
+
+
+@pytest.mark.parametrize("shift", [1, 17, 4800])
+def test_shifting_the_recording_shifts_the_peak_by_the_same_number_of_samples(shift):
+    stimulus = build_stimulus(make_sweep(FS_HZ, SWEEP), FS_HZ, SWEEP.preroll_s, SWEEP.tail_s)
+    ref = stimulus[:, 0].astype(np.float64)
+
+    def peak_of(rec):
+        ir_full = deconvolve(rec, ref, FS_HZ, SWEEP.f1_hz, SWEEP.f2_hz)
+        return extract_ir(ir_full, FS_HZ, SWEEP.ir_length_s, SWEEP.ir_pre_ms)[1]
+
+    assert peak_of(np.roll(ref, 100 + shift)) - peak_of(np.roll(ref, 100)) == shift
+
+
 def test_deconvolve_rejects_empty_input():
     with pytest.raises(ValueError, match="non-empty"):
         deconvolve(np.zeros(0), np.ones(8), FS_HZ, 20.0, 20000.0)

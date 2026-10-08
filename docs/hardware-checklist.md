@@ -22,3 +22,4 @@ Capabilities per model/firmware live in `src/churchtune/mixers/x32/capabilities.
 | 11 | X32P 4.09 | Sends of the USB playback channels to aux/monitor buses detected | `ctune doctor` | matches the console screen | | |
 | 12 | X32P 4.09 | Ctrl+C and Space stop sound instantly in the TUI on Terminal.app and iTerm2 | wizard S8 | silence < 100 ms, mutes restored | | |
 | 13 | X32P 4.09 | Reading the action / scene / recorder nodes with `/node` (`-action`, `-snap`, `-show`, `-usb`, `-urec`) changes nothing; the read-only client refuses them until this is confirmed | read each node once with a raw OSC tool while watching the console | console state unchanged, scene not recalled | | |
+| 14 | X32P 4.09 | EQ response model (`domain/eq_model.py`): PEQ Q definition, VEQ, shelf Q, BU/BS/LR slopes | electrical loop USB out → channel → Main EQ → USB in, one band type at a time; compare the measured response with `band_response_db` | within ±0.5 dB from 40 Hz to 16 kHz | | |

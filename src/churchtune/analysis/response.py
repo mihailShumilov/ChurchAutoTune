@@ -65,12 +65,14 @@ def magnitude_db(
         Magnitude in dB, ``float64[n_freqs]``; a unit impulse gives 0 dB everywhere.
 
     Raises:
-        ValueError: ``ir`` is empty or ``fs_hz`` is not positive.
+        ValueError: ``ir`` is empty or not finite, or ``fs_hz`` is not positive.
     """
     if len(ir) == 0:
         raise ValueError("magnitude_db needs a non-empty impulse response")
     if not (math.isfinite(fs_hz) and fs_hz > 0):
         raise ValueError(f"fs_hz must be a positive finite number, got {fs_hz!r}")
+    if not np.isfinite(ir).all():
+        raise ValueError("magnitude_db needs finite samples (found NaN or infinity)")
     n = min(len(ir), int(window_s * fs_hz))
     h = np.array(ir[:n], dtype=np.float64)
     fade = int(WINDOW_FADE_FRACTION * n)

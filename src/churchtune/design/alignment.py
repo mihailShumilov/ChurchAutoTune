@@ -40,6 +40,10 @@ _POWER_FLOOR = 1e-30
 class JunctionPoint:
     """Impulse responses of one point on a common time base.
 
+    Each response is either the whole circular response of its block or its causal first half
+    (what is stored on disk): the direct sound is searched in the first half of what is given,
+    and the distortion products of a circular response sit in its second half.
+
     Attributes:
         sub: Sub only, ``float64[n]``.
         tops: Tops only.

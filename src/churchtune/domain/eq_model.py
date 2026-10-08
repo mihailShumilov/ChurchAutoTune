@@ -4,6 +4,10 @@ Parametric bands and shelves are RBJ biquads; Butterworth / Bessel / Linkwitz-Ri
 analog prototype magnitude. The exact console internals are not public, so the model is used for
 predictions and for the room simulator, never as a statement of what the console outputs.
 
+UNVERIFIED: none of the shapes below was compared with a console on a loopback measurement:
+the Q definition of PEQ, VEQ modelled as a plain peaking filter, the Q of the shelves, and the
+Bessel normalisation (``norm="mag"``). See docs/hardware-checklist.md #14.
+
 The model lives in ``domain`` because ``design``, ``safety`` and the fake audio backend all need it
 and may depend only on ``domain`` (docs/adr/0002).
 """

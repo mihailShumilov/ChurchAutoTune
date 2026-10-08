@@ -64,7 +64,12 @@ def schroeder_db(h: FloatArray, fs_hz: float) -> tuple[FloatArray | None, float]
     Returns:
         ``(decay_db, dynamic_db)``: the decay curve in dB (0 at its start), or None when the
         response is shorter than 0.2 s after its peak; and the dynamic range of the envelope.
+
+    Raises:
+        ValueError: ``h`` holds NaN or infinity.
     """
+    if not np.isfinite(h).all():
+        raise ValueError("schroeder_db needs finite samples (found NaN or infinity)")
     energy = np.asarray(h, dtype=np.float64) ** 2
     energy = energy[int(np.argmax(energy)) :]
     if len(energy) < fs_hz * MIN_DECAY_S:

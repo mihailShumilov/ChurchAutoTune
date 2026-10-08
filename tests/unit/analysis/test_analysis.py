@@ -4,6 +4,9 @@ import math
 
 import numpy as np
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+from hypothesis.extra import numpy as npst
 from scipy import signal
 
 from churchtune.analysis.bands import OCTAVES_HZ, octave_band_sos, octave_levels
@@ -128,6 +131,34 @@ def test_magnitude_rejects_empty_input_and_bad_sample_rate():
         magnitude_db(np.zeros(0), FS_HZ)
     with pytest.raises(ValueError, match="fs_hz"):
         magnitude_db(impulse(), 0.0)
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_non_finite_samples_are_rejected_everywhere(bad):
+    ir = impulse()
+    ir[100] = bad
+
+    with pytest.raises(ValueError, match="finite"):
+        magnitude_db(ir, FS_HZ)
+    with pytest.raises(ValueError, match="finite"):
+        schroeder_db(ir, FS_HZ)
+    with pytest.raises(ValueError, match="finite"):
+        analyze_points({"p1": PointResponse(ir, FS_HZ)})
+
+
+@given(level=st.floats(min_value=1e-3, max_value=10.0), at=st.integers(min_value=0, max_value=5000))
+def test_scaling_an_impulse_shifts_the_response_and_moving_it_does_not_change_it(level, at):
+    response = magnitude_db(impulse(at=at, level=level), FS_HZ)
+
+    np.testing.assert_allclose(response, 20 * np.log10(level), atol=1e-6)
+
+
+@given(curves=npst.arrays(np.float64, (4, 16), elements=st.floats(min_value=-60.0, max_value=20.0)))
+def test_energy_average_lies_between_the_lowest_and_highest_curve(curves):
+    average = energy_average(curves)
+
+    assert np.all(average >= curves.min(axis=0) - 1e-9)
+    assert np.all(average <= curves.max(axis=0) + 1e-9)
 
 
 def test_silence_is_floored_not_minus_infinity():

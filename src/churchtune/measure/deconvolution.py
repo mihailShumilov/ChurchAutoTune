@@ -38,10 +38,12 @@ def deconvolve(
         ``len(rec) + len(ref)``.
 
     Raises:
-        ValueError: An input is empty.
+        ValueError: An input is empty or holds NaN or infinity.
     """
     if len(rec) == 0 or len(ref) == 0:
         raise ValueError("deconvolve needs a non-empty recording and reference")
+    if not (np.isfinite(rec).all() and np.isfinite(ref).all()):
+        raise ValueError("deconvolve needs finite samples (found NaN or infinity)")
     n_fft = int(2 ** math.ceil(math.log2(len(rec) + len(ref))))
     rec_spectrum = np.fft.rfft(rec, n_fft)
     ref_spectrum = np.fft.rfft(ref, n_fft)

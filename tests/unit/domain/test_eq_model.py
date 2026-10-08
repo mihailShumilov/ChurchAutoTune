@@ -18,7 +18,41 @@ def test_peq_response_equals_gain_at_centre():
     response = band_response_db(band, np.array([1000.0]), FS_HZ)
 
     # RBJ peaking filter has exactly its gain at f0.
-    np.testing.assert_allclose(response, [-6.0], atol=0.05)
+    np.testing.assert_allclose(response, [-6.0], atol=1e-9)
+
+
+def test_peq_q_follows_the_analog_peaking_prototype():
+    """Pins the Q definition: H(s) = (s^2 + s*A/Q + 1) / (s^2 + s/(A*Q) + 1), A = 10^(g/40)."""
+    f0_hz, gain_db, q = 100.0, -9.0, 1.5
+    freqs = np.geomspace(30.0, 400.0, 60)
+    amp = 10 ** (gain_db / 40)
+    s = 1j * freqs / f0_hz
+    prototype = 20 * np.log10(np.abs((s**2 + s * amp / q + 1) / (s**2 + s / (amp * q) + 1)))
+
+    response = band_response_db(Band(2, EqType.PEQ, f0_hz, gain_db, q), freqs, FS_HZ)
+
+    # At 100 Hz and 48 kHz the bilinear transform's warping is far below 0.02 dB.
+    np.testing.assert_allclose(response, prototype, atol=0.02)
+
+
+def test_eq_response_is_the_sum_of_its_bands_for_any_gains():
+    freqs = np.geomspace(20.0, 20000.0, 40)
+    rng = np.random.default_rng(0)
+    for _ in range(20):
+        bands = tuple(
+            Band(
+                i,
+                EqType.PEQ,
+                float(rng.uniform(30, 15000)),
+                float(rng.uniform(-15, 15)),
+                float(rng.uniform(0.3, 10)),
+            )
+            for i in range(1, 7)
+        )
+        total = eq_response_db(SystemEq(True, bands), freqs, FS_HZ)
+        np.testing.assert_allclose(
+            total, sum(band_response_db(b, freqs, FS_HZ) for b in bands), atol=1e-9
+        )
 
 
 def test_peq_response_is_flat_far_from_centre():
