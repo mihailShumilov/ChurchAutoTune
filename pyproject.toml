@@ -88,6 +88,9 @@ convention = "google"
 "src/churchtune/design/crossover.py" = [
     "S105",  # LOW_PASS / HIGH_PASS are filter names, not passwords
 ]
+"src/churchtune/report/texts.py" = [
+    "PLR0911",  # one return per message code; the module turns into catalogue lookups in M3 (ADR 0003)
+]
 "scripts/**" = [
     "T20",  # scripts print
 ]

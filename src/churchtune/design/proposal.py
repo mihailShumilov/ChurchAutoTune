@@ -49,6 +49,7 @@ class ReasonCode(StrEnum):
     NOTCH_KEPT = "notch-kept"  # narrow existing cut (feedback?): at most halved
     NOT_NEEDED = "not-needed"  # the band goes back to 0 dB
     OPTIMIZED = "optimized"  # set by the joint optimisation
+    LEGACY = "legacy"  # read from a file of the original tool: ``params["text"]`` is the reason
 
 
 class SkipCode(StrEnum):

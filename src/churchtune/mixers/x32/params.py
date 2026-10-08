@@ -256,3 +256,20 @@ def describe_band(band: Band) -> str:
         f"{band.type:<4} {fmt_freq(band.freq_hz):>6} Hz "
         f"{fmt_gain(band.gain_db):>6} dB Q {fmt_q(band.q)}"
     )
+
+
+@dataclass(frozen=True, slots=True)
+class X32Formats:
+    """How the X32/M32 shows values, for reports and diffs."""
+
+    def freq(self, freq_hz: float) -> str:
+        """A frequency as the console shows it."""
+        return fmt_freq(freq_hz)
+
+    def q(self, q: float) -> str:
+        """A Q value as the console shows it."""
+        return fmt_q(q)
+
+    def band(self, band: Band) -> str:
+        """A whole band as the console shows it."""
+        return describe_band(band)
