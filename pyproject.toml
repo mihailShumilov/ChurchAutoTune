@@ -65,6 +65,9 @@ ignore = [
     "D105",    # magic methods are documented by the class docstring
     "D107",    # __init__ is documented in the class docstring (google style)
     "N818",    # errors are named by what happened (UnsafeWrite, ReadbackMismatch), CODING_STANDARDS §6
+    "RUF001",  # Cyrillic is intended: console names and (until M3) operator texts are Russian
+    "RUF002",
+    "RUF003",
     "TRY003",  # error messages carry context (path, value); a class per message adds nothing
 ]
 
@@ -81,6 +84,9 @@ convention = "google"
     "S104",     # addresses appear as values under test; nothing binds to them
     "PERF",     # clarity over speed in tests
     "ARG",      # fixtures requested for their side effect; fakes implement interfaces they ignore
+]
+"src/churchtune/design/crossover.py" = [
+    "S105",  # LOW_PASS / HIGH_PASS are filter names, not passwords
 ]
 "scripts/**" = [
     "T20",  # scripts print

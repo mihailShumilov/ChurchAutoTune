@@ -62,3 +62,24 @@ class ConsoleState:
     main_eq: SystemEq
     matrices: Mapping[int, MatrixState]
     delays: Mapping[int, OutputDelay]
+
+
+@dataclass(frozen=True, slots=True)
+class Roles:
+    """Which matrices feed which speakers.
+
+    Attributes:
+        sub: Matrices of the subwoofer path.
+        mains: Matrices of the top speakers.
+        others: Other speaker matrices (balcony, fills): muted during the junction measurement
+            and delayed together with the tops.
+    """
+
+    sub: tuple[int, ...]
+    mains: tuple[int, ...]
+    others: tuple[int, ...] = ()
+
+    @property
+    def all(self) -> tuple[int, ...]:
+        """Every matrix with a role: sub, then mains, then others."""
+        return (*self.sub, *self.mains, *self.others)

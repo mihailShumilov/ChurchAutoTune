@@ -39,3 +39,20 @@ class ValueLaws(Protocol):
     def band_wire_values(self, band: Band) -> tuple[Mapping[str, WireValue], Mapping[str, str]]:
         """Quantized wire values ``{type, f, g, q}`` of a band and their display strings."""
         ...
+
+    def fader_wire(self, level_db: float) -> float:
+        """Quantized normalized value of a fader level in dB."""
+        ...
+
+    def fader_display(self, level_db: float) -> str:
+        """A fader level as the console shows it."""
+        ...
+
+    def delay_wire(self, delay_ms: float) -> float:
+        """Quantized normalized value of an output delay in ms (clamped to the console range)."""
+        ...
+
+    @property
+    def min_delay_ms(self) -> float:
+        """Shortest output delay the console can store."""
+        ...

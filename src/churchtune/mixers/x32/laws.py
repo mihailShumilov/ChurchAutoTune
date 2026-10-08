@@ -48,6 +48,23 @@ class X32ValueLaws:
             raise ValueError(f"parameter kind {kind!r} has no value grid")
         return params.step_index(x_norm, STEPS_BY_KIND[kind])
 
+    def fader_wire(self, level_db: float) -> float:
+        """Quantized normalized value of a fader level in dB."""
+        return params.quantize_fader(params.fader_to_norm(level_db))
+
+    def fader_display(self, level_db: float) -> str:
+        """A fader level as the console shows it."""
+        return params.fmt_fader(level_db)
+
+    def delay_wire(self, delay_ms: float) -> float:
+        """Quantized normalized value of an output delay in ms (clamped to the console range)."""
+        return params.quantize_delay(params.delay_to_norm(delay_ms))
+
+    @property
+    def min_delay_ms(self) -> float:
+        """Shortest output delay the console can store."""
+        return params.DELAY_MIN_MS
+
     def band_wire_values(self, band: Band) -> tuple[Mapping[str, WireValue], Mapping[str, str]]:
         """Quantized wire values ``{type, f, g, q}`` of a band and their display strings."""
         values: dict[str, WireValue] = {
