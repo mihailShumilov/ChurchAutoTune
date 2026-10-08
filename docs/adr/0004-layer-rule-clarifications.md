@@ -24,3 +24,19 @@ SPEC §5 gives the dependency rule between layers but leaves a few edges open th
 ## Consequences
 
 Adding an edge means changing the table in the test, with a reason, in the same change.
+
+## Deferred after the M0 review
+
+Left as they are so the port stays line-for-line comparable with the original; to be paid in the milestone
+that next touches the module:
+
+- `app` may import `domain` (the checker already allows it; SPEC §5 does not list it).
+- Functions longer than the ~50 lines of CODING_STANDARDS §2: `safety/plan.py::plan_changes`,
+  `safety/sub_plan.py::alignment_changes` (first, in M5, with a `safety-reviewer` pass),
+  `report/markdown.py::session_report_md` and `export_for_chat`, `measure/gates.py::assess`,
+  `design/alignment.py::analyze_alignment`, `design/system_eq_opt.py::optimize_design`; module
+  `design/system_eq.py` (about 500 lines).
+- Names without units in `mixers/x32/params.py` (`norm_to_freq`, `norm_to_gain`, ...), kept from the original.
+- `NewType` identifiers (`MicId`, `PointId`, `OutputId`) arrive with the venue model in M1/M2.
+- `transport.py` reads the clock directly; `client.py` and `writer.py` take it as an argument.
+

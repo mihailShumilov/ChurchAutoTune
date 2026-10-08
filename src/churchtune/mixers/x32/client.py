@@ -8,6 +8,7 @@ Everything else raises ``ReadOnlyViolation``. Some no-argument X32 addresses are
 arbitrary no-argument messages are refused too. Writing is the job of ``writer.py`` alone.
 """
 
+import logging
 import re
 import time
 from collections.abc import Callable, Sequence
@@ -15,6 +16,8 @@ from typing import Protocol
 
 from churchtune.errors import ReadOnlyViolation
 from churchtune.mixers.x32.codec import OscArg, encode, meter_floats, same_addr
+
+logger = logging.getLogger(__name__)
 
 NODE_ADDRESS = "/node"
 METERS_ADDRESS = "/meters"
@@ -172,12 +175,13 @@ class X32Client:
             The reply line without the trailing newline, or None after one retry.
         """
         path = path.lstrip("/")
-        for _ in range(ATTEMPTS):
+        for attempt in range(1, ATTEMPTS + 1):
             values = self.ask(NODE_ADDRESS, path, expect="node", timeout_s=timeout_s)
             if values and isinstance(values[0], str):
                 line = values[0].strip()
                 if line.lstrip("/").split(" ")[0] == path:
                     return line
+            logger.warning("no reply to /node %s (attempt %d of %d)", path, attempt, ATTEMPTS)
         return None
 
     def query(self, path: str, timeout_s: float = DEFAULT_TIMEOUT_S) -> OscArg | None:
@@ -187,10 +191,11 @@ class X32Client:
             The first argument of the reply (normalized float or int), or None after one retry.
         """
         address = "/" + path.lstrip("/")
-        for _ in range(ATTEMPTS):
+        for attempt in range(1, ATTEMPTS + 1):
             values = self.ask(address, timeout_s=timeout_s)
             if values:
                 return values[0]
+            logger.warning("no reply to %s (attempt %d of %d)", address, attempt, ATTEMPTS)
         return None
 
     def meters0(self, duration_s: float, on_frame: Callable[[list[float]], None]) -> None:

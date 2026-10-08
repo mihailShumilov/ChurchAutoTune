@@ -10,7 +10,7 @@ not needed until later milestones.
 
 ## Decision
 
-- Python 3.12, managed by uv; `src/` layout; hatchling build backend; entry point `ctune = churchtune.cli:app`.
+- Python 3.12, managed by uv; `src/` layout; hatchling build backend; entry point `ctune = churchtune.cli.main:run`.
 - Every package from SPEC §5 exists from the start (some are empty until their milestone) so the layer test
   covers the full map from day one.
 - Runtime dependencies in M0 are limited to what the ported code uses: numpy, scipy, sounddevice, soundfile,

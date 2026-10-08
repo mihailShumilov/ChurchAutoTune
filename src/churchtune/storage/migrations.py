@@ -6,14 +6,11 @@ Version 0 is the file shape of the original single-hall tool, which had no versi
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from churchtune.errors import UnsupportedSchema
 from churchtune.storage.models import SCHEMA_VERSION
 
 LEGACY_CODE = "legacy"
 Raw = dict[str, Any]
-
-
-class UnsupportedSchema(ValueError):
-    """The file was written by a newer version of ChurchTune, or is not a ChurchTune file."""
 
 
 def _legacy_text(text: object) -> Raw:
@@ -87,9 +84,11 @@ def migrate(kind: str, data: Raw) -> Raw:
         KeyError: ``kind`` is unknown.
     """
     version = data.get("schema_version", 0)
-    if not isinstance(version, int) or isinstance(version, bool) or version > SCHEMA_VERSION:
-        raise UnsupportedSchema(f"unsupported schema_version {version!r} in a {kind} file")
-    if version < 0:
+    if (
+        not isinstance(version, int)
+        or isinstance(version, bool)
+        or not 0 <= version <= SCHEMA_VERSION
+    ):
         raise UnsupportedSchema(f"unsupported schema_version {version!r} in a {kind} file")
     migrated = dict(data)
     if version == 0:

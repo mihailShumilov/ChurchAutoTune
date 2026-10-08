@@ -51,8 +51,7 @@ STYLE = {
 @contextmanager
 def _figure(path: Path, size: tuple[float, float]) -> Iterator[Figure]:
     """A figure in the report style that is saved to ``path`` on leaving the block."""
-    # matplotlib types the rc keys as one huge Literal union; a plain dict of them does not match.
-    with mpl.rc_context(STYLE):  # type: ignore[arg-type]
+    with mpl.rc_context(STYLE):  # type: ignore[arg-type]  # rc keys are typed as a Literal union
         figure = Figure(figsize=size)
         FigureCanvasAgg(figure)
         yield figure

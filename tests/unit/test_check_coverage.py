@@ -1,4 +1,5 @@
-from scripts.check_coverage import Gate, evaluate
+from scripts.check_coverage import Gate
+from scripts.check_coverage import evaluate as evaluate_all
 
 
 def _file(covered_lines, statements, covered_branches=0, branches=0):
@@ -10,6 +11,11 @@ def _file(covered_lines, statements, covered_branches=0, branches=0):
             "num_branches": branches,
         }
     }
+
+
+def evaluate(files, gates):
+    """Failures of the gates that have measured code; the empty ones have their own test."""
+    return [f for f in evaluate_all(files, gates) if "no measured code" not in f]
 
 
 GATES = (
@@ -48,10 +54,12 @@ def test_evaluate_counts_branches_together_with_lines():
     assert failures == ["measure: 50.0% < 90.0% (10 of 20 lines+branches missed)"]
 
 
-def test_evaluate_ignores_gates_without_measured_code():
-    failures = evaluate({}, GATES)
+def test_a_gate_that_matches_no_measured_code_fails():
+    """A renamed file must not drop its gate silently."""
+    failures = evaluate_all({}, GATES)
 
-    assert failures == []
+    assert len(failures) == len(GATES)
+    assert failures[0] == "safety: no measured code matches src/churchtune/safety/*"
 
 
 def test_evaluate_matches_writer_only_by_file_name():

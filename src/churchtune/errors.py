@@ -40,6 +40,12 @@ class ReadOnlyViolation(ChurchTuneError):
     i18n_key: ClassVar[str] = "err-read-only-violation"
 
 
+class UnsupportedSchema(ChurchTuneError, ValueError):
+    """The file was written by a newer version of ChurchTune, or is not a ChurchTune file."""
+
+    i18n_key: ClassVar[str] = "err-unsupported-schema"
+
+
 class UnsafeWrite(ChurchTuneError):
     """A write was refused by the safety policy; nothing was sent."""
 

@@ -21,7 +21,6 @@ _SAME_DELAY_NORM = 1e-12
 # Delays and fader moves smaller than these are not worth a write.
 MIN_DELAY_MS = 0.05
 MIN_FADER_CHANGE_DB = 0.5
-NORMAL_POLARITY = 1
 INVERTED_POLARITY = -1
 
 

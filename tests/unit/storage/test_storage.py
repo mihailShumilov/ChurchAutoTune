@@ -10,8 +10,9 @@ from pydantic import ValidationError
 
 from churchtune.domain.changes import Change, WriteScope
 from churchtune.domain.eq import Band, EqType, SystemEq
+from churchtune.errors import UnsupportedSchema
 from churchtune.storage import files
-from churchtune.storage.migrations import UnsupportedSchema, migrate
+from churchtune.storage.migrations import migrate
 from churchtune.storage.models import (
     ChangeModel,
     CodedText,

@@ -4,7 +4,7 @@ Claude Code never talks to a real console. Every OSC address or behaviour marked
 here. A human runs the command in the hall, records the result, and only then may the driver capability for that
 scope move from `suggest_only` to `full` for that model/firmware.
 The small proposal files under `tests/hw/` are created in milestone M5 (each touches one parameter; `apply` does a fresh read and shows the diff first).
-Capabilities per model/firmware live in `src/churchtune/mixers/x32/capabilities.py`; a human changes a row from
+Capabilities per model/firmware live in `src/churchtune/mixers/x32/capabilities.py` (arrives in M1); a human changes a row from
 `suggest_only` to `full` only together with a filled row here (PR must reference the row number).
 
 | # | Model / fw | What to verify | Command (human runs) | Expected | Result | Date / who |

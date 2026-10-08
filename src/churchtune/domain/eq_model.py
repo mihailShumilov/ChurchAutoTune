@@ -20,9 +20,8 @@ from scipy import signal
 
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.eq import Band, EqType, SystemEq
+from churchtune.domain.levels import amplitude_db
 
-# Magnitudes below this (linear) are reported as -240 dB instead of -inf.
-MAGNITUDE_FLOOR = 1e-12
 # Parametric bands with |gain| below this are treated as exactly flat.
 FLAT_GAIN_DB = 1e-9
 # Shelves need a finite slope; the console's Q range ends at 0.3.
@@ -116,7 +115,7 @@ def _biquad(band: Band, fs_hz: float) -> FloatArray | None:
 def _biquad_db(row: FloatArray, freqs_hz: FloatArray, fs_hz: float) -> FloatArray:
     z = np.exp(-1j * 2 * np.pi * freqs_hz / fs_hz)
     h = (row[0] + row[1] * z + row[2] * z * z) / (row[3] + row[4] * z + row[5] * z * z)
-    return np.asarray(20 * np.log10(np.maximum(np.abs(h), MAGNITUDE_FLOOR)), dtype=np.float64)
+    return amplitude_db(np.abs(h))
 
 
 def _slope_btype(band: Band) -> Literal["highpass", "lowpass"]:
@@ -132,7 +131,7 @@ def _analog_slope_db(band: Band, freqs_hz: FloatArray) -> FloatArray:
     else:
         b, a = signal.butter(order, wc, btype=_slope_btype(band), analog=True)
     _, h = signal.freqs(b, a, worN=2 * np.pi * freqs_hz)
-    db = np.asarray(20 * np.log10(np.maximum(np.abs(h), MAGNITUDE_FLOOR)), dtype=np.float64)
+    db = amplitude_db(np.abs(h))
     # Linkwitz-Riley is a squared Butterworth.
     return 2 * db if band.type in _LINKWITZ_RILEY else db
 

@@ -47,7 +47,6 @@ FADER_STEPS = 1024
 FREQ_MIN_HZ, FREQ_MAX_HZ = 20.0, 20000.0
 GAIN_MIN_DB, GAIN_MAX_DB = -15.0, 15.0
 Q_MIN, Q_MAX = 0.3, 10.0
-FADER_MAX_DB = 10.0
 FADER_OFF_DB = -90.0
 # UNVERIFIED: delay formula and step count are from Maillot and were never written on hardware
 # (docs/hardware-checklist.md #1).

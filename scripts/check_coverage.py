@@ -32,6 +32,13 @@ GATES: tuple[Gate, ...] = (
     Gate("measure", "src/churchtune/measure/*", 90.0),
     Gate("analysis", "src/churchtune/analysis/*", 90.0),
     Gate("design", "src/churchtune/design/*", 90.0),
+    # "Everything else" of SPEC §14.3, per package, so a well-covered package cannot hide another.
+    Gate("cli", "src/churchtune/cli/*", 80.0),
+    Gate("audio", "src/churchtune/audio/*", 80.0),
+    Gate("storage", "src/churchtune/storage/*", 80.0),
+    Gate("report", "src/churchtune/report/*", 80.0),
+    Gate("domain", "src/churchtune/domain/*", 80.0),
+    Gate("platform", "src/churchtune/platform/*", 80.0),
 )
 
 
@@ -40,7 +47,8 @@ def evaluate(files: dict[str, Any], gates: tuple[Gate, ...]) -> list[str]:
 
     Args:
         files: The ``files`` mapping of a coverage.py JSON report (path -> data with ``summary``).
-        gates: Gates to check. A gate that matches no measured code passes.
+        gates: Gates to check. A gate that matches no measured code fails: a renamed or moved
+            file must not drop its gate silently.
 
     Returns:
         Human-readable failure messages; empty when every gate is met.
@@ -56,6 +64,7 @@ def evaluate(files: dict[str, Any], gates: tuple[Gate, ...]) -> list[str]:
             covered += summary["covered_lines"] + summary.get("covered_branches", 0)
             total += summary["num_statements"] + summary.get("num_branches", 0)
         if total == 0:
+            failures.append(f"{gate.name}: no measured code matches {gate.pattern}")
             continue
         percent = 100.0 * covered / total
         if percent < gate.min_percent:
