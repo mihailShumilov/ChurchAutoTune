@@ -1,4 +1,4 @@
-"""Parsing of ``/node`` reply lines into domain models.
+"""Parsing of ``/node`` reply lines into domain models, and reading them through a client.
 
 ``/node`` strings are human-readable and formatted, not raw: frequency ``232.3`` / ``1k97``, gain
 ``+0.00`` / ``-15.0``, Q ``3.9``. They are parsed with the display parsers from ``params``.
@@ -6,8 +6,10 @@
 
 import re
 from collections.abc import Sequence
+from typing import Protocol
 
 from churchtune.domain.eq import BANDS_PER_EQ, Band, EqType, SystemEq
+from churchtune.errors import ConsoleUnreachable
 from churchtune.mixers.x32.params import parse_freq
 
 MAIN_EQ_NODE = "main/st/eq"
@@ -82,3 +84,32 @@ def parse_eq_from_dump(text: str) -> SystemEq | None:
     if on is None or len(bands) != BANDS_PER_EQ:
         return None
     return SystemEq(on, tuple(bands[i] for i in range(1, BANDS_PER_EQ + 1)))
+
+
+class NodeReader(Protocol):
+    """Anything that can read one ``/node`` line (the read-only client)."""
+
+    def node(self, path: str) -> str | None:
+        """Return the reply line for ``path``, or None when the console does not answer."""
+        ...
+
+
+def _require_node(reader: NodeReader, path: str) -> str:
+    line = reader.node(path)
+    if line is None:
+        raise ConsoleUnreachable(f"no answer to /node {path}", node=path)
+    return line
+
+
+def read_main_eq(reader: NodeReader) -> SystemEq:
+    """Read the Main LR EQ (switch and six bands).
+
+    Raises:
+        ConsoleUnreachable: A node was not answered.
+    """
+    on = parse_eq_on_line(_require_node(reader, MAIN_EQ_NODE))
+    bands = tuple(
+        parse_eq_node_line(_require_node(reader, f"{MAIN_EQ_NODE}/{number}"))
+        for number in range(1, BANDS_PER_EQ + 1)
+    )
+    return SystemEq(on, bands)

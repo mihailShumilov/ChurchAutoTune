@@ -26,3 +26,21 @@ class DevSafeViolation(ChurchTuneError):
     """A real console or a real audio device was requested while dev-safe mode is on."""
 
     i18n_key: ClassVar[str] = "err-dev-safe-violation"
+
+
+class ConsoleUnreachable(ChurchTuneError):
+    """The console did not answer, or the network refused to carry the packet."""
+
+    i18n_key: ClassVar[str] = "err-console-unreachable"
+
+
+class ReadOnlyViolation(ChurchTuneError):
+    """The read-only client was asked to send a message that could change the console."""
+
+    i18n_key: ClassVar[str] = "err-read-only-violation"
+
+
+class UnsafeWrite(ChurchTuneError):
+    """A write was refused by the safety policy; nothing was sent."""
+
+    i18n_key: ClassVar[str] = "err-unsafe-write"

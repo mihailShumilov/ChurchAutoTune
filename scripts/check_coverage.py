@@ -28,6 +28,7 @@ GATES: tuple[Gate, ...] = (
     Gate("safety", "src/churchtune/safety/*", 100.0),
     Gate("writer", "src/churchtune/mixers/*/writer.py", 100.0),
     Gate("client", "src/churchtune/mixers/*/client.py", 100.0),
+    Gate("transport", "src/churchtune/mixers/*/transport.py", 100.0),
     Gate("measure", "src/churchtune/measure/*", 90.0),
     Gate("analysis", "src/churchtune/analysis/*", 90.0),
     Gate("design", "src/churchtune/design/*", 90.0),

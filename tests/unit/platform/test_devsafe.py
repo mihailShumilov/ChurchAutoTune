@@ -79,7 +79,7 @@ def test_is_loopback_host_accepts_loopback(host):
         "172.16.4.1",
         "169.254.1.1",
         "8.8.8.8",
-        "0.0.0.0",  # noqa: S104 - a value under test, nothing binds to it
+        "0.0.0.0",
         "255.255.255.255",
         "128.0.0.1",
         "126.255.255.255",
