@@ -64,6 +64,7 @@ select = [
 ignore = [
     "D105",    # magic methods are documented by the class docstring
     "D107",    # __init__ is documented in the class docstring (google style)
+    "N818",    # errors are named by what happened (UnsafeWrite, ReadbackMismatch), CODING_STANDARDS §6
     "TRY003",  # error messages carry context (path, value); a class per message adds nothing
 ]
 
