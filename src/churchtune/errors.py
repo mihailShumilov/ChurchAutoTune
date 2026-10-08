@@ -44,3 +44,9 @@ class UnsafeWrite(ChurchTuneError):
     """A write was refused by the safety policy; nothing was sent."""
 
     i18n_key: ClassVar[str] = "err-unsafe-write"
+
+
+class LevelError(ChurchTuneError, ValueError):
+    """A stimulus level above the hard output limit was requested; nothing is generated."""
+
+    i18n_key: ClassVar[str] = "err-level-above-limit"
