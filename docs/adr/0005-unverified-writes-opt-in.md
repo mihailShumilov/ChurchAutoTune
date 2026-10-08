@@ -1,6 +1,6 @@
 # 0005 — Writes never verified on hardware need an explicit opt-in
 
-Status: proposed (2026-10-08) — needs the owner's decision, see "Open question"
+Status: accepted (2026-10-08) by the project owner
 
 ## Context
 
@@ -40,9 +40,12 @@ The original tool wrote both without any gate.
 - When rows 1 and 2 of the checklist are filled, the gate moves to the per-model capability table
   (`mixers/x32/capabilities.py`, milestone M1/M5) and the flag is removed.
 
-## Open question
+## Why the flag exists
 
-Whether the flag should exist at all before the checklist rows are filled. The alternative is
-"advice only" with no way to write these parameters from the CLI. The flag is kept for now because
-the hardware check itself needs a way to send the write (rows 1 and 2 use it), and because the
+The alternative was "advice only", with no way to write these parameters from the CLI. The owner
+chose to keep the flag: the hardware check of rows 1 and 2 needs a way to send the write, and the
 wizard (M5) will not expose it.
+
+Note for the check: in the reference hall the alignment of 2026-10-02 found less than 1 dB to gain,
+so `sub align` writes no delay there even with the flag. Rows 1 and 2 need a junction session that
+really asks for a delay or an inverted polarity, or the one-parameter proposal files of M5.

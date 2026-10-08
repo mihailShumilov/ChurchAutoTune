@@ -31,7 +31,8 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - Use Context7 MCP for library docs (Textual, Typer, sounddevice, pydantic, numpy, scipy, fluent.runtime).
 - Before finishing a task, run the full check:
   ```bash
-  CTUNE_DEV_SAFE=1 uv run ruff format --check . && uv run ruff check . && uv run mypy && CTUNE_DEV_SAFE=1 uv run pytest
+  CTUNE_DEV_SAFE=1 uv run ruff format --check . && uv run ruff check . && uv run mypy \
+    && CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json && uv run python scripts/check_coverage.py
   ```
 
 ## Agents (use them — they are part of Definition of Done)
