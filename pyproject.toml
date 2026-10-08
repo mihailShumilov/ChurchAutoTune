@@ -93,6 +93,11 @@ strict = true
 files = ["src"]
 warn_unreachable = true
 
+[[tool.mypy.overrides]]
+# No type stubs are published for these.
+module = ["sounddevice", "soundfile"]
+ignore_missing_imports = true
+
 # --------------------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]

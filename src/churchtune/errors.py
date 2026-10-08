@@ -50,3 +50,15 @@ class LevelError(ChurchTuneError, ValueError):
     """A stimulus level above the hard output limit was requested; nothing is generated."""
 
     i18n_key: ClassVar[str] = "err-level-above-limit"
+
+
+class AudioDeviceError(ChurchTuneError):
+    """The audio device is missing, too small or cannot run at the needed sample rate."""
+
+    i18n_key: ClassVar[str] = "err-audio-device"
+
+
+class MeasurementAborted(ChurchTuneError):
+    """Playback was interrupted; the output was silenced at once."""
+
+    i18n_key: ClassVar[str] = "err-measurement-aborted"
