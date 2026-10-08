@@ -1,0 +1,24 @@
+{
+  "created": "2026-10-02T18:56:32",
+  "ip": "192.0.2.80",
+  "scope": "sub",
+  "what": "align d=0.0ms pol=1",
+  "changes": [
+    {
+      "path": "/mtx/03/mix/fader",
+      "old_value": 0.2404692082111437,
+      "new_value": 0.2590420332355816,
+      "old_display": "-31.5",
+      "new_display": "-29.3"
+    }
+  ],
+  "results": [
+    {
+      "path": "/mtx/03/mix/fader",
+      "wanted": 0.2590420332355816,
+      "readback": 0.25904202461242676,
+      "node": "/mtx/03/mix ON -29.3",
+      "ok": true
+    }
+  ]
+}

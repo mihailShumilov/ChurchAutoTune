@@ -1,0 +1,27 @@
+{
+  "point": "p1-center",
+  "time": "2026-10-02T18:52:48",
+  "level_dbfs": -17.0,
+  "peaks_dbfs": [
+    -11.0,
+    -10.8,
+    -10.9
+  ],
+  "xruns": [],
+  "roles": {
+    "sub": [
+      3
+    ],
+    "mains": [
+      1,
+      2
+    ],
+    "others": [
+      5,
+      6
+    ]
+  },
+  "state": {
+    "sub_fader": -31.5
+  }
+}

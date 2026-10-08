@@ -1,0 +1,59 @@
+{
+  "name": "after-sub",
+  "kind": "baseline",
+  "base": null,
+  "created": "2026-10-02T18:57:21",
+  "eq_at_measurement": {
+    "on": true,
+    "bands": [
+      {
+        "band": 1,
+        "type": "BU18",
+        "freq": 23.0,
+        "gain": -7.75,
+        "q": 7.8
+      },
+      {
+        "band": 2,
+        "type": "PEQ",
+        "freq": 496.6,
+        "gain": -4.0,
+        "q": 1.2
+      },
+      {
+        "band": 3,
+        "type": "PEQ",
+        "freq": 232.3,
+        "gain": -1.75,
+        "q": 3.9
+      },
+      {
+        "band": 4,
+        "type": "PEQ",
+        "freq": 1970.0,
+        "gain": -3.5,
+        "q": 6.4
+      },
+      {
+        "band": 5,
+        "type": "PEQ",
+        "freq": 2790.0,
+        "gain": 2.5,
+        "q": 1.0
+      },
+      {
+        "band": 6,
+        "type": "PEQ",
+        "freq": 49.1,
+        "gain": -3.0,
+        "q": 1.4
+      }
+    ]
+  },
+  "fs": 48000,
+  "sweep": {
+    "f1": 20.0,
+    "f2": 20000.0,
+    "seconds": 6.0
+  }
+}

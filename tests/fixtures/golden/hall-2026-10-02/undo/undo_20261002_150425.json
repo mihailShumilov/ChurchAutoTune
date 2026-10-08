@@ -1,0 +1,131 @@
+{
+  "created": "2026-10-02T15:04:25",
+  "ip": "192.0.2.80",
+  "proposal": "/tmp/x32_writetest2.json",
+  "eq_before": {
+    "on": true,
+    "bands": [
+      {
+        "band": 1,
+        "type": "BU18",
+        "freq": 23.0,
+        "gain": -7.75,
+        "q": 7.8
+      },
+      {
+        "band": 2,
+        "type": "PEQ",
+        "freq": 496.6,
+        "gain": -4.0,
+        "q": 1.2
+      },
+      {
+        "band": 3,
+        "type": "PEQ",
+        "freq": 248.9,
+        "gain": -2.0,
+        "q": 3.9
+      },
+      {
+        "band": 4,
+        "type": "PEQ",
+        "freq": 1970.0,
+        "gain": -3.5,
+        "q": 6.4
+      },
+      {
+        "band": 5,
+        "type": "PEQ",
+        "freq": 2790.0,
+        "gain": 2.5,
+        "q": 1.0
+      },
+      {
+        "band": 6,
+        "type": "PEQ",
+        "freq": 49.1,
+        "gain": -3.0,
+        "q": 1.4
+      }
+    ]
+  },
+  "changes": [
+    {
+      "path": "/main/st/eq/3/type",
+      "old_value": 2,
+      "new_value": 3,
+      "old_display": "PEQ",
+      "new_display": "VEQ"
+    },
+    {
+      "path": "/main/st/eq/3/q",
+      "old_value": 0.2676056338028169,
+      "new_value": 0.4647887323943662,
+      "old_display": "Q 3.9",
+      "new_display": "Q 2.0"
+    }
+  ],
+  "eq_after": {
+    "on": true,
+    "bands": [
+      {
+        "band": 1,
+        "type": "BU18",
+        "freq": 23.0,
+        "gain": -7.75,
+        "q": 7.8
+      },
+      {
+        "band": 2,
+        "type": "PEQ",
+        "freq": 496.6,
+        "gain": -4.0,
+        "q": 1.2
+      },
+      {
+        "band": 3,
+        "type": "VEQ",
+        "freq": 248.9,
+        "gain": -2.0,
+        "q": 2.0
+      },
+      {
+        "band": 4,
+        "type": "PEQ",
+        "freq": 1970.0,
+        "gain": -3.5,
+        "q": 6.4
+      },
+      {
+        "band": 5,
+        "type": "PEQ",
+        "freq": 2790.0,
+        "gain": 2.5,
+        "q": 1.0
+      },
+      {
+        "band": 6,
+        "type": "PEQ",
+        "freq": 49.1,
+        "gain": -3.0,
+        "q": 1.4
+      }
+    ]
+  },
+  "results": [
+    {
+      "path": "/main/st/eq/3/type",
+      "wanted": 3,
+      "readback": 3,
+      "node": "/main/st/eq/3 VEQ 248.9 -2.00 3.9",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/3/q",
+      "wanted": 0.4647887323943662,
+      "readback": 0.4647887349128723,
+      "node": "/main/st/eq/3 VEQ 248.9 -2.00 2.0",
+      "ok": true
+    }
+  ]
+}

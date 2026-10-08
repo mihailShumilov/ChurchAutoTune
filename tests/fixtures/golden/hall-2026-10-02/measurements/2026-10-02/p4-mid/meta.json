@@ -1,0 +1,16 @@
+{
+  "point": "p4-mid",
+  "time": "2026-10-02T18:23:25",
+  "level_dbfs": -17.0,
+  "avg": 2,
+  "backend": "sounddevice",
+  "peak_dbfs": -12.43,
+  "clipped_samples": 0,
+  "noise_dbfs": -63.3,
+  "sweep_rms_dbfs": -26.44,
+  "snr_db": 36.9,
+  "pnr_db": 85.2,
+  "latency_ms": 225.9,
+  "verdict": "ok",
+  "warnings": []
+}

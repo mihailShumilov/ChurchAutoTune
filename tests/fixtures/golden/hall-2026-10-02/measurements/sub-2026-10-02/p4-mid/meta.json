@@ -1,0 +1,27 @@
+{
+  "point": "p4-mid",
+  "time": "2026-10-02T18:47:39",
+  "level_dbfs": -17.0,
+  "peaks_dbfs": [
+    -21.3,
+    -12.7,
+    -12.5
+  ],
+  "xruns": [],
+  "roles": {
+    "sub": [
+      3
+    ],
+    "mains": [
+      1,
+      2
+    ],
+    "others": [
+      5,
+      6
+    ]
+  },
+  "state": {
+    "sub_fader": -37.5
+  }
+}

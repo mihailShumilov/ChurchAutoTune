@@ -1,0 +1,201 @@
+{
+  "created": "2026-10-02T19:19:41",
+  "ip": "192.0.2.80",
+  "proposal": "eq_proposal.json",
+  "eq_before": {
+    "on": true,
+    "bands": [
+      {
+        "band": 1,
+        "type": "BU18",
+        "freq": 23.0,
+        "gain": -7.75,
+        "q": 7.8
+      },
+      {
+        "band": 2,
+        "type": "PEQ",
+        "freq": 496.6,
+        "gain": -4.0,
+        "q": 1.2
+      },
+      {
+        "band": 3,
+        "type": "PEQ",
+        "freq": 232.3,
+        "gain": -1.75,
+        "q": 3.9
+      },
+      {
+        "band": 4,
+        "type": "PEQ",
+        "freq": 1970.0,
+        "gain": -3.5,
+        "q": 6.4
+      },
+      {
+        "band": 5,
+        "type": "PEQ",
+        "freq": 2790.0,
+        "gain": 2.5,
+        "q": 1.0
+      },
+      {
+        "band": 6,
+        "type": "PEQ",
+        "freq": 49.1,
+        "gain": -3.0,
+        "q": 1.4
+      }
+    ]
+  },
+  "changes": [
+    {
+      "path": "/main/st/eq/2/g",
+      "old_value": 0.36666666666666664,
+      "new_value": 0.2,
+      "old_display": "-4.00 dB",
+      "new_display": "-9.00 dB"
+    },
+    {
+      "path": "/main/st/eq/2/f",
+      "old_value": 0.465,
+      "new_value": 0.46,
+      "old_display": "496.6 Hz",
+      "new_display": "479.8 Hz"
+    },
+    {
+      "path": "/main/st/eq/2/q",
+      "old_value": 0.6056338028169014,
+      "new_value": 0.5352112676056338,
+      "old_display": "Q 1.2",
+      "new_display": "Q 1.5"
+    },
+    {
+      "path": "/main/st/eq/4/g",
+      "old_value": 0.38333333333333336,
+      "new_value": 0.44166666666666665,
+      "old_display": "-3.50 dB",
+      "new_display": "-1.75 dB"
+    },
+    {
+      "path": "/main/st/eq/6/g",
+      "old_value": 0.4,
+      "new_value": 0.3,
+      "old_display": "-3.00 dB",
+      "new_display": "-6.00 dB"
+    },
+    {
+      "path": "/main/st/eq/6/f",
+      "old_value": 0.13,
+      "new_value": 0.135,
+      "old_display": "49.1 Hz",
+      "new_display": "50.8 Hz"
+    },
+    {
+      "path": "/main/st/eq/6/q",
+      "old_value": 0.5633802816901409,
+      "new_value": 0.28169014084507044,
+      "old_display": "Q 1.4",
+      "new_display": "Q 3.7"
+    }
+  ],
+  "eq_after": {
+    "on": true,
+    "bands": [
+      {
+        "band": 1,
+        "type": "BU18",
+        "freq": 23.0,
+        "gain": -7.75,
+        "q": 7.8
+      },
+      {
+        "band": 2,
+        "type": "PEQ",
+        "freq": 479.8,
+        "gain": -9.0,
+        "q": 1.5
+      },
+      {
+        "band": 3,
+        "type": "PEQ",
+        "freq": 232.3,
+        "gain": -1.75,
+        "q": 3.9
+      },
+      {
+        "band": 4,
+        "type": "PEQ",
+        "freq": 1970.0,
+        "gain": -1.75,
+        "q": 6.4
+      },
+      {
+        "band": 5,
+        "type": "PEQ",
+        "freq": 2790.0,
+        "gain": 2.5,
+        "q": 1.0
+      },
+      {
+        "band": 6,
+        "type": "PEQ",
+        "freq": 50.8,
+        "gain": -6.0,
+        "q": 3.7
+      }
+    ]
+  },
+  "results": [
+    {
+      "path": "/main/st/eq/2/g",
+      "wanted": 0.2,
+      "readback": 0.20000000298023224,
+      "node": "/main/st/eq/2 PEQ 496.6 -9.00 1.2",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/2/f",
+      "wanted": 0.46,
+      "readback": 0.46000000834465027,
+      "node": "/main/st/eq/2 PEQ 479.8 -9.00 1.2",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/2/q",
+      "wanted": 0.5352112676056338,
+      "readback": 0.5352112650871277,
+      "node": "/main/st/eq/2 PEQ 479.8 -9.00 1.5",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/4/g",
+      "wanted": 0.44166666666666665,
+      "readback": 0.4416666626930237,
+      "node": "/main/st/eq/4 PEQ 1k97 -1.75 6.4",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/6/g",
+      "wanted": 0.3,
+      "readback": 0.30000001192092896,
+      "node": "/main/st/eq/6 PEQ 49.1 -6.00 1.4",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/6/f",
+      "wanted": 0.135,
+      "readback": 0.13500000536441803,
+      "node": "/main/st/eq/6 PEQ 50.8 -6.00 1.4",
+      "ok": true
+    },
+    {
+      "path": "/main/st/eq/6/q",
+      "wanted": 0.28169014084507044,
+      "readback": 0.28169015049934387,
+      "node": "/main/st/eq/6 PEQ 50.8 -6.00 3.7",
+      "ok": true
+    }
+  ]
+}

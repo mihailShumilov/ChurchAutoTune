@@ -1,0 +1,67 @@
+{
+  "created": "2026-10-02T15:04:27",
+  "reverts": "undo/undo_20261002_150418.json",
+  "eq_before": {
+    "on": true,
+    "bands": [
+      {
+        "band": 1,
+        "type": "BU18",
+        "freq": 23.0,
+        "gain": -7.75,
+        "q": 7.8
+      },
+      {
+        "band": 2,
+        "type": "PEQ",
+        "freq": 496.6,
+        "gain": -4.0,
+        "q": 1.2
+      },
+      {
+        "band": 3,
+        "type": "PEQ",
+        "freq": 248.9,
+        "gain": -2.0,
+        "q": 3.9
+      },
+      {
+        "band": 4,
+        "type": "PEQ",
+        "freq": 1970.0,
+        "gain": -3.5,
+        "q": 6.4
+      },
+      {
+        "band": 5,
+        "type": "PEQ",
+        "freq": 2790.0,
+        "gain": 2.5,
+        "q": 1.0
+      },
+      {
+        "band": 6,
+        "type": "PEQ",
+        "freq": 49.1,
+        "gain": -3.0,
+        "q": 1.4
+      }
+    ]
+  },
+  "changes": [
+    {
+      "path": "/main/st/eq/3/f",
+      "old_value": 0.365,
+      "new_value": 0.355,
+      "old_display": "248.9 Hz",
+      "new_display": "232.3 Hz"
+    },
+    {
+      "path": "/main/st/eq/3/g",
+      "old_value": 0.43333333333333335,
+      "new_value": 0.44166666666666665,
+      "old_display": "-2.00 dB",
+      "new_display": "-1.75 dB"
+    }
+  ]
+}

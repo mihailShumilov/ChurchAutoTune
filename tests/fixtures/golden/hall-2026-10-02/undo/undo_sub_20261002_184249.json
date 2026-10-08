@@ -1,0 +1,178 @@
+{
+  "created": "2026-10-02T18:42:49",
+  "ip": "192.0.2.80",
+  "scope": "sub",
+  "what": "crossover LR24 100Hz",
+  "changes": [
+    {
+      "path": "/mtx/03/eq/2/g",
+      "old_value": 0.65,
+      "new_value": 0.5,
+      "old_display": "+4.50 dB",
+      "new_display": "+0.00 dB"
+    },
+    {
+      "path": "/mtx/03/eq/5/g",
+      "old_value": 0.525,
+      "new_value": 0.5,
+      "old_display": "+0.75 dB",
+      "new_display": "+0.00 dB"
+    },
+    {
+      "path": "/mtx/03/eq/6/type",
+      "old_value": 4,
+      "new_value": 13,
+      "old_display": "HShv",
+      "new_display": "LR24"
+    },
+    {
+      "path": "/mtx/03/eq/6/f",
+      "old_value": 0.525,
+      "new_value": 0.235,
+      "old_display": "751.7 Hz",
+      "new_display": "101.4 Hz"
+    },
+    {
+      "path": "/mtx/01/eq/1/type",
+      "old_value": 0,
+      "new_value": 13,
+      "old_display": "LCut",
+      "new_display": "LR24"
+    },
+    {
+      "path": "/mtx/01/eq/1/f",
+      "old_value": 0.25,
+      "new_value": 0.235,
+      "old_display": "112.5 Hz",
+      "new_display": "101.4 Hz"
+    },
+    {
+      "path": "/mtx/02/eq/1/type",
+      "old_value": 0,
+      "new_value": 13,
+      "old_display": "LCut",
+      "new_display": "LR24"
+    },
+    {
+      "path": "/mtx/02/eq/1/f",
+      "old_value": 0.25,
+      "new_value": 0.235,
+      "old_display": "112.5 Hz",
+      "new_display": "101.4 Hz"
+    },
+    {
+      "path": "/mtx/03/eq/3/g",
+      "old_value": 0.025,
+      "new_value": 0.5,
+      "old_display": "-14.2 dB",
+      "new_display": "+0.00 dB"
+    },
+    {
+      "path": "/mtx/03/eq/4/g",
+      "old_value": 0.0,
+      "new_value": 0.5,
+      "old_display": "-15.0 dB",
+      "new_display": "+0.00 dB"
+    },
+    {
+      "path": "/mtx/01/eq/2/g",
+      "old_value": 0.008333333333333333,
+      "new_value": 0.5,
+      "old_display": "-14.7 dB",
+      "new_display": "+0.00 dB"
+    },
+    {
+      "path": "/mtx/02/eq/2/g",
+      "old_value": 0.008333333333333333,
+      "new_value": 0.5,
+      "old_display": "-14.7 dB",
+      "new_display": "+0.00 dB"
+    }
+  ],
+  "results": [
+    {
+      "path": "/mtx/03/eq/2/g",
+      "wanted": 0.5,
+      "readback": 0.5,
+      "node": "/mtx/03/eq/2 PEQ 120.5 +0.00 0.8",
+      "ok": true
+    },
+    {
+      "path": "/mtx/03/eq/5/g",
+      "wanted": 0.5,
+      "readback": 0.5,
+      "node": "/mtx/03/eq/5 PEQ 257.6 +0.00 7.1",
+      "ok": true
+    },
+    {
+      "path": "/mtx/03/eq/6/type",
+      "wanted": 13,
+      "readback": 13,
+      "node": "/mtx/03/eq/6 LR24 751.7 -15.0 2.0",
+      "ok": true
+    },
+    {
+      "path": "/mtx/03/eq/6/f",
+      "wanted": 0.235,
+      "readback": 0.23499999940395355,
+      "node": "/mtx/03/eq/6 LR24 101.4 -15.0 2.0",
+      "ok": true
+    },
+    {
+      "path": "/mtx/01/eq/1/type",
+      "wanted": 13,
+      "readback": 13,
+      "node": "/mtx/01/eq/1 LR24 112.5 -14.2 2.0",
+      "ok": true
+    },
+    {
+      "path": "/mtx/01/eq/1/f",
+      "wanted": 0.235,
+      "readback": 0.23499999940395355,
+      "node": "/mtx/01/eq/1 LR24 101.4 -14.2 2.0",
+      "ok": true
+    },
+    {
+      "path": "/mtx/02/eq/1/type",
+      "wanted": 13,
+      "readback": 13,
+      "node": "/mtx/02/eq/1 LR24 101.4 -14.2 2.0",
+      "ok": true
+    },
+    {
+      "path": "/mtx/02/eq/1/f",
+      "wanted": 0.235,
+      "readback": 0.23499999940395355,
+      "node": "/mtx/02/eq/1 LR24 101.4 -14.2 2.0",
+      "ok": true
+    },
+    {
+      "path": "/mtx/03/eq/3/g",
+      "wanted": 0.5,
+      "readback": 0.5,
+      "node": "/mtx/03/eq/3 PEQ 9k03 +0.00 0.3",
+      "ok": true
+    },
+    {
+      "path": "/mtx/03/eq/4/g",
+      "wanted": 0.5,
+      "readback": 0.5,
+      "node": "/mtx/03/eq/4 PEQ 1k39 +0.00 1.1",
+      "ok": true
+    },
+    {
+      "path": "/mtx/01/eq/2/g",
+      "wanted": 0.5,
+      "readback": 0.5,
+      "node": "/mtx/01/eq/2 VEQ 74.3 +0.00 3.2",
+      "ok": true
+    },
+    {
+      "path": "/mtx/02/eq/2/g",
+      "wanted": 0.5,
+      "readback": 0.5,
+      "node": "/mtx/02/eq/2 VEQ 74.3 +0.00 3.2",
+      "ok": true
+    }
+  ]
+}
