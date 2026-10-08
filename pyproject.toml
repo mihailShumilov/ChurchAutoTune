@@ -100,6 +100,8 @@ xfail_strict = true
 [tool.coverage.run]
 source = ["churchtune"]
 branch = true
+# Three-line `python -m churchtune` shim; the CLI itself is tested through churchtune.cli.app.
+omit = ["*/churchtune/__main__.py"]
 
 [tool.coverage.report]
 # Overall gate; per-package gates from SPEC §14.3 are enforced by scripts/check_coverage.py.
