@@ -1,0 +1,52 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv sync:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(CTUNE_DEV_SAFE=1 uv run pytest:*)",
+      "Bash(CTUNE_DEV_SAFE=1 uv run ctune:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(pip install:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(~/sites/my/X32-church/**)",
+      "Write(~/sites/my/X32-church/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/mihailshumilov/sites/my/X32-church"
+    ]
+  },
+  "env": {
+    "CTUNE_DEV_SAFE": "1"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard_console.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format_python.py"
+          }
+        ]
+      }
+    ]
+  }
+}
