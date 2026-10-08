@@ -5,8 +5,8 @@ original tool computed and what was applied to the console and verified by ear. 
 must reproduce them: the EQ proposal, the response tables, the sub / top alignment analysis and
 the exact console writes.
 
-Tolerances: stored proposals keep full float precision, so bands are compared to 1e-9; tables
-are compared as printed.
+Tolerances: proposed bands lie on the console's parameter grid, so they are compared to 1e-9 (a
+difference would be a whole grid step); tables are compared as printed.
 """
 
 import json
@@ -119,6 +119,14 @@ def test_proposal_prediction_and_range_match(proposal, reference_proposal):
     assert proposal.f_low_hz == reference_proposal.f_low_hz == 26.3
 
 
+def test_proposal_has_no_warnings_and_was_made_for_the_eq_on_the_console(
+    proposal, reference_proposal
+):
+    assert proposal.warnings == ()
+    assert reference_proposal.warnings == ()
+    assert reference_proposal.eq_current == reference_proposal.eq_at_measurement
+
+
 def test_proposal_leaves_the_same_features_alone(proposal, reference_proposal):
     got = [(s.kind.value, s.freq_hz, s.dev_db, s.width_oct, s.points) for s in proposal.skipped]
     expected = [
@@ -214,6 +222,9 @@ def test_junction_before_the_level_change_matches_the_original_analysis():
 
     # results/sub-2026-10-02/sub_align.txt
     assert (result.delay_ms, result.polarity) == (9.2, 1)
+    # The search grid itself: 9.2 and -1.8 ms also lie on a coarser grid.
+    assert len(result.delays_ms) == 301
+    assert np.allclose(np.diff(result.delays_ms), 0.1, atol=1e-9)
     assert f"{result.score_now_db:+.1f} -> {result.score_best_db:+.1f}" == "-11.4 -> -10.6"
     assert result.sub_minus_tops_at_fc_db == -8.6
     p1, p4 = result.points["p1-center"], result.points["p4-mid"]
@@ -370,6 +381,18 @@ def test_main_eq_plan_reproduces_the_writes_made_in_the_hall(reference_proposal)
     assert all(result.ok for result in undo.results)
 
 
+@pytest.mark.parametrize("name", ["undo_20261002_150418.json", "undo_20261002_150425.json"])
+def test_afternoon_main_eq_plans_reproduce_the_order_of_the_writes(name):
+    """Two earlier Main EQ changes of the same day: gain before frequency, and PEQ -> VEQ."""
+    undo = files.read_undo(UNDO / name)
+
+    changes = plan_changes(
+        undo.eq_before.to_domain(), undo.eq_after.to_domain(), WritePolicy(LAWS, frozenset())
+    )
+
+    assert_same_writes(changes, undo.changes)
+
+
 def test_console_readbacks_of_that_evening_land_on_the_planned_grid_steps():
     for name in (
         "undo_20261002_191941.json",
@@ -400,8 +423,15 @@ def test_every_file_of_the_original_tool_in_the_fixture_is_readable():
 
 
 def test_fixture_holds_no_personal_or_site_data():
-    pattern = re.compile(r"192\.168\.|\b10\.\d+\.\d+\.\d+\b|X32P-04|ablesque", re.IGNORECASE)
-    for path in GOLDEN_HALL.rglob("*"):
-        if path.suffix in (".json", ".md", ".txt", ".csv"):
-            assert not pattern.search(path.read_text(encoding="utf-8")), path
+    private_address = re.compile(
+        r"192\.168\.|\b10\.\d+\.\d+\.\d+\b|\b172\.(1[6-9]|2\d|3[01])\.\d+\.\d+\b"
+    )
+    texts = [p for p in GOLDEN_HALL.rglob("*") if p.suffix in (".json", ".md", ".txt", ".csv")]
+    for path in [*texts, *DUMP_2026_10_02.parent.glob("*.txt")]:
+        assert not private_address.search(path.read_text(encoding="utf-8")), path
+    for dump in DUMP_2026_10_02.parent.glob("*.txt"):
+        prefs = [
+            ln for ln in dump.read_text(encoding="utf-8").splitlines() if ln.startswith("/-prefs ")
+        ]
+        assert all('"ChurchTune"' in line for line in prefs), dump
     assert json.loads((UNDO / "undo_20261002_191941.json").read_text())["ip"] == "192.0.2.80"
