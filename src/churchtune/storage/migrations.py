@@ -37,6 +37,7 @@ def _junction_meta_v0(data: Raw) -> Raw:
 def _undo_v0(data: Raw) -> Raw:
     migrated = dict(data)
     migrated.setdefault("scope", "main")
+    migrated.setdefault("created", "")
     return migrated
 
 

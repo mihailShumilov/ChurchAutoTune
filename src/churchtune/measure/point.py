@@ -5,7 +5,7 @@ Pure of files: storing the result is the job of ``storage``.
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -20,7 +20,9 @@ from churchtune.measure.stimulus import build_stimulus, make_sweep
 class PlayRecBackend(Protocol):
     """The part of an audio backend a point measurement needs."""
 
-    def playrec(self, out: npt.NDArray[np.float32]) -> tuple[FloatArray, Sequence[str]]:
+    def playrec(
+        self, out: npt.NDArray[np.float32]
+    ) -> tuple[npt.NDArray[np.floating[Any]], Sequence[str]]:
         """Play ``out`` (``float32[n, 2]``) and record the mic in the same stream.
 
         Returns:

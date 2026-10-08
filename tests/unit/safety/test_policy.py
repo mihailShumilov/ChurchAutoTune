@@ -22,6 +22,7 @@ from churchtune.safety.policy import (
     SUB_MATRIX_PATH_RE,
     WriteLimits,
     WritePolicy,
+    is_unverified_write,
 )
 from tests.fixtures.venues import MATRICES, reference_policy
 
@@ -442,3 +443,19 @@ def test_whatever_is_accepted_is_in_range_and_within_limits(path, value, scope):
 def test_allowlist_regexes_have_no_wildcards():
     for regex in ALL_ALLOWED:
         assert not re.search(r"\.[*+]|\\S|\\w", regex.pattern)
+
+
+@pytest.mark.parametrize(
+    ("path", "unverified"),
+    [
+        ("/outputs/main/06/delay/time", True),
+        ("/outputs/main/06/delay/on", True),
+        ("/mtx/03/preamp/invert", True),
+        ("/mtx/03/mix/fader", False),
+        ("/mtx/03/mix/on", False),
+        ("/mtx/03/eq/6/f", False),
+        ("/main/st/eq/on", False),
+    ],
+)
+def test_unverified_writes_are_recognised_by_path(path, unverified):
+    assert is_unverified_write(path) is unverified

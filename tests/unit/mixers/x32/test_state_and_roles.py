@@ -269,3 +269,14 @@ def test_split_irs_gives_one_response_per_block_on_the_blocks_own_time_base():
     assert int(np.argmax(np.abs(irs[1]))) == 300
     assert irs[1][300] < 0 < irs[0][100]
     assert np.max(np.abs(irs[2])) < 1e-9
+
+
+@pytest.mark.parametrize(
+    "override",
+    [{"sub": [4]}, {"sub": [7]}, {"mains": [0, 1]}, {"others": [4]}],
+    ids=["no-output", "no-such-matrix", "zero", "other-without-output"],
+)
+def test_a_role_cannot_be_given_to_a_matrix_that_feeds_no_output(override):
+    """An override names what the plan may write, so it must name a real, connected matrix."""
+    with pytest.raises(ValueError, match="feed no physical output"):
+        detect_roles(_state(REFERENCE), **override)

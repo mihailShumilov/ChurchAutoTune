@@ -28,7 +28,8 @@ def detect_roles(
     other matrix with an output counts as "other".
 
     Raises:
-        ValueError: No sub or no mains were found and none were given.
+        ValueError: No sub or no mains were found and none were given, or a named matrix does
+            not exist or feeds no physical output.
     """
     feeding = {n: m for n, m in state.matrices.items() if m.outputs}
     if sub is None:
@@ -37,6 +38,12 @@ def detect_roles(
         mains = [n for n, m in feeding.items() if MAINS_NAME_RE.search(m.name)]
     if others is None:
         others = [n for n in feeding if n not in sub and n not in mains]
+    named = [*sub, *mains, *others]
+    without_output = sorted({n for n in named if n not in feeding})
+    if without_output:
+        raise ValueError(
+            f"matrices {without_output} feed no physical output and cannot have a role"
+        )
     if not sub or not mains:
         raise ValueError(
             f"could not tell which matrices are the sub and the mains "

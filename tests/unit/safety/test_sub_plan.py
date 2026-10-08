@@ -165,13 +165,14 @@ def test_small_fader_changes_are_not_written(fader_change_db):
 def test_positive_delay_delays_the_sub_output_and_switches_the_delay_on():
     changes = alignment_changes(console(), ROLES, UNVERIFIED_OK, delay_ms=9.2, polarity=1)
 
+    # The time is written before the delay is switched on (SPEC section 9.2).
     assert [c.path for c in changes] == [
-        "/outputs/main/06/delay/on",
         "/outputs/main/06/delay/time",
+        "/outputs/main/06/delay/on",
     ]
-    assert (changes[0].old_value, changes[0].new_value) == (0, 1)
-    assert P.norm_to_delay(changes[1].new_value) == pytest.approx(9.2, abs=0.05)
-    assert (changes[1].old_display, changes[1].new_display) == ("0.3 ms", "9.2 ms")
+    assert (changes[1].old_value, changes[1].new_value) == (0, 1)
+    assert P.norm_to_delay(changes[0].new_value) == pytest.approx(9.2, abs=0.05)
+    assert (changes[0].old_display, changes[0].new_display) == ("0.3 ms", "9.2 ms")
 
 
 def test_negative_delay_delays_the_tops_and_the_other_speakers_alike():
@@ -202,7 +203,7 @@ def test_delay_is_added_to_a_delay_that_is_already_on():
 def test_delay_is_capped_at_the_policy_limit():
     changes = alignment_changes(console(), ROLES, UNVERIFIED_OK, delay_ms=80.0, polarity=1)
 
-    assert P.norm_to_delay(changes[-1].new_value) == pytest.approx(50.0, abs=0.05)
+    assert P.norm_to_delay(changes[0].new_value) == pytest.approx(50.0, abs=0.05)
 
 
 @pytest.mark.parametrize("delay_ms", [0.0, 0.05, -0.05, 0.04])
@@ -242,8 +243,8 @@ def test_full_alignment_package_is_ordered_delay_polarity_fader():
     )
 
     assert [c.path.rsplit("/", 2)[-2:] for c in changes] == [
-        ["delay", "on"],
         ["delay", "time"],
+        ["delay", "on"],
         ["preamp", "invert"],
         ["mix", "fader"],
     ]

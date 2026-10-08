@@ -5,6 +5,7 @@ generation refuses to exceed it and the audio backends clip to it.
 """
 
 import numpy as np
+import numpy.typing as npt
 
 from churchtune.domain.arrays import FloatArray
 
@@ -32,7 +33,7 @@ def amplitude_db(x: FloatArray) -> FloatArray:
     return np.asarray(20 * np.log10(np.maximum(np.abs(x), _AMPLITUDE_FLOOR)), dtype=np.float64)
 
 
-def rms_dbfs(x: FloatArray) -> float:
+def rms_dbfs(x: npt.ArrayLike) -> float:
     """RMS level of a signal in dBFS; ``SILENCE_DBFS`` for an empty or silent signal."""
     samples = np.asarray(x, dtype=np.float64)
     if samples.size == 0:
@@ -40,7 +41,7 @@ def rms_dbfs(x: FloatArray) -> float:
     return float(10 * np.log10(max(float(np.mean(samples * samples)), _POWER_FLOOR)))
 
 
-def peak_dbfs(x: FloatArray) -> float:
+def peak_dbfs(x: npt.ArrayLike) -> float:
     """Peak level of a signal in dBFS; ``SILENCE_DBFS`` for an empty signal."""
     samples = np.asarray(x, dtype=np.float64)
     if samples.size == 0:

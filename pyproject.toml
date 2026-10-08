@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ctune = "churchtune.cli:app"
+ctune = "churchtune.cli.main:run"
 
 [dependency-groups]
 dev = [
@@ -83,6 +83,7 @@ convention = "google"
     "E501",     # tables of test cases read better on one line
     "S104",     # addresses appear as values under test; nothing binds to them
     "PERF",     # clarity over speed in tests
+    "PLR09",    # test doubles mirror the signatures they replace
     "ARG",      # fixtures requested for their side effect; fakes implement interfaces they ignore
 ]
 "src/churchtune/design/crossover.py" = [
@@ -90,6 +91,11 @@ convention = "google"
 ]
 "src/churchtune/report/texts.py" = [
     "PLR0911",  # one return per message code; the module turns into catalogue lookups in M3 (ADR 0003)
+]
+"src/churchtune/cli/*.py" = [
+    # Transitional expert CLI ported from one 1000-line module (ADR 0003): commands take many
+    # options and walk through many operator-visible steps. Reworked with the wizard in M3.
+    "PLR0912", "PLR0913", "PLR0915", "PLR0917", "C901", "FBT",
 ]
 "scripts/**" = [
     "T20",  # scripts print

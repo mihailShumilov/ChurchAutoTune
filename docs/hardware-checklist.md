@@ -9,8 +9,8 @@ Capabilities per model/firmware live in `src/churchtune/mixers/x32/capabilities.
 
 | # | Model / fw | What to verify | Command (human runs) | Expected | Result | Date / who |
 |---|---|---|---|---|---|---|
-| 1 | X32P 4.09 | Output delay write + readback; formula and steps of `/outputs/main/NN/delay/time` | `ctune apply tests/hw/delay_1ms.json` | 1.0 ms reads back; `ctune undo <undo-file printed by apply>` restores | | |
-| 2 | X32P 4.09 | Matrix polarity write + readback | `ctune apply tests/hw/mtx3_invert.json` | invert=1 reads back, undo restores | | |
+| 1 | X32P 4.09 | Output delay write + readback; formula and steps of `/outputs/main/NN/delay/time` | until M5: `ctune sub align --write-unverified` on a junction session that asks for a delay (ADR 0005); from M5: `ctune apply tests/hw/delay_1ms.json` | the diff marks the rows as not verified; the time is written before the switch; the value on the console screen equals the diff; `ctune undo <undo-file> --write-unverified` restores (switch off first) | | |
+| 2 | X32P 4.09 | Matrix polarity write + readback | until M5: `ctune sub align --write-unverified` on a session that asks for inverted polarity (ADR 0005); from M5: `ctune apply tests/hw/mtx3_invert.json` | invert=1 reads back and shows on the console screen; `ctune undo <undo-file> --write-unverified` restores | | |
 | 3 | X32P 4.09 | Channel mute write + restore (temp_mutes) | wizard S6 on the measurement channel | channel muted, restored on exit and after Ctrl+C | | |
 | 4 | X32P 4.09 | Broadcast discovery | `ctune doctor` | console found without typing the IP | | |
 | 5 | X32P 4.09 | Channel config/preamp parsing (names, sources, HPF) | `ctune snapshot` | names and HPF match the console screen | | |

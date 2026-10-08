@@ -84,8 +84,8 @@ def _delay_changes(
     new_norm = laws.delay_wire(new_ms)
     current_norm = laws.delay_wire(current.delay_ms)
     changes = []
-    if not current.on:
-        changes.append(Change(f"/outputs/main/{output:02d}/delay/on", 0, 1, "OFF", "ON"))
+    # Time first, then the switch: switching on first would put the old stored time (up to
+    # 500 ms) into the signal path for a moment, or for good if the plan stopped in between.
     if abs(new_norm - current_norm) > _SAME_DELAY_NORM:
         changes.append(
             Change(
@@ -96,6 +96,8 @@ def _delay_changes(
                 f"{laws.delay_ms(new_norm):.1f} ms",
             )
         )
+    if not current.on:
+        changes.append(Change(f"/outputs/main/{output:02d}/delay/on", 0, 1, "OFF", "ON"))
     return changes
 
 

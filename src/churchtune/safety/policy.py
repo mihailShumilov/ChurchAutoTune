@@ -37,6 +37,13 @@ SWITCH_KINDS = frozenset({"on", "invert"})
 # UNVERIFIED: these writes were never done on hardware (docs/hardware-checklist.md #1, #2).
 UNVERIFIED_KINDS = frozenset({"invert"})
 
+
+def is_unverified_write(path: str) -> bool:
+    """Whether writing ``path`` was never confirmed on hardware (output delay, polarity)."""
+    kind = path.rsplit("/", 1)[-1]
+    return bool(SUB_DELAY_PATH_RE.fullmatch(path)) or kind in UNVERIFIED_KINDS
+
+
 # Ceilings no configuration may exceed; a venue can only tighten them.
 MAIN_BOOST_CEILING_DB = 3.0
 SUB_BOOST_CEILING_DB = 6.0
@@ -159,7 +166,7 @@ class WritePolicy:
         if matrix_match and int(matrix_match.group(1)) not in self.matrices:
             raise UnsafeWrite(f"this matrix is not in the sub scope: {path}", path=path)
         kind = path.rsplit("/", 1)[1]
-        if (delay_match or kind in UNVERIFIED_KINDS) and not self.allow_unverified_writes:
+        if is_unverified_write(path) and not self.allow_unverified_writes:
             raise UnsafeWrite(
                 f"writing {path} was never verified on hardware; set the value by hand",
                 path=path,

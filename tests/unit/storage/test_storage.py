@@ -478,3 +478,20 @@ def test_migration_does_not_mutate_its_input():
     migrate("undo", legacy)
 
     assert legacy == {"created": "t", "changes": []}
+
+
+@pytest.mark.parametrize(
+    "value", ["0.5", True, None, float("nan"), float("inf"), -float("inf")], ids=repr
+)
+def test_change_values_must_be_real_finite_numbers(value):
+    """A value that goes on the wire is never coerced from a string or a boolean."""
+    for field in ("old_value", "new_value"):
+        fields = {"path": "/main/st/eq/1/g", "old_value": 0.5, "new_value": 0.5, field: value}
+        with pytest.raises(ValidationError):
+            ChangeModel(old_display="a", new_display="b", **fields)
+
+
+@pytest.mark.parametrize("matrix", [0, 7, -1])
+def test_pending_mutes_name_only_matrices_that_exist(matrix):
+    with pytest.raises(ValidationError, match="no such matrices"):
+        PendingMutes(created="t", mtx_on={1: True, matrix: False})

@@ -4,15 +4,16 @@ The shapes follow the files of the original single-hall tool (version 0, no vers
 ``migrations`` lifts those to version 1 on reading.
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from churchtune.domain.changes import Change, WriteScope
 from churchtune.domain.eq import Band, EqType, SystemEq
 
 SCHEMA_VERSION: Literal[1] = 1
 ParamValue = float | int | str | bool | None
+MATRIX_COUNT = 6
 
 
 class FileModel(BaseModel):
@@ -132,12 +133,15 @@ class JunctionMeta(FileModel):
     state: JunctionState
 
 
+WireNumber = StrictInt | Annotated[float, Field(strict=True, allow_inf_nan=False)]
+
+
 class ChangeModel(FileModel):
-    """One planned parameter write."""
+    """One planned parameter write. Values must be real JSON numbers, finite, not strings."""
 
     path: str
-    old_value: int | float
-    new_value: int | float
+    old_value: WireNumber
+    new_value: WireNumber
     old_display: str
     new_display: str
 
@@ -191,6 +195,14 @@ class PendingMutes(FileModel):
     schema_version: Literal[1] = SCHEMA_VERSION
     created: str
     mtx_on: dict[int, bool]
+
+    @field_validator("mtx_on")
+    @classmethod
+    def _matrices_exist(cls, value: dict[int, bool]) -> dict[int, bool]:
+        unknown = sorted(n for n in value if not 1 <= n <= MATRIX_COUNT)
+        if unknown:
+            raise ValueError(f"no such matrices: {unknown}")
+        return value
 
 
 class TargetModel(FileModel):

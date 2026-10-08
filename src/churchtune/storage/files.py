@@ -46,6 +46,21 @@ def write_json(path: Path, model: FileModel) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
+    _sync_directory(path.parent)
+
+
+def _sync_directory(directory: Path) -> None:
+    """Flush the directory entry, so the renamed file survives a power cut where supported."""
+    try:
+        descriptor = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass  # some file systems do not support fsync on a directory
+    finally:
+        os.close(descriptor)
 
 
 def _read_json(path: Path, kind: str) -> dict[str, Any]:
@@ -137,11 +152,13 @@ class StoredPoint:
     meta: PointMeta | None
 
 
-def _write_wav(path: Path, samples: FloatArray, fs_hz: float) -> None:
+def write_wav(path: Path, samples: FloatArray, fs_hz: float) -> None:
+    """Write mono samples as a 32-bit float WAV file."""
     soundfile.write(str(path), np.asarray(samples, dtype=np.float32), round(fs_hz), subtype="FLOAT")
 
 
-def _read_wav(path: Path) -> tuple[FloatArray, float]:
+def read_wav(path: Path) -> tuple[FloatArray, float]:
+    """Read a WAV file as ``(float64 samples, sample rate)``."""
     samples, fs_hz = soundfile.read(str(path), dtype="float64")
     return np.asarray(samples, dtype=np.float64), float(fs_hz)
 
@@ -159,8 +176,8 @@ def save_point(  # noqa: PLR0913 - one point is these files
     """Store one measured point: recording, impulse response, raw response and quality."""
     directory = session_dir / meta.point
     directory.mkdir(parents=True, exist_ok=True)
-    _write_wav(directory / RECORDING_FILE, recording, fs_hz)
-    _write_wav(directory / IR_FILE, ir, fs_hz)
+    write_wav(directory / RECORDING_FILE, recording, fs_hz)
+    write_wav(directory / IR_FILE, ir, fs_hz)
     np.savetxt(
         directory / FR_FILE,
         np.column_stack([grid_hz, response_db]),
@@ -189,7 +206,7 @@ def load_points(session_dir: Path) -> dict[str, StoredPoint]:
     """Load every point of a session that has an impulse response."""
     points = {}
     for name in point_names(session_dir):
-        ir, fs_hz = _read_wav(session_dir / name / IR_FILE)
+        ir, fs_hz = read_wav(session_dir / name / IR_FILE)
         points[name] = StoredPoint(ir, fs_hz, read_point_meta(session_dir / name))
     return points
 
@@ -217,7 +234,7 @@ def save_junction_point(
     directory.mkdir(parents=True, exist_ok=True)
     half = len(irs[0]) // 2
     for name, ir in zip(JUNCTION_BLOCKS, irs, strict=True):
-        _write_wav(directory / f"ir_{name}.wav", ir[:half], fs_hz)
+        write_wav(directory / f"ir_{name}.wav", ir[:half], fs_hz)
     write_json(directory / META_FILE, meta)
     return directory
 
@@ -227,7 +244,7 @@ def load_junction_points(session_dir: Path) -> dict[str, StoredJunctionPoint]:
     points = {}
     directories = sorted(p for p in session_dir.iterdir() if (p / "ir_sub.wav").exists())
     for directory in directories:
-        responses = [_read_wav(directory / f"ir_{name}.wav") for name in JUNCTION_BLOCKS]
+        responses = [read_wav(directory / f"ir_{name}.wav") for name in JUNCTION_BLOCKS]
         meta = JunctionMeta.model_validate(_read_json(directory / META_FILE, "junction_meta"))
         points[directory.name] = StoredJunctionPoint(
             responses[0][0], responses[1][0], responses[2][0], responses[0][1], meta

@@ -74,6 +74,7 @@ class X32Emulator:
         self.mic_level = mic_level
         self.meter_subs = {}  # peer -> expiry
         self.drop_next = 0  # simulate UDP loss
+        self.ignored = set()  # addresses whose writes are logged but change nothing
         for line in Path(dump_file).read_text(encoding="utf-8").splitlines():
             if line.startswith("/"):
                 self.nodes[line.split(" ", 1)[0].lstrip("/")] = line
@@ -124,7 +125,7 @@ class X32Emulator:
     def eq_line(self, i):
         return f"/main/st/eq/{i} {_band_text(self.eq_x[i])}"
 
-    def node_line(self, path):  # noqa: PLR0911 - one return per node family, as in the original
+    def node_line(self, path):
         m = re.match(r"^main/st/eq/([1-6])$", path)
         if m:
             return self.eq_line(int(m.group(1)))
@@ -253,6 +254,8 @@ class X32Emulator:
         return round(min(max(float(value), 0), 1) * (steps - 1)) / (steps - 1)
 
     def _write(self, addr, args):
+        if addr in self.ignored:
+            return
         m = EQ_PARAM_RE.match(addr)
         v = args[0]
         if m:
