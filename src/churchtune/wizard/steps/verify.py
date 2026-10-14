@@ -12,8 +12,15 @@ from dataclasses import dataclass
 import numpy as np
 
 from churchtune.analysis.points import Analysis
-from churchtune.analysis.response import interpolate_at, third_octave_centres
-from churchtune.analysis.verdict import Verdict, VerifyResult, verify, worst_point
+from churchtune.analysis.response import third_octave_centres
+from churchtune.analysis.verdict import (
+    Verdict,
+    VerifyResult,
+    level_free,
+    level_offset,
+    verify,
+    worst_point,
+)
 from churchtune.design.proposal import TargetSpec
 from churchtune.design.target import target_curve
 from churchtune.domain.arrays import FloatArray
@@ -60,32 +67,50 @@ def centre_point(plan: PointPlan, points: Sequence[str]) -> str:
 
 
 def verify_points(baseline: Analysis, plan: PointPlan, mic_count: int) -> tuple[str, ...]:
-    """The points to measure again: the worst, the centre, then the rest in walking order.
+    """The points to measure again, in walking order.
 
+    The baseline's worst point and the one nearest the middle, then each time the point
+    farthest from those already chosen, so the check covers the hall rather than one corner.
     At least four (or all the baseline has), and as many as there are microphones, so a
     multi-microphone check is one round.
     """
     measured = [p for p in plan.ids if p in baseline.norm_db] or list(baseline.point_names)
-    worst = worst_point(baseline, target_of(baseline), measured)
-    chosen = [worst]
+    chosen = [worst_point(baseline, target_of(baseline), measured)]
     known = [p for p in measured if p in plan.ids]
     if known:
         centre = centre_point(plan, known)
         if centre not in chosen:
             chosen.append(centre)
     wanted = min(len(measured), max(MIN_VERIFY_POINTS, mic_count))
-    chosen.extend(p for p in measured if p not in chosen)
-    return tuple(chosen[:wanted])
+
+    def distance(a: str, b: str) -> float:
+        pa, pb = plan.point(a), plan.point(b)
+        return float(np.hypot(pa.x_m - pb.x_m, pa.y_m - pb.y_m))
+
+    while len(chosen) < wanted:
+        rest = [p for p in measured if p not in chosen]
+        if not all(p in plan.ids for p in [*rest, *chosen]):
+            chosen.append(rest[0])
+            continue
+        chosen.append(max(rest, key=lambda p: min(distance(p, c) for c in chosen)))
+    order = {p: i for i, p in enumerate(measured)}
+    return tuple(sorted(chosen[:wanted], key=order.__getitem__))
 
 
 def chart(before: Analysis, after: Analysis) -> str:
-    """Deviation from the target before and after, as two rows of blocks (higher = more off)."""
+    """Deviation from the target before and after, as two rows of blocks (higher = more off).
+
+    The same level alignment as the verdict: the normalisation shift is not shown as harm.
+    """
     centres = third_octave_centres(*CHART_RANGE_HZ)
     target = target_of(before)
+    grid = before.grid_hz
+    shift = level_offset(before.avg_db, after.avg_db, grid, before.f_low_hz)
+    deviations = level_free(before.avg_db, after.avg_db - shift, target, centres, grid)
+    top = len(CHART_LEVELS) - 1
     rows = []
-    for label, analysis in (("1", before), ("2", after)):
-        off = np.abs(interpolate_at(centres, analysis.avg_db - target, analysis.grid_hz))
-        steps = np.clip(off / CHART_SPAN_DB * (len(CHART_LEVELS) - 1), 0, len(CHART_LEVELS) - 1)
+    for label, deviation in zip(("1", "2"), deviations, strict=True):
+        steps = np.clip(np.abs(deviation) / CHART_SPAN_DB * top, 0, top)
         rows.append(label + " " + "".join(CHART_LEVELS[round(float(s))] for s in steps))
     rows.append("  63" + " " * max(len(centres) - 4, 1) + "8k")
     return "\n".join(rows)

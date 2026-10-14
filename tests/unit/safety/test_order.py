@@ -4,8 +4,10 @@ Never weaken, skip or xfail these tests. The property test builds random plans o
 matrices and checks every intermediate state by simulation.
 """
 
+import dataclasses
 import math
 
+import numpy as np
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -14,7 +16,13 @@ from churchtune.domain.eq import Band, EqType, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
 from churchtune.safety import order
-from churchtune.safety.order import Step, StripState, check_order, order_steps
+from churchtune.safety.order import (
+    Step,
+    StripState,
+    chain_response_db,
+    check_order,
+    order_steps,
+)
 
 FS = 48000.0
 MAIN = SignalRef(SourceKind.MAIN_L)
@@ -206,3 +214,66 @@ def test_steps_that_miss_the_plan_are_refused_by_the_planner(monkeypatch):
     monkeypatch.setattr(order, "_band_orders", lambda strip, old, new: [[]])
     with pytest.raises(UnsafeWrite, match="do not reach the planned state"):
         order_steps(before, after, CHAINS, FS)
+
+
+DENSE_HZ = 20.0 * 2 ** (np.arange(0, int(np.log2(1000) * 480) + 1) / 480)
+
+
+def _dense_check(before, steps, after, chains):
+    """Every prefix of the steps within max(before, after) + 0.5 dB on a 1/480-octave grid."""
+    envelope = {
+        name: np.maximum(
+            chain_response_db(before, chain, FS, DENSE_HZ),
+            chain_response_db(after, chain, FS, DENSE_HZ),
+        )
+        + 0.5
+        + 1e-6
+        for name, chain in chains.items()
+    }
+    states = dict(before)
+    for step in steps:
+        state = states[step.strip]
+        if step.what == "band":
+            states[step.strip] = dataclasses.replace(state, eq=state.eq.with_band(step.band))
+        elif step.what == "fader":
+            states[step.strip] = dataclasses.replace(state, fader_db=step.value)
+        elif step.what == "eq_on":
+            states[step.strip] = dataclasses.replace(state, eq=state.eq.with_on(step.value))
+        else:
+            states[step.strip] = dataclasses.replace(state, on=step.value)
+        for name, chain in chains.items():
+            assert np.all(chain_response_db(states, chain, FS, DENSE_HZ) <= envelope[name])
+
+
+def test_a_narrow_boost_that_moves_is_checked_at_its_peak():
+    before_eq = flat_eq().with_band(Band(3, EqType.PEQ, 95.5, 3.0, 10.0))
+    after_eq = flat_eq().with_band(Band(3, EqType.PEQ, 68.5, 3.0, 10.0))
+    before = {MAIN: state(before_eq), TOPS: state(), SUB: state()}
+    after = {MAIN: state(after_eq), TOPS: state(), SUB: state()}
+    steps = order_steps(before, after, CHAINS, FS)
+    _dense_check(before, steps, after, CHAINS)
+
+
+narrow_band_strategy = st.builds(
+    lambda n, f, g, q: Band(n, EqType.PEQ, f, g, q),
+    st.integers(1, 6),
+    st.sampled_from([57.3, 68.5, 95.5, 141.0, 333.0, 707.0, 1777.0, 4321.0]),
+    st.sampled_from([-9.0, -3.0, 0.0, 2.0, 3.0]),
+    st.sampled_from([0.7, 2.0, 6.4, 8.0, 10.0]),
+)
+
+
+@settings(max_examples=40, deadline=None)
+@given(
+    st.lists(narrow_band_strategy, max_size=2).map(lambda b: _apply(flat_eq(), b)),
+    st.lists(narrow_band_strategy, max_size=2).map(lambda b: _apply(flat_eq(), b)),
+)
+def test_narrow_bands_stay_inside_the_envelope_on_a_dense_grid(before_eq, after_eq):
+    chains = {"tops": (MAIN, TOPS)}
+    before = {MAIN: state(before_eq), TOPS: state()}
+    after = {MAIN: state(after_eq), TOPS: state()}
+    try:
+        steps = order_steps(before, after, chains, FS)
+    except UnsafeWrite:
+        return  # a refusal writes nothing
+    _dense_check(before, steps, after, chains)

@@ -353,3 +353,4 @@ verify-offer-undo = Put the old values back now?
 step-finish-scene = Save the scene on the console under a new name (for example with today's date), so the new settings survive a restart.
 step-finish-undo-later = To put the old values back later, run: { $command }
 undo-console-changed = The console changed while the list was on the screen. Nothing was put back. Look at the console and start the undo again.
+apply-run-refused = The safety check stopped the writing half-way ({ $count } settings had been written). Nothing more was sent.

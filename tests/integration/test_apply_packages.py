@@ -373,3 +373,85 @@ def test_a_run_refused_after_an_earlier_run_reports_a_partial_write(
     assert not outcome.complete
     assert outcome.sent > 0
     assert files.read_undo(tmp_path / "u.json").results  # what was written is on record
+
+
+# ------------------------------------------------------------ regressions of the second review
+def _forged_undo(home, changes) -> str:
+    path = home / "undo" / "undo_pkg_forged.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"created": "2026-10-14T10:00:00", "scope": "system_eq",
+                                "what": "packages", "changes": changes}), encoding="utf-8")  # fmt: skip
+    return str(path)
+
+
+def test_an_undo_file_never_switches_on_an_eq(emu, home, run):
+    emu.hand_change("/main/st/eq/on", 0)
+    emu.hand_change("/main/st/eq/5/g", P.gain_to_norm(15.0))
+    undo = _forged_undo(home, [{"path": "/main/st/eq/on", "old_value": 1, "new_value": 0,
+                                "old_display": "ON", "new_display": "OFF",
+                                "scope": "system_eq"}])  # fmt: skip
+    result = run(["undo", undo], answers=["вернуть"])
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert emu.writes == []
+
+
+def test_an_undo_file_never_moves_a_tops_high_pass_out_of_range(emu, home, run, client):
+    now = read_console_state(client).matrices[1].eq.band(1)
+    current = P.quantize_freq(P.freq_to_norm(now.freq_hz))
+    undo = _forged_undo(home, [{"path": "/mtx/01/eq/1/f", "old_value": P.freq_to_norm(16000.0),
+                                "new_value": current, "old_display": "16k", "new_display": "x",
+                                "scope": "system_eq"}])  # fmt: skip
+    result = run(["undo", undo], answers=["вернуть"])
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert emu.writes == []
+
+
+@pytest.mark.parametrize(
+    ("number", "band", "change"),
+    [
+        (0, 1, {"type": EqType.PEQ}),  # Main's subsonic filter
+        (1, 1, {"type": EqType.PEQ, "gain_db": 0.0}),  # the tops' high-pass removed
+        (1, 1, {"freq_hz": 1490.0}),  # moved far out of a crossover's range
+    ],
+)
+def test_even_the_crossover_package_keeps_the_cut_filters_in_their_place(
+    emu, home, run, client, number, band, change
+):
+    state = read_console_state(client)
+    before = state.main_eq if number == 0 else state.matrices[number].eq
+    if before.band(band).adjustable:
+        pytest.skip("the reference hall has no cut filter here")  # never for these cases
+    after = before.with_band(replace(before.band(band), **change))
+    ref = MAIN_REF if number == 0 else PathRefModel(kind="matrix", number=number)
+    result = run(["apply-packages", eq_proposal(home, "crossover", ref, before, after)],
+                 answers=["применить"])  # fmt: skip
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert emu.writes == []
+
+
+def test_an_undo_after_a_stop_puts_back_a_neutralised_band(emu, home, client, transport, tmp_path):
+    emu.hand_change("/main/st/eq/5/type", P.EQ_TYPES.index(EqType.HSHV))
+    emu.hand_change("/main/st/eq/5/f", P.freq_to_norm(8000.0))
+    emu.hand_change("/main/st/eq/5/g", P.gain_to_norm(-6.0))
+    before = read_console_state(client).main_eq
+    after = before.with_band(replace(before.band(5), type=EqType.LSHV, freq_hz=60.0))
+    package = PackageModel(kind="system_eq", suggest_only=False, risk="low", selected=True,
+                           eq=(PathEqModel(path=MAIN_REF, before=EqModel.from_domain(before),
+                                           after=EqModel.from_domain(after)),))  # fmt: skip
+    port = _port(client, transport)
+    plan = port.plan_packages([package])
+    asked = []
+
+    def stop_after_the_first_write():
+        asked.append(1)
+        return len(asked) > 1
+
+    outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json",
+                         stop_after_the_first_write)  # fmt: skip
+    assert outcome.stopped
+    assert emu.main_eq().band(5).gain_db == pytest.approx(0.0, abs=0.13)  # neutralised, louder
+    back = port.plan_undo(tmp_path / "u.json")
+    assert "/main/st/eq/5/g" not in back.changed_by_hand
+    port.apply(back, "вернуть", "вернуть", tmp_path / "r.json", lambda: False,
+               reverts=tmp_path / "u.json")  # fmt: skip
+    assert emu.main_eq().band(5).gain_db == pytest.approx(-6.0, abs=0.13)

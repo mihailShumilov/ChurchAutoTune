@@ -32,8 +32,9 @@ from churchtune.cli.context import (
     say,
     settings_of,
 )
-from churchtune.domain.changes import Change, WriteScope
+from churchtune.domain.changes import Change, WireValue, WriteScope
 from churchtune.domain.console import ConsoleState, Roles
+from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
 from churchtune.mixers.x32.laws import X32ValueLaws
 from churchtune.mixers.x32.nodes import read_console_state
@@ -49,6 +50,7 @@ from churchtune.mixers.x32.plan_writes import (
 from churchtune.mixers.x32.topology import detect_roles
 from churchtune.report.texts import format_changes
 from churchtune.safety.authorize import TypedWord, authorize_typed
+from churchtune.safety.cut_filters import PathRole, check_cut_changes
 from churchtune.safety.order import order_steps
 from churchtune.safety.plan import same_step
 from churchtune.safety.policy import WritePolicy
@@ -59,6 +61,8 @@ from churchtune.wizard.applying import (
     chosen_packages,
     combined_target,
     ordered_steps,
+    role_of,
+    same_band,
     speaker_chains,
     strip_states,
     writable_packages,
@@ -116,12 +120,19 @@ def plan_package_writes(
             write is outside the policy.
     """
     fresh = strip_states(state)
-    target = combined_target(packages, fresh, LAWS)
+    target = combined_target(packages, fresh, LAWS, path_roles(policy))
     steps = ordered_steps(target, fresh, FS_HZ)
     planned = plan_writes(steps, fresh, LAWS)
     for item in planned:
         policy.validate(item.change.path, item.change.new_value, item.scope)
     return planned
+
+
+def path_roles(policy: WritePolicy) -> dict[SignalRef, PathRole]:
+    """The sub and top matrices of the policy (from the fresh read) as path roles."""
+    roles = {SignalRef(SourceKind.MATRIX, n): PathRole.SUB for n in policy.sub_matrices}
+    roles.update({SignalRef(SourceKind.MATRIX, n): PathRole.TOPS for n in policy.top_matrices})
+    return roles
 
 
 def has_crossover(packages: Sequence[PackageModel]) -> bool:
@@ -275,6 +286,10 @@ def apply_packages_command(
         # The person may have thought for a while: plan again from a fresh read, send only the
         # plan that was shown.
         state = read_console_state(console.client)
+        try:
+            roles = detect_roles(state)
+        except ValueError as error:
+            fail(f"ОТКАЗ: не понятно, какие матрицы саб и сателлиты: {error}", EXIT_REFUSED)
         policy = package_policy(state, roles, allow_cut_filters=cut)
         try:
             require_same_plan(planned, plan_package_writes(packages, state, policy))
@@ -329,7 +344,8 @@ def collapsed_changes(changes: Sequence[ChangeModel]) -> list[ChangeModel]:
     """One entry per path: the old value of its first write, the new value of its last.
 
     A never-louder order may write a parameter twice (a gain to 0 dB, then to its value); the
-    console then holds the last value and the way back is the first old one.
+    console then holds the last value (or, after a stop, an earlier one: see
+    ``written_values``) and the way back is the first old one.
     """
     first: dict[str, ChangeModel] = {}
     last: dict[str, ChangeModel] = {}
@@ -347,6 +363,14 @@ def collapsed_changes(changes: Sequence[ChangeModel]) -> list[ChangeModel]:
     return collapsed
 
 
+def written_values(changes: Sequence[ChangeModel]) -> dict[str, list[WireValue]]:
+    """Every value the plan wrote (or meant to write) per path, in order."""
+    written: dict[str, list[WireValue]] = {}
+    for change in changes:
+        written.setdefault(change.path, []).append(change.new_value)
+    return written
+
+
 def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) -> UndoPlan:
     """Three-way undo: revert what still has the new value, skip what was changed by hand.
 
@@ -358,9 +382,12 @@ def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) 
     target = dict(fresh)
     already_old: list[str] = []
     by_hand: list[str] = []
+    written = written_values(undo.changes)
     for stored in collapsed_changes(undo.changes):
         if stored.scope not in PACKAGE_SCOPES:
             raise UnsafeWrite(f"undo file names a write outside the packages: {stored.path}")
+        if stored.path.endswith("/eq/on"):
+            raise UnsafeWrite(f"a package never switches an EQ on or off: {stored.path}")
         strip = strip_of(stored.path)
         if strip not in fresh:
             raise UnsafeWrite(f"the console has no {strip.label()}", strip=strip.label())
@@ -369,10 +396,18 @@ def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) 
         now = wire_value(target[strip], stored.path, LAWS)
         if same_step(LAWS, kind, now, stored.old_value):
             already_old.append(stored.path)
-        elif same_step(LAWS, kind, now, stored.new_value):
+        elif any(same_step(LAWS, kind, now, value) for value in written[stored.path]):
+            # The last value, or an earlier one when the plan stopped half-way.
             target[strip] = with_wire_value(target[strip], stored.path, stored.old_value)
         else:
             by_hand.append(stored.path)
+    roles = path_roles(policy)
+    for ref, wanted in target.items():
+        if wanted.eq != fresh[ref].eq:
+            check_cut_changes(
+                ref.label(), role_of(ref, roles), fresh[ref].eq, wanted.eq,
+                lambda a, b: same_band(LAWS, a, b), may_remove=True,
+            )  # fmt: skip
     steps = order_steps(fresh, target, speaker_chains(fresh), FS_HZ)
     planned = plan_writes(steps, fresh, LAWS)
     for item in planned:
@@ -489,7 +524,9 @@ class X32WritePort:
             undo = files.read_undo(undo_path)
         except (ValueError, OSError) as error:
             raise UnsafeWrite(f"damaged undo file: {error}") from error
-        _, _, state, policy = self._fresh(True)
+        host, _, state, policy = self._fresh(True)
+        if undo.ip and host and undo.ip != host:
+            raise UnsafeWrite(f"the undo file was written for another console ({undo.ip})")
         plan = plan_package_undo(undo, state, policy)
 
         def recipe(fresh: ConsoleState, rules: WritePolicy) -> tuple[PlannedChange, ...]:

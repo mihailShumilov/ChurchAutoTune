@@ -15,6 +15,7 @@ from churchtune.domain.console import ConsoleState
 from churchtune.domain.eq import Band, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
+from churchtune.safety.cut_filters import PathRole, check_cut_changes
 from churchtune.safety.laws import ValueLaws
 from churchtune.safety.order import Chains, Step, StripState, order_steps
 from churchtune.safety.plan import same_step
@@ -115,15 +116,19 @@ def same_eq(laws: ValueLaws, a: SystemEq, b: SystemEq) -> bool:
     return all(same_band(laws, x, y) for x, y in zip(a.bands, b.bands, strict=True))
 
 
-def check_eq_change(
-    kind: str, label: str, now: SystemEq, wanted: SystemEq, laws: ValueLaws
+def check_eq_change(  # noqa: PLR0913, PLR0917 - every input of the rule is explicit
+    kind: str,
+    label: str,
+    role: PathRole,
+    now: SystemEq,
+    wanted: SystemEq,
+    laws: ValueLaws,
 ) -> None:
     """Refuse what no package may do to an EQ block.
 
     A package never switches an EQ on or off: a block that was off may hold bands that were
     never checked (a +15 dB leftover), and switching it off again could drop a cut filter. A
-    cut filter (low cut, high cut, crossover slopes) is set, moved or removed only by the
-    crossover package.
+    cut filter is set or moved only by the crossover package, within ``safety.cut_filters``.
 
     Raises:
         UnsafeWrite: The package does one of these.
@@ -133,6 +138,9 @@ def check_eq_change(
             f"package {kind} would switch the EQ of {label} on or off", eq_switch=label
         )
     if kind == CROSSOVER:
+        check_cut_changes(
+            label, role, now, wanted, lambda a, b: same_band(laws, a, b), may_remove=False
+        )
         return
     for old, new in zip(now.bands, wanted.bands, strict=True):
         if (not old.adjustable or not new.adjustable) and not same_band(laws, old, new):
@@ -141,6 +149,13 @@ def check_eq_change(
                 f"{label}",
                 cut_filter=label,
             )
+
+
+def role_of(ref: SignalRef, roles: Mapping[SignalRef, PathRole]) -> PathRole:
+    """What a strip feeds: Main LR is the common path, a matrix as the fresh read says."""
+    if ref.kind is SourceKind.MAIN_L:
+        return PathRole.MAIN
+    return roles.get(ref, PathRole.OTHER)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +176,10 @@ class PackageTarget:
 
 
 def package_target(
-    package: PackageModel, fresh: Mapping[SignalRef, StripState], laws: ValueLaws
+    package: PackageModel,
+    fresh: Mapping[SignalRef, StripState],
+    laws: ValueLaws,
+    roles: Mapping[SignalRef, PathRole] | None = None,
 ) -> PackageTarget:
     """The fresh and wanted states of the strips one package changes.
 
@@ -183,7 +201,8 @@ def package_target(
         before.setdefault(ref, fresh[ref])
         if not same_eq(laws, fresh[ref].eq, _eq(path_eq.before)):
             mismatches.append(ref.label())
-        check_eq_change(package.kind, ref.label(), current.eq, _eq(path_eq.after), laws)
+        role = role_of(ref, roles or {})
+        check_eq_change(package.kind, ref.label(), role, current.eq, _eq(path_eq.after), laws)
         after[ref] = replace(current, eq=_eq(path_eq.after))
     for level in package.levels:
         ref = ref_of(level.path)
@@ -224,7 +243,10 @@ def changed_strips(steps: Sequence[Step]) -> set[SignalRef]:
 
 
 def combined_target(
-    packages: Sequence[PackageModel], fresh: Mapping[SignalRef, StripState], laws: ValueLaws
+    packages: Sequence[PackageModel],
+    fresh: Mapping[SignalRef, StripState],
+    laws: ValueLaws,
+    roles: Mapping[SignalRef, PathRole] | None = None,
 ) -> PackageTarget:
     """Where the chosen packages take the console together.
 
@@ -238,7 +260,7 @@ def combined_target(
     after: dict[SignalRef, StripState] = {}
     mismatches: list[str] = []
     for package in packages:
-        target = package_target(package, current, laws)
+        target = package_target(package, current, laws, roles)
         mismatches.extend(f"{package.kind}: {label}" for label in target.mismatches)
         current.update(target.after)
         after.update(target.after)
