@@ -9,6 +9,7 @@ from churchtune.domain.eq import Band, EqType, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
 from churchtune.mixers.x32.laws import X32ValueLaws
+from churchtune.safety.cut_filters import PathRole
 from churchtune.safety.order import check_order
 from churchtune.storage.models import (
     EqModel,
@@ -141,29 +142,35 @@ def test_same_eq_uses_the_grid_and_the_switch():
 
 
 def test_packages_stack_on_each_other():
-    crossover = flat().with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4))
-    first = eq_package(flat(), crossover, kind="crossover")
-    second = eq_package(crossover, CUT.with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4)))
+    first_cut = flat().with_band(Band(1, EqType.PEQ, 60.0, -3.0, 1.4))
+    first = eq_package(flat(), first_cut, kind="crossover")
+    second = eq_package(first_cut, CUT.with_band(first_cut.band(1)))
     fresh = strip_states(console())
     target = combined_target([first, second], fresh, LAWS)
     assert target.mismatches == ()
     assert target.kind == "crossover+system_eq"
     assert target.before[MAIN] == fresh[MAIN]
     assert target.after[MAIN].eq.band(4).gain_db == -9.0
-    with pytest.raises(UnsafeWrite, match="only the crossover"):  # the EQ alone sets no cut
-        combined_target([second], fresh, LAWS)
+    stale = combined_target([second], fresh, LAWS)  # the EQ alone expects the crossover first
+    assert stale.mismatches == ("system_eq: main_l",)
+
+
+def test_the_crossover_never_touches_a_cut_on_main_lr():
+    hpf = flat().with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4))
+    with pytest.raises(UnsafeWrite, match="may not change"):
+        combined_target([eq_package(flat(), hpf, kind="crossover")], strip_states(console()), LAWS)
 
 
 def test_a_package_never_switches_an_eq_on_or_off():
     with pytest.raises(UnsafeWrite, match="on or off"):
-        check_eq_change("system_eq", "main_l", flat().with_on(False), flat(), LAWS)
+        check_eq_change("system_eq", "main_l", PathRole.MAIN, flat().with_on(False), flat(), LAWS)
 
 
 def test_the_crossover_package_may_set_a_cut_filter():
     crossover = flat().with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4))
-    check_eq_change("crossover", "matrix 1", flat(), crossover, LAWS)
+    check_eq_change("crossover", "matrix 1", PathRole.TOPS, flat(), crossover, LAWS)
     with pytest.raises(UnsafeWrite, match="only the crossover"):
-        check_eq_change("system_eq", "matrix 1", flat(), crossover, LAWS)
+        check_eq_change("system_eq", "matrix 1", PathRole.TOPS, flat(), crossover, LAWS)
 
 
 def test_advice_packages_and_what_needs_them_are_not_written():

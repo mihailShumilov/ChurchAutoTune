@@ -26,7 +26,9 @@ from churchtune.domain.snapshot import SignalRef
 from churchtune.errors import UnsafeWrite
 
 TOLERANCE_DB = 0.5
-GRID_HZ: FloatArray = 20.0 * 2 ** (np.arange(0, int(np.log2(20000 / 20) * 24) + 1) / 24)
+# 1/48 octave, plus the centre frequency of every band of the plan (the peak of a narrow band
+# lies on it and could fall between grid points).
+GRID_HZ: FloatArray = 20.0 * 2 ** (np.arange(0, int(np.log2(20000 / 20) * 48) + 1) / 48)
 MUTED_DB = -200.0
 # A band's parameters as written one at a time, read through a table.
 BAND_PARAMS: tuple[str, ...] = ("type", "freq_hz", "q", "gain_db")
@@ -84,16 +86,31 @@ class Step:
 Chains = Mapping[str, tuple[SignalRef, ...]]
 
 
+def plan_grid(*plans: Mapping[SignalRef, StripState]) -> FloatArray:
+    """The fixed grid plus every band centre of the given states (within 20 Hz-20 kHz)."""
+    centres = [
+        band.freq_hz
+        for states in plans
+        for state in states.values()
+        for band in state.eq.bands
+        if GRID_HZ[0] <= band.freq_hz <= GRID_HZ[-1]
+    ]
+    return np.unique(np.concatenate([GRID_HZ, np.asarray(centres, dtype=np.float64)]))
+
+
 def chain_response_db(
-    states: Mapping[SignalRef, StripState], chain: tuple[SignalRef, ...], fs_hz: float
+    states: Mapping[SignalRef, StripState],
+    chain: tuple[SignalRef, ...],
+    fs_hz: float,
+    grid_hz: FloatArray = GRID_HZ,
 ) -> FloatArray:
     """Modelled response of one speaker path: every strip's EQ and fader, muted as silence."""
-    total = np.zeros_like(GRID_HZ)
+    total = np.zeros_like(grid_hz)
     for ref in chain:
         state = states[ref]
         if not state.on:
-            return np.full_like(GRID_HZ, MUTED_DB)
-        total = total + eq_response_db(state.eq, GRID_HZ, fs_hz) + max(state.fader_db, MUTED_DB)
+            return np.full_like(grid_hz, MUTED_DB)
+        total = total + eq_response_db(state.eq, grid_hz, fs_hz) + max(state.fader_db, MUTED_DB)
     return total
 
 
@@ -110,9 +127,12 @@ class _Simulation:
         self.states = dict(before)
         self.chains = chains
         self.fs_hz = fs_hz
+        # Intermediate bands take every parameter from before or after: their centres are here.
+        self.grid = plan_grid(before, after)
         self.envelope = {
             name: np.maximum(
-                chain_response_db(before, chain, fs_hz), chain_response_db(after, chain, fs_hz)
+                chain_response_db(before, chain, fs_hz, self.grid),
+                chain_response_db(after, chain, fs_hz, self.grid),
             )
             + TOLERANCE_DB
             for name, chain in chains.items()
@@ -140,7 +160,8 @@ class _Simulation:
                 self.states = self._applied(step)
                 for name, chain in self.chains.items():
                     if step.strip in chain and np.any(
-                        chain_response_db(self.states, chain, self.fs_hz) > self.envelope[name]
+                        chain_response_db(self.states, chain, self.fs_hz, self.grid)
+                        > self.envelope[name]
                     ):
                         return False
             return True

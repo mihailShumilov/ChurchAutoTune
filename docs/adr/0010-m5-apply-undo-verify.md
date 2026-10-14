@@ -66,7 +66,18 @@ package's "before", the default is to cancel and measure again.
    was written ends the plan as incomplete, so the undo is offered; the old `authorize()` (a
    plain "y") accepts only the `main` and `sub` scopes; a package that requires an advice
    package is left out.
-10. **Delay and polarity are advice** in the wizard and in `apply-packages`: shown as values to set
+10. **After the second safety review and the DSP review**: `safety/cut_filters.py` keeps every
+   cut-filter change (crossover and undo alike) off Main LR, on band 1 of a top path or band 6 of
+   the sub path, with the corner in 40–250 Hz; only an undo may remove a cut. An undo never
+   writes an EQ switch and recognises every value its plan wrote (a stop half-way leaves a
+   neutralised band that still goes back). The order is simulated on a 1/48-octave grid plus
+   every band centre of the plan. The verdict aligns each "after" curve to "before" by the
+   median band difference (a cut near 500 Hz moves the 500–2000 Hz normalisation), takes the
+   deviation from the target without the overall level, and uses third-octave band means; the
+   averages are made from the common points only. The verify target is the default
+   `TargetSpec`, the one the wizard designs with (the proposal file does not store it yet).
+   The simulated hall keeps its EQ filter state between stream blocks.
+11. **Delay and polarity are advice** in the wizard and in `apply-packages`: shown as values to set
    by hand. Their writes stay behind `--write-unverified` in the sub commands until the hardware
    checklist confirms them.
 

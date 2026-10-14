@@ -17,7 +17,13 @@ from churchtune.storage.models import PackageModel, WizardStateFile
 from churchtune.wizard.applying import chosen_packages, ref_of
 from churchtune.wizard.labels import output_text
 from churchtune.wizard.protocol import Table, Text
-from churchtune.wizard.services import PlannedWrite, WizardContext, WriteOutcome, WritePlan
+from churchtune.wizard.services import (
+    PlannedWrite,
+    WizardContext,
+    WriteOutcome,
+    WritePlan,
+    WritePort,
+)
 from churchtune.wizard.state import Outcome
 from churchtune.wizard.steps.proposal import path_text
 from churchtune.wizard.steps.setup import measuring
@@ -66,7 +72,9 @@ def _outcome_texts(outcome: WriteOutcome) -> list[Text]:
         return [t("apply-done", count=outcome.sent), t("apply-scene-not-saved")]
     if outcome.stopped:
         return [t("apply-stopped", count=outcome.sent)]
-    return [t("apply-readback-failed", path=outcome.failed_path or "?", count=outcome.sent)]
+    if outcome.failed_path is None:  # a later run was refused by the safety check
+        return [t("apply-run-refused", count=outcome.sent)]
+    return [t("apply-readback-failed", path=outcome.failed_path, count=outcome.sent)]
 
 
 def undo_applied(ctx: WizardContext, undo_path: Path) -> bool:
@@ -108,6 +116,29 @@ def undo_applied(ctx: WizardContext, undo_path: Path) -> bool:
         return False
     info(ctx.prompter, t("undo-done") if outcome.complete else t("undo-incomplete"))
     return outcome.complete
+
+
+def _send(
+    ctx: WizardContext, writes: WritePort, plan: WritePlan, typed: str, word: str
+) -> WriteOutcome | None:
+    """Send a confirmed plan; None (with the reason shown) when nothing could be judged.
+
+    Whatever happens, once the undo file exists the way back is remembered in the state.
+    """
+    root = ctx.services.workspace.root
+    undo_path = ctx.services.workspace.new_undo_path(None, ctx.services.now())
+    ctx.services.reset_stop()
+    try:
+        return writes.apply(plan, typed, word, undo_path, ctx.services.stop.is_set)
+    except UnsafeWrite as error:
+        changed = "mismatches" in error.context
+        info(ctx.prompter, t("apply-console-changed") if changed else t("apply-cancelled"))
+    except ConsoleUnreachable:
+        info(ctx.prompter, t("apply-console-lost"))
+    finally:
+        if undo_path.exists():
+            ctx.box.update(applied_undo=str(undo_path.relative_to(root)))
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,24 +189,13 @@ class Apply:
             ctx.prompter, t("apply-what", count=len(plan.writes)), t("apply-undo-first"),
             t("apply-type", word=word), table=write_table(plan),
         )  # fmt: skip
-        undo_path = ctx.services.workspace.new_undo_path(None, ctx.services.now())
-        ctx.services.reset_stop()
-        try:
-            outcome = writes.apply(plan, typed, word, undo_path, ctx.services.stop.is_set)
-        except UnsafeWrite as error:
-            changed = "mismatches" in error.context
-            info(ctx.prompter, t("apply-console-changed") if changed else t("apply-cancelled"))
+        outcome = _send(ctx, writes, plan, typed, word)
+        if outcome is None:
             return Outcome.DONE
-        except ConsoleUnreachable:
-            if undo_path.exists():
-                ctx.box.update(applied_undo=str(undo_path.relative_to(root)))
-            info(ctx.prompter, t("apply-console-lost"))
-            return Outcome.DONE
-        ctx.box.update(applied_undo=str(undo_path.relative_to(root)))
         texts = _outcome_texts(outcome)
         if outcome.complete:
             info(ctx.prompter, *texts)
             return Outcome.DONE
         if confirm(ctx.prompter, *texts, t("apply-offer-undo"), default=True):
-            undo_applied(ctx, undo_path)
+            undo_applied(ctx, outcome.undo_path)
         return Outcome.DONE

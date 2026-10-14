@@ -121,6 +121,7 @@ class FakeHall:
         default_factory=dict, init=False, repr=False
     )
     _shapes: dict[int, FloatArray] = field(default_factory=dict, init=False, repr=False)
+    _eq_state: tuple[SystemEq, FloatArray] | None = field(default=None, init=False, repr=False)
     _rng: np.random.Generator = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -253,18 +254,27 @@ class FakeHall:
         }
 
     def _through_main_eq(self, out: FloatArray) -> FloatArray:
-        """The playback after the console's Main LR EQ (unchanged without one)."""
+        """The playback after the console's Main LR EQ (unchanged without one).
+
+        The filter state carries over from one call to the next (a stream comes in blocks), and
+        starts again from silence when the EQ changes.
+        """
         if self.main_eq is None:
             return out
         eq = self.main_eq()
         if not eq.on:
             return out
         filtered = np.asarray(out, dtype=np.float64)
-        for band in eq.bands:
-            sos = band_sos(band, self.fs_hz)
-            if sos is not None:
-                filtered = signal.sosfilt(sos, filtered, axis=0)
-        return filtered
+        sections = [sos for band in eq.bands if (sos := band_sos(band, self.fs_hz)) is not None]
+        if not sections:
+            return filtered
+        sos = np.concatenate(sections)
+        state = self._eq_state
+        if state is None or state[0] != eq or state[1].shape[2] != filtered.shape[1]:
+            state = (eq, np.zeros((sos.shape[0], 2, filtered.shape[1])))
+        filtered, zi = signal.sosfilt(sos, filtered, axis=0, zi=state[1])
+        self._eq_state = (eq, zi)
+        return np.asarray(filtered, dtype=np.float64)
 
     def _noise(self, usb_input: int, n: int) -> FloatArray:
         """Self-noise of the input; a more sensitive capsule hears the room noise louder too."""

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from churchtune.analysis.points import Analysis
-from churchtune.analysis.response import GRID_HZ, energy_average
+from churchtune.analysis.response import GRID_HZ, band_mean_db, energy_average
 from churchtune.analysis.verdict import (
     Verdict,
     VerifyThresholds,
@@ -15,6 +15,8 @@ from churchtune.analysis.verdict import (
     verify,
     worst_point,
 )
+from churchtune.domain.eq import Band, EqType, SystemEq
+from churchtune.domain.eq_model import eq_response_db
 
 FLAT = np.zeros_like(GRID_HZ)
 
@@ -122,3 +124,56 @@ def test_the_verdict_table(m, w, b, s, verdict):
 def test_thresholds_are_configurable():
     strict = VerifyThresholds(m_better_db=2.0)
     assert judge(-1.0, 0.0, 0.0, 0.0, strict) is Verdict.NO_CHANGE
+
+
+# ------------------------------------------------------------ as the analysis really normalises
+def normalised(curves: dict[str, np.ndarray]) -> Analysis:
+    return analysis({p: c - band_mean_db(c, 500.0, 2000.0) for p, c in curves.items()})
+
+
+HALL_CUT = SystemEq(
+    True, tuple(Band(n, EqType.PEQ, 1000.0, 0.0, 1.4) for n in range(1, 7))
+).with_band(Band(2, EqType.PEQ, 479.8, -9.0, 1.5))
+
+
+def test_a_correction_inside_the_normalisation_band_is_better_not_worse():
+    cut = eq_response_db(HALL_CUT, GRID_HZ, 48000.0)
+    room = {f"p{i}": -cut + bump(2500, 0.5 * i, 0.4) for i in range(1, 5)}
+    room["p2"] = room["p2"] + bump(100, 4.0, 0.3)  # a mode the EQ does not touch
+    after = {p: c + cut for p, c in room.items()}
+    result = verify(normalised(room), normalised(after), FLAT)
+    assert result.verdict is Verdict.BETTER
+    assert result.band_delta_db < 0.5
+
+
+def test_a_narrow_new_notch_counts_about_the_same_wherever_it_falls():
+    """Band values instead of samples at the centres: a notch between two centres is split over
+    two bands but still counts; sampled at the centres it would almost vanish (5.2 vs 2.2 dB).
+    """
+    flat_eq = SystemEq(True, tuple(Band(n, EqType.PEQ, 1000.0, 0.0, 1.4) for n in range(1, 7)))
+    found = []
+    for notch_hz in (2000.0, 2245.0, 2520.0):
+        notch = flat_eq.with_band(Band(2, EqType.PEQ, notch_hz, -6.0, 6.0))
+        harm = eq_response_db(notch, GRID_HZ, 48000.0)
+        after = {p: c + harm for p, c in ROOM.items()}
+        found.append(verify(analysis(ROOM), analysis(after), FLAT).band_delta_db)
+    assert min(found) > 2.0
+    assert max(found) / min(found) < 1.7
+
+
+def test_repeat_noise_alone_is_rarely_worse():
+    rng = np.random.default_rng(5)
+    worse = 0
+    for _ in range(100):
+        before = {p: c + rng.normal(0, 0.7, size=GRID_HZ.size) for p, c in ROOM.items()}
+        after = {p: c + rng.normal(0, 0.7, size=GRID_HZ.size) for p, c in ROOM.items()}
+        worse += verify(analysis(before), analysis(after), FLAT).verdict is Verdict.WORSE
+    assert worse <= 1
+
+
+def test_the_averages_are_made_from_the_common_points_only():
+    full = analysis({**ROOM, "p9": bump(300, 12.0)})
+    after = analysis(corrected(4.5))
+    assert verify(full, after, FLAT).m_before_db == pytest.approx(
+        verify(analysis(ROOM), after, FLAT).m_before_db
+    )
