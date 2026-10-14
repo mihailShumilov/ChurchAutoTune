@@ -77,6 +77,8 @@ from tests.fixtures.topologies import all_fixtures
         ("Submix", None),
         ("Субгруппа", None),
         ("Transept", None),
+        ("PA Principal", SpeakerRole.TOP_MONO),
+        ("Central", SpeakerRole.TOP_MONO),
     ],
 )
 def test_role_hint(name, role):
@@ -107,6 +109,16 @@ def test_role_hint(name, role):
         ("Level", None),
         ("Derek", None),
         ("P", None),
+        ("Central", None),
+        ("Frontal", None),
+        ("Sala Central", None),
+        ("Monitor", None),
+        ("Монитор", None),
+        ("Subwoofer", None),
+        ("Infill", None),
+        ("Frontfill", None),
+        ("Central R", Side.RIGHT),
+        ("TopR", Side.RIGHT),
     ],
 )
 def test_side_hint(name, side):
@@ -120,6 +132,7 @@ def test_normalize_and_non_speaker_names():
     assert is_non_speaker("Запис")
     assert is_non_speaker("Submix")
     assert is_non_speaker("Record")
+    assert is_non_speaker("Livestream")
     assert not is_non_speaker("Main L")
     assert not is_non_speaker("Platea")
     assert not is_non_speaker("Recital hall")
