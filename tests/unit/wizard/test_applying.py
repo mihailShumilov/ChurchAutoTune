@@ -21,6 +21,7 @@ from churchtune.storage.models import (
 from churchtune.wizard.applying import (
     MAIN,
     changed_strips,
+    check_eq_change,
     chosen_packages,
     combined_target,
     ordered_steps,
@@ -28,6 +29,7 @@ from churchtune.wizard.applying import (
     same_eq,
     speaker_chains,
     strip_states,
+    writable_packages,
 )
 
 FS = 48000.0
@@ -148,5 +150,27 @@ def test_packages_stack_on_each_other():
     assert target.kind == "crossover+system_eq"
     assert target.before[MAIN] == fresh[MAIN]
     assert target.after[MAIN].eq.band(4).gain_db == -9.0
-    stale = combined_target([second], fresh, LAWS)  # the EQ alone expects the crossover first
-    assert stale.mismatches == ("system_eq: main_l",)
+    with pytest.raises(UnsafeWrite, match="only the crossover"):  # the EQ alone sets no cut
+        combined_target([second], fresh, LAWS)
+
+
+def test_a_package_never_switches_an_eq_on_or_off():
+    with pytest.raises(UnsafeWrite, match="on or off"):
+        check_eq_change("system_eq", "main_l", flat().with_on(False), flat(), LAWS)
+
+
+def test_the_crossover_package_may_set_a_cut_filter():
+    crossover = flat().with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4))
+    check_eq_change("crossover", "matrix 1", flat(), crossover, LAWS)
+    with pytest.raises(UnsafeWrite, match="only the crossover"):
+        check_eq_change("system_eq", "matrix 1", flat(), crossover, LAWS)
+
+
+def test_advice_packages_and_what_needs_them_are_not_written():
+    align = PackageModel(kind="alignment", suggest_only=False, risk="unverified", selected=True,
+                         delay_ms=1.0)  # fmt: skip
+    level = level_package(-20.0, -23.0)
+    needs = eq_package(flat(), CUT, requires=("alignment",))
+    kept, advice = writable_packages([align, level, needs])
+    assert kept == [level]
+    assert advice == [align]

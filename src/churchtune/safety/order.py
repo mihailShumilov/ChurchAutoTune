@@ -154,12 +154,12 @@ class _Simulation:
 
 
 def _band_steps(strip: SignalRef, old: Band, new: Band, order: Sequence[str]) -> list[Step]:
+    """One step per parameter in ``order`` (only parameters that differ are ever passed)."""
     steps = []
     current = old
     for param in order:
-        if _PARAM_OF[param](current) != _PARAM_OF[param](new):
-            current = _TAKE[param](current, new)
-            steps.append(Step(strip, "band", band=current, param=param))
+        current = _TAKE[param](current, new)
+        steps.append(Step(strip, "band", band=current, param=param))
     return steps
 
 
@@ -173,9 +173,12 @@ def _band_orders(strip: SignalRef, old: Band, new: Band) -> list[list[Step]]:
     if old.adjustable and old.gain_db != 0:
         neutral = replace(old, gain_db=0.0)
         first = Step(strip, "band", band=neutral, param="gain_db")
+        # From the neutral band the gain may have to come back to its value, even if it did
+        # not change between before and after.
+        rest = [p for p in BAND_PARAMS if _PARAM_OF[p](neutral) != _PARAM_OF[p](new)]
         orders.extend(
             [first, *_band_steps(strip, neutral, new, perm)]
-            for perm in itertools.permutations(changed)
+            for perm in itertools.permutations(rest)
         )
     return orders
 
@@ -251,6 +254,8 @@ def order_steps(
     if not sim.safe(late):
         raise UnsafeWrite("raising faders or unmuting last would still be too loud")
     sim.take(late)
+    if any(sim.states[ref] != after[ref] for ref in after):
+        raise UnsafeWrite("the ordered steps do not reach the planned state")
     return tuple(sim.steps)
 
 

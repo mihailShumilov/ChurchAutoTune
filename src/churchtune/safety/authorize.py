@@ -114,6 +114,11 @@ def _issue(
     return WriteAuthorization(scope, plan, undo_path, policy, seal, undo_sha256)
 
 
+# The scopes of the expert CLI that predate the typed word (ADR 0010); every other scope is
+# authorized only by ``authorize_typed``.
+YES_SCOPES = frozenset({WriteScope.MAIN, WriteScope.SUB})
+
+
 def authorize(
     scope: WriteScope,
     changes: Sequence[Change],
@@ -134,9 +139,12 @@ def authorize(
         The sealed authorization for the writer.
 
     Raises:
-        UnsafeWrite: The operator did not confirm, the policy is not exactly a ``WritePolicy``,
-            or a change is outside the policy.
+        UnsafeWrite: The scope needs a typed word (every scope but ``main`` and ``sub``), the
+            operator did not confirm, the policy is not exactly a ``WritePolicy``, or a change
+            is outside the policy.
     """
+    if scope not in YES_SCOPES:
+        raise UnsafeWrite(f"the {scope.value} scope needs a typed word (authorize_typed)")
     if not is_confirmation(confirmation):
         raise UnsafeWrite("the operator did not confirm the write")
     if type(policy) is not WritePolicy:
