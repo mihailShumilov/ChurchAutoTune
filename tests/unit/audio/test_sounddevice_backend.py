@@ -312,8 +312,8 @@ def test_stream_is_closed_even_when_abort_itself_fails(sd):
     backend = make(sd)
     original_stream = backend._stream
 
-    def stream_with_broken_abort(callback):
-        stream = original_stream(callback)
+    def stream_with_broken_abort(callback, *args):
+        stream = original_stream(callback, *args)
 
         def broken_abort():
             raise RuntimeError("PortAudio error")
@@ -483,7 +483,63 @@ def test_missing_portaudio_is_reported_as_an_audio_device_error(monkeypatch):
     def unavailable():
         raise AudioDeviceError("sounddevice / PortAudio is not available: no library")
 
-    monkeypatch.setattr("churchtune.audio.sounddevice_backend._load_sounddevice", unavailable)
+    monkeypatch.setattr("churchtune.audio.sounddevice_backend.load_sounddevice", unavailable)
 
     with pytest.raises(AudioDeviceError, match="not available"):
         SoundDeviceBackend("x-usb", FS_HZ, MIC_INPUT)
+
+
+# ------------------------------------------------------------ several inputs, stop flag
+class Flag:
+    def __init__(self, after_polls=0):
+        self.polls = 0
+        self.after = after_polls
+
+    def is_set(self):
+        self.polls += 1
+        return self.polls > self.after
+
+
+def test_playrec_multi_records_the_requested_inputs_in_order(sd):
+    backend = make(sd)
+    recording = backend.playrec_multi(stereo(2 * BLOCK_FRAMES, 0.1), [MIC_INPUT, 2])
+    assert recording.samples.shape == (2 * BLOCK_FRAMES, 2)
+    assert np.all(recording.channel(0) == np.float32(sd.mic_level))
+    assert np.all(recording.channel(1) == 0)
+    assert sd.streams[0].settings["channels"] == (max(MIC_INPUT, 2), 2)
+    assert backend.input_count == 32
+
+
+def test_playrec_multi_refuses_inputs_outside_the_device_before_opening_a_stream(sd):
+    backend = make(sd)
+    with pytest.raises(AudioDeviceError, match="outside"):
+        backend.playrec_multi(stereo(BLOCK_FRAMES, 0.1), [33])
+    with pytest.raises(AudioDeviceError, match="repeat"):
+        backend.playrec_multi(stereo(BLOCK_FRAMES, 0.1), [3, 3])
+    assert sd.streams == []
+
+
+def test_stop_flag_aborts_the_stream_and_reports(sd):
+    backend = make(sd)
+    with pytest.raises(MeasurementAborted):
+        backend.playrec_multi(stereo(20 * BLOCK_FRAMES, 0.1), [MIC_INPUT], stop=Flag(after_polls=2))
+    stream = sd.streams[0]
+    assert stream.aborted
+    assert stream.closed
+    assert len(stream.output) < 20
+
+
+def test_record_multi_plays_silence(sd):
+    backend = make(sd)
+    recording = backend.record_multi(BLOCK_FRAMES / FS_HZ, [MIC_INPUT])
+    assert recording.samples.shape == (BLOCK_FRAMES, 1)
+    assert all(np.all(block == 0) for block in sd.streams[0].output)
+
+
+def test_run_stream_multi_hands_over_the_requested_columns(sd):
+    backend = make(sd)
+    blocks = iter([stereo(BLOCK_FRAMES, 0.1), stereo(BLOCK_FRAMES, 0.1)])
+    seen = []
+    backend.run_stream_multi(lambda frames: next(blocks, None), [2, MIC_INPUT], seen.append)
+    assert seen[0].shape == (BLOCK_FRAMES, 2)
+    assert np.all(seen[0][:, 1] == np.float32(sd.mic_level))
