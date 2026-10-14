@@ -3,7 +3,9 @@
 A driver discovers consoles, reads a full snapshot without changing anything, infers the speaker
 topology, maps the USB audio card and streams meters. Writes go through a scoped writer that needs
 an authorization from ``safety`` (M5). The wizard depends on this module only, never on a concrete
-console family.
+console family. Discovery is a function of each family (``mixers/x32/driver.discover_consoles``)
+that the entry point hands to the wizard; it is not a method because it runs before any console is
+connected (ADR 0006).
 """
 
 from collections.abc import Callable, Iterator, Mapping
@@ -52,7 +54,8 @@ class Capabilities:
 
     Attributes:
         support: Support level by feature; a missing feature is ``none``.
-        verified_firmware: True when the firmware line was checked on hardware.
+        verified_firmware: True when the firmware belongs to the line the protocol notes describe
+            (4.x); False means "not checked at all" and earns a warning.
     """
 
     support: Mapping[Feature, Support]
@@ -115,6 +118,28 @@ class MeterFrame:
     matrices: tuple[float, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class LinkQuality:
+    """Round trips of repeated identity requests (SPEC S2).
+
+    Attributes:
+        sent: Requests sent.
+        answered: Requests answered in time.
+        median_ms: Median round trip of the answered requests; None when none was answered.
+        max_ms: Slowest answered round trip; None when none was answered.
+    """
+
+    sent: int
+    answered: int
+    median_ms: float | None
+    max_ms: float | None
+
+    @property
+    def loss(self) -> float:
+        """Share of unanswered requests, 0..1."""
+        return 1.0 - self.answered / self.sent if self.sent else 0.0
+
+
 class MixerDriver(Protocol):
     """What the wizard needs from a console family."""
 
@@ -125,6 +150,16 @@ class MixerDriver(Protocol):
 
     def read_snapshot(self, progress: ProgressCb | None = None) -> ConsoleSnapshot:
         """Read everything needed without changing anything."""
+        ...
+
+    def parse_snapshot(
+        self, identity: ConsoleIdentity, raw: Mapping[str, str], taken_at: str
+    ) -> ConsoleSnapshot:
+        """Rebuild a snapshot from stored raw lines with this version's parser. Pure."""
+        ...
+
+    def link_quality(self, count: int, timeout_s: float) -> LinkQuality:
+        """Round trips and loss of ``count`` identity requests."""
         ...
 
     def infer_topology(self, snapshot: ConsoleSnapshot) -> TopologyGuess:

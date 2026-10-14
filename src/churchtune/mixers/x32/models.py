@@ -14,6 +14,9 @@ X32_MODELS = frozenset({"X32", "X32C", "X32P", "X32RACK", "X32CORE"})
 M32_MODELS = frozenset({"M32", "M32R", "M32C"})
 VERIFIED_FIRMWARE_MAJOR = "4"
 XINFO_FIELDS = 4
+# Model and firmware pairs whose writes were done and read back on hardware. A pair is added only
+# together with filled rows of docs/hardware-checklist.md (PR must reference them).
+VERIFIED_CONSOLES: frozenset[tuple[str, str]] = frozenset({("X32P", "4.09")})
 
 # Written and read back on an X32 Producer with firmware 4.09 (skill x32-osc, session 2026-10-02).
 _X32_VERIFIED: frozenset[Feature] = frozenset(
@@ -51,22 +54,25 @@ def identity_from_xinfo(values: list[object], host: str) -> ConsoleIdentity:
     return ConsoleIdentity(family_of(model), model, name, firmware, host)
 
 
-def is_verified_firmware(firmware: str) -> bool:
-    """True for the firmware line the protocol was checked on (4.x)."""
+def is_supported_firmware(firmware: str) -> bool:
+    """True for the firmware line the protocol notes describe (4.x); others get a warning."""
     return firmware.split(".", 1)[0] == VERIFIED_FIRMWARE_MAJOR
+
+
+def is_verified_console(identity: ConsoleIdentity) -> bool:
+    """True only for a model and firmware pair whose writes were checked on hardware."""
+    return (identity.model.strip().upper(), identity.firmware.strip()) in VERIFIED_CONSOLES
 
 
 def capabilities(identity: ConsoleIdentity) -> Capabilities:
     """What may be written on this console.
 
-    Only the X32 family on firmware 4.x has verified writes; everything else is suggest-only.
+    Writes are ``full`` only on a verified model and firmware pair (today the X32 Producer with
+    4.09); every other X32 or M32 is suggest-only until a human fills the hardware checklist.
     """
-    verified_fw = is_verified_firmware(identity.firmware)
-    verified = (
-        _X32_VERIFIED if identity.family is ConsoleFamily.X32 and verified_fw else frozenset()
-    )
+    verified = _X32_VERIFIED if is_verified_console(identity) else frozenset()
     support = {f: Support.FULL if f in verified else Support.SUGGEST_ONLY for f in Feature}
-    return Capabilities(support, verified_fw)
+    return Capabilities(support, is_supported_firmware(identity.firmware))
 
 
 def console_model(identity: ConsoleIdentity) -> ConsoleModel:
