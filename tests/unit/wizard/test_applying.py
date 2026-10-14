@@ -22,6 +22,7 @@ from churchtune.wizard.applying import (
     MAIN,
     changed_strips,
     chosen_packages,
+    combined_target,
     ordered_steps,
     package_target,
     same_eq,
@@ -135,3 +136,17 @@ def test_same_eq_uses_the_grid_and_the_switch():
     assert same_eq(LAWS, flat(), flat().with_band(Band(4, EqType.PEQ, 480.0, 0.01, 1.4)))
     assert not same_eq(LAWS, flat(), flat().with_on(False))
     assert not same_eq(LAWS, flat(), CUT)
+
+
+def test_packages_stack_on_each_other():
+    crossover = flat().with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4))
+    first = eq_package(flat(), crossover, kind="crossover")
+    second = eq_package(crossover, CUT.with_band(Band(1, EqType.LCUT, 100.0, 0.0, 1.4)))
+    fresh = strip_states(console())
+    target = combined_target([first, second], fresh, LAWS)
+    assert target.mismatches == ()
+    assert target.kind == "crossover+system_eq"
+    assert target.before[MAIN] == fresh[MAIN]
+    assert target.after[MAIN].eq.band(4).gain_db == -9.0
+    stale = combined_target([second], fresh, LAWS)  # the EQ alone expects the crossover first
+    assert stale.mismatches == ("system_eq: main_l",)

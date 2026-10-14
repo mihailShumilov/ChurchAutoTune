@@ -110,9 +110,9 @@ class Workspace:
             number += 1
         return path
 
-    def undo_path(self, scope: WriteScope, now: datetime, *, revert: bool = False) -> Path:
-        """Name of a new undo file for a plan applied at ``now``."""
-        prefix = "undo_sub_" if scope is WriteScope.SUB else "undo_"
+    def undo_path(self, scope: WriteScope | None, now: datetime, *, revert: bool = False) -> Path:
+        """Name of a new undo file for a plan applied at ``now`` (``None``: applied packages)."""
+        prefix = {WriteScope.SUB: "undo_sub_", None: "undo_pkg_"}.get(scope, "undo_")
         suffix = "_revert" if revert else ""
         return self.undo / f"{prefix}{now.strftime(TIMESTAMP_FORMAT)}{suffix}.json"
 

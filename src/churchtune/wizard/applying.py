@@ -162,3 +162,27 @@ def ordered_steps(
 def changed_strips(steps: Sequence[Step]) -> set[SignalRef]:
     """The strips the steps touch."""
     return {step.strip for step in steps}
+
+
+def combined_target(
+    packages: Sequence[PackageModel], fresh: Mapping[SignalRef, StripState], laws: ValueLaws
+) -> PackageTarget:
+    """Where the chosen packages take the console together.
+
+    The packages were designed one on top of the other (the EQ starts from the crossover), so
+    each "before" is compared with the fresh state plus the packages written before it.
+
+    Raises:
+        UnsafeWrite: A package names a strip the console does not have.
+    """
+    current = dict(fresh)
+    after: dict[SignalRef, StripState] = {}
+    mismatches: list[str] = []
+    for package in packages:
+        target = package_target(package, current, laws)
+        mismatches.extend(f"{package.kind}: {label}" for label in target.mismatches)
+        current.update(target.after)
+        after.update(target.after)
+    before = {ref: fresh[ref] for ref in after}
+    kinds = "+".join(p.kind for p in packages)
+    return PackageTarget(kinds, before, after, tuple(mismatches))

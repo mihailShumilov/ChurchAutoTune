@@ -303,6 +303,10 @@ class X32Emulator:
             self.writes.append((addr, list(args)))
             self._write(addr, args)
 
+    def hand_change(self, addr: str, value: OscArg) -> None:
+        """Change a parameter as a person at the console would: not counted as a write."""
+        self._write(addr, [value])
+
     def _query(self, addr: str, peer: tuple[str, int]) -> None:
         if addr in self.silent:
             return

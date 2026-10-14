@@ -436,8 +436,12 @@ def undo_command(
         if not is_confirmation(ask(question)):
             say("Отменено — ничего не записано.")
             raise typer.Exit(EXIT_USER)
+    from churchtune.cli import apply_packages  # noqa: PLC0415 - it imports this module
+
     with reachable_console(settings) as console:
-        if undo.scope is WriteScope.SUB:
+        if apply_packages.is_package_undo(undo):
+            code = apply_packages.undo_packages(settings, console, undo, undo_file, dry_run)
+        elif undo.scope is WriteScope.SUB:
             code = _undo_sub(settings, console, undo, undo_file, dry_run, write_unverified)
         else:
             code = _undo_main(settings, console, undo, undo_file, dry_run)
