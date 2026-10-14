@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from churchtune import __version__
-from churchtune.cli import analyze, apply, check, console, hwcheck, measure, mics, sub
+from churchtune.cli import analyze, apply, check, console, hwcheck, measure, mics, sub, wizard
 from churchtune.cli.context import EXIT_REFUSED, Settings, load_venue, parse_console, say
 from churchtune.errors import ChurchTuneError, DevSafeViolation
 from churchtune.storage.paths import workspace_from_env
@@ -19,7 +19,7 @@ AUDIO_VAR = "CTUNE_AUDIO"
 app = typer.Typer(
     name="ctune",
     help="Measure the room and tune a Behringer X32 / Midas M32 system.",
-    no_args_is_help=True,
+    invoke_without_command=True,
     add_completion=False,
     pretty_exceptions_enable=False,
 )
@@ -73,6 +73,8 @@ def main(
         venue = replace(venue, console_host=LOOPBACK, console_port=emu.port)
         audio = "fake"
     ctx.obj = Settings(workspace, venue, audio or venue.audio_device or "fake")
+    if ctx.invoked_subcommand is None:
+        wizard.wizard_command(ctx)  # SPEC §12: plain ``ctune`` is the wizard
 
 
 app.command("check")(check.check_command)
@@ -94,6 +96,8 @@ app.command("devices")(mics.devices_command)
 app.command("noise")(mics.noise_command)
 app.command("pathcheck")(mics.pathcheck_command)
 app.add_typer(mics.mics_app, name="mics")
+app.command("wizard")(wizard.wizard_command)
+app.command("resume")(wizard.resume_command)
 
 
 def run() -> None:
