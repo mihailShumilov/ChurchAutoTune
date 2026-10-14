@@ -1,20 +1,21 @@
-"""One measurement round with several microphones: one stream, one sweep, every mic deconvolved.
+"""One measurement round with several microphones: each sweep in one stream, every mic deconvolved.
 
-All microphones of a round share the stream and its clock, so their impulse responses share one
-time base (SPEC §8.1). Each microphone gets the point gates of ``gates.assess`` plus the
-repeatability gate of SPEC §8.2: two sweeps must agree within ``max_repeat_db`` in 1/3 octaves
-from 100 Hz to 8 kHz.
+All microphones of a sweep share the stream and its clock, so their impulse responses share one
+time base (SPEC §8.1). Each sweep is its own stream: the sweeps are aligned on the impulse-response
+peak before averaging, and a shift between them is reported. Each microphone gets the point gates
+of ``gates.assess`` plus the repeatability gate of SPEC §8.2: two sweeps must agree within
+``max_repeat_db`` in 1/3 octaves from 100 Hz to 8 kHz.
 """
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Protocol
 
 import numpy as np
 
 from churchtune.analysis.response import magnitude_db, third_octave_centres
 from churchtune.domain.arrays import FloatArray
-from churchtune.domain.recording import Float32Array, MultiRecording, StopFlag
+from churchtune.domain.recording import MultiRecording, StopFlag
+from churchtune.measure.backend import MeasureBackend
 from churchtune.measure.config import QualityGates, SweepConfig
 from churchtune.measure.deconvolution import deconvolve, extract_ir
 from churchtune.measure.gates import (
@@ -30,20 +31,6 @@ from churchtune.measure.stimulus import build_stimulus, make_sweep
 REPEAT_LOW_HZ, REPEAT_HIGH_HZ = 100.0, 8000.0
 REPEAT_SMOOTHING_FRACTION = 3
 MIN_SWEEPS_FOR_REPEATABILITY = 2
-
-
-class MultiPlayRec(Protocol):
-    """The part of a multichannel backend a round needs."""
-
-    def playrec_multi(
-        self,
-        out: Float32Array,
-        inputs: Sequence[int],
-        events: None = None,
-        stop: StopFlag | None = None,
-    ) -> MultiRecording:
-        """Play ``out`` and record ``inputs`` in one stream."""
-        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,33 +82,61 @@ class RoundMeasurement:
         raise KeyError(usb_input)
 
 
+def _sweep_irs(
+    recs: Sequence[FloatArray], ref: FloatArray, fs_hz: float, sweep: SweepConfig
+) -> tuple[list[FloatArray], list[int]]:
+    """Circular impulse response and peak index of every single sweep."""
+    irs = [deconvolve(rec, ref, fs_hz, sweep.f1_hz, sweep.f2_hz) for rec in recs]
+    return irs, [int(np.argmax(np.abs(ir))) for ir in irs]
+
+
 def repeat_difference_db(
-    first: FloatArray, second: FloatArray, ref: FloatArray, fs_hz: float, sweep: SweepConfig
+    first: FloatArray, second: FloatArray, fs_hz: float, sweep: SweepConfig
 ) -> float:
-    """Largest 1/3-octave level difference (100 Hz-8 kHz) between two recordings of one sweep."""
+    """Largest 1/3-octave level difference (100 Hz-8 kHz) between the responses of two sweeps."""
     centres = third_octave_centres(REPEAT_LOW_HZ, REPEAT_HIGH_HZ)
     curves = []
-    for rec in (first, second):
-        ir_full = deconvolve(rec, ref, fs_hz, sweep.f1_hz, sweep.f2_hz)
+    for ir_full in (first, second):
         ir, _ = extract_ir(ir_full, fs_hz, sweep.ir_length_s, sweep.ir_pre_ms)
         curves.append(magnitude_db(ir, fs_hz, frac=REPEAT_SMOOTHING_FRACTION, grid_hz=centres))
     return float(np.max(np.abs(curves[0] - curves[1])))
 
 
+def _aligned_mean(
+    recs: Sequence[FloatArray], peaks: Sequence[int], n_fft: int
+) -> tuple[FloatArray, int]:
+    """Mean of the recordings after shifting each to the first sweep's peak; the largest shift."""
+    shifts = []
+    for peak in peaks:
+        shift = peak - peaks[0]
+        if shift > n_fft // 2:  # circular wrap of the impulse response
+            shift -= n_fft
+        elif shift < -n_fft // 2:
+            shift += n_fft
+        shifts.append(shift)
+    aligned = [np.roll(rec, -shift) for rec, shift in zip(recs, shifts, strict=True)]
+    return np.asarray(np.mean(aligned, axis=0), dtype=np.float64), max(abs(s) for s in shifts)
+
+
 def with_repeatability(
-    quality: PointQuality, repeat_db: float, gates: QualityGates
+    quality: PointQuality, repeat_db: float, gates: QualityGates, shift_samples: int = 0
 ) -> PointQuality:
-    """Add the repeatability gate to a point's quality."""
-    if repeat_db <= gates.max_repeat_db:
+    """Add the repeatability gate to a point's quality.
+
+    A latency that moved between sweeps (each sweep is its own stream) is reported even when the
+    levels agree: the sweeps were aligned before averaging, but the system was not steady.
+    """
+    if repeat_db <= gates.max_repeat_db and shift_samples == 0:
         return quality
     bad = repeat_db > gates.bad_repeat_db
-    warning = QualityWarning(WarningCode.UNSTEADY, {"repeat_db": round(repeat_db, 1), "bad": bad})
+    params = {"repeat_db": round(repeat_db, 1), "bad": bad, "shift_samples": shift_samples}
+    warning = QualityWarning(WarningCode.UNSTEADY, params)
     verdict = worse(quality.verdict, Verdict.BAD if bad else Verdict.WARN)
     return replace(quality, verdict=verdict, warnings=(*quality.warnings, warning))
 
 
 def measure_round(  # noqa: PLR0913 - explicit configuration instead of globals
-    backend: MultiPlayRec,
+    backend: MeasureBackend,
     inputs: Sequence[int],
     *,
     fs_hz: float,
@@ -132,7 +147,7 @@ def measure_round(  # noqa: PLR0913 - explicit configuration instead of globals
     stop: StopFlag | None = None,
     on_sweep: Callable[[int, int], None] | None = None,
 ) -> RoundMeasurement:
-    """Measure every microphone of a round with ``n_avg`` sweeps in one stream.
+    """Measure every microphone of a round with ``n_avg`` sweeps (one stream per sweep).
 
     Raises:
         LevelError: The level is above the hard output limit; nothing is played.
@@ -155,7 +170,8 @@ def measure_round(  # noqa: PLR0913 - explicit configuration instead of globals
     results = []
     for column, usb_input in enumerate(inputs):
         recs = [np.asarray(take.channel(column), dtype=np.float64) for take in takes]
-        mean_rec = np.asarray(np.mean(recs, axis=0), dtype=np.float64)
+        single_irs, peaks = _sweep_irs(recs, ref, fs_hz, sweep)
+        mean_rec, shift = _aligned_mean(recs, peaks, len(single_irs[0]))
         ir_full = deconvolve(mean_rec, ref, fs_hz, sweep.f1_hz, sweep.f2_hz)
         ir, peak_idx = extract_ir(ir_full, fs_hz, sweep.ir_length_s, sweep.ir_pre_ms)
         abs_max = np.asarray(np.max(np.abs(recs), axis=0), dtype=np.float64)
@@ -164,7 +180,7 @@ def measure_round(  # noqa: PLR0913 - explicit configuration instead of globals
         )
         repeat_db = None
         if len(recs) >= MIN_SWEEPS_FOR_REPEATABILITY:
-            repeat_db = repeat_difference_db(recs[0], recs[1], ref, fs_hz, sweep)
-            quality = with_repeatability(quality, repeat_db, gates)
+            repeat_db = repeat_difference_db(single_irs[0], single_irs[1], fs_hz, sweep)
+            quality = with_repeatability(quality, repeat_db, gates, shift)
         results.append(MicResult(usb_input, ir, ir_full, peak_idx, quality, repeat_db))
     return RoundMeasurement(tuple(results), level, n_avg, fs_hz)
