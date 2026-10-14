@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a console (hardware checklist rows 1 and 2, ADR 0005).
 - Golden tests on the anonymized hall session of 2026-10-02 (`tests/fixtures/golden/`, about 33 MB).
 - Layer-rule test, coverage gates per package, pre-commit and CI configuration.
+- Open-source project files: contributing guide, Contributor Covenant code of conduct, security and safety
+  policy with private reporting, support page, issue forms (bug, feature, hardware check result), pull request
+  template with a safety checklist, CODEOWNERS, Dependabot, CodeQL, `.editorconfig`, `.gitattributes`.
 
 ### Changed (compared with the original tool)
 - Output delay and matrix polarity are written only with `--write-unverified`; by default `sub align` prints
