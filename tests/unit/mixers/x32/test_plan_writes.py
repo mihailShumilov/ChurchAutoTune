@@ -7,8 +7,16 @@ from churchtune.domain.eq import Band, EqType, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
 from churchtune.mixers.x32.laws import X32ValueLaws
-from churchtune.mixers.x32.plan_writes import PlannedChange, plan_writes, runs_by_scope
+from churchtune.mixers.x32.plan_writes import (
+    PlannedChange,
+    plan_writes,
+    runs_by_scope,
+    strip_of,
+    wire_value,
+    with_wire_value,
+)
 from churchtune.safety.order import Step, StripState, order_steps
+from churchtune.safety.plan import same_step
 from churchtune.safety.policy import WritePolicy
 from tests.fixtures.venues import MATRICES
 
@@ -89,3 +97,50 @@ def test_runs_group_consecutive_scopes():
         (eq, 2),
         (lv, 1),
     ]
+
+
+@pytest.mark.parametrize(
+    ("path", "strip"),
+    [("/main/st/eq/4/g", MAIN), ("/mtx/03/mix/fader", SUB), ("/mtx/01/eq/on", TOPS)],
+)
+def test_wire_values_go_both_ways(path, strip):
+    planned_after = flat().with_band(Band(4, EqType.PEQ, 480.0, -6.0, 1.5)).with_on(False)
+    after = StripState(planned_after, -12.0, False)
+    value = wire_value(after, path, LAWS)
+    assert strip_of(path) == strip
+    back = with_wire_value(StripState(flat()), path, value)
+    assert same_step(LAWS, path.rsplit("/", 1)[1], wire_value(back, path, LAWS), value)
+
+
+def test_every_band_parameter_and_the_mute_go_back():
+    state = StripState(flat())
+    for kind, value in (("type", 9), ("f", 0.5), ("g", 0.25), ("q", 0.5)):
+        state = with_wire_value(state, f"/mtx/02/eq/2/{kind}", value)
+        assert same_step(LAWS, kind, wire_value(state, f"/mtx/02/eq/2/{kind}", LAWS), value)
+    assert not with_wire_value(state, "/mtx/02/mix/on", 0).on
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        ("/bus/01/mix/fader", 0.5),
+        ("/mtx/07/mix/fader", 0.5),
+        ("/main/st/eq/7/g", 0.5),
+        ("/main/st/eq/on", 0.5),
+        ("/main/st/eq/on", True),
+        ("/main/st/eq/on", 2),
+        ("/main/st/eq/1/type", 99),
+        ("/main/st/eq/1/g", 1.5),
+        ("/main/st/eq/1/g", 1),
+    ],
+)
+def test_bad_undo_values_are_refused(path, value):
+    with pytest.raises(UnsafeWrite):
+        with_wire_value(StripState(flat()), path, value)
+
+
+def test_a_foreign_address_has_no_strip_or_value():
+    with pytest.raises(UnsafeWrite):
+        strip_of("/ch/01/mix/fader")
+    with pytest.raises(UnsafeWrite):
+        wire_value(StripState(flat()), "/ch/01/mix/fader", LAWS)

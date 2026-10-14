@@ -115,3 +115,13 @@ def test_the_new_scopes_go_through_the_same_seal(tmp_path):
     other = dataclasses.replace(policy, mute_originals=(("/mtx/03/mix/on", 0),))
     with pytest.raises(UnsafeWrite):
         verify(dataclasses.replace(auth, policy=other))
+
+
+def test_a_policy_that_is_not_exactly_a_write_policy_is_refused(tmp_path):
+    class Permissive(type(POLICY)):  # type: ignore[misc]
+        __slots__ = ()
+
+    lax = Permissive(**{f.name: getattr(POLICY, f.name) for f in dataclasses.fields(POLICY)})
+    path, digest = undo_file(tmp_path)
+    with pytest.raises(UnsafeWrite, match="exactly a WritePolicy"):
+        authorize_typed(WriteScope.MAIN, PLAN, path, WORD, lax, undo_sha256=digest)

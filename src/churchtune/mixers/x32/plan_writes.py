@@ -6,18 +6,23 @@ the strip states the plan started from, so the undo file holds what the console 
 whose new value already sits on the console's grid step is left out.
 """
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from churchtune.domain.changes import Change, WireValue, WriteScope
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
+from churchtune.mixers.x32 import params
 from churchtune.safety.laws import ValueLaws
 from churchtune.safety.order import Step, StripState
 from churchtune.safety.plan import same_step
 
 # Band parameters of a step and their address segment.
 _SEGMENT = {"type": "type", "freq_hz": "f", "q": "q", "gain_db": "g"}
+_STRIP_RE = re.compile(
+    r"^/(?:main/st|mtx/0([1-6]))/(eq/on|eq/([1-6])/(type|f|g|q)|mix/(fader|on))$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,3 +125,72 @@ def runs_by_scope(planned: Sequence[PlannedChange]) -> list[tuple[WriteScope, li
         else:
             runs.append((item.scope, [item.change]))
     return runs
+
+
+def strip_of(path: str) -> SignalRef:
+    """The strip a writable address belongs to.
+
+    Raises:
+        UnsafeWrite: The address is not a strip parameter a plan may write.
+    """
+    match = _STRIP_RE.fullmatch(path)
+    if match is None:
+        raise UnsafeWrite(f"not a strip parameter a plan may write: {path}", path=path)
+    number = match.group(1)
+    return SignalRef(SourceKind.MATRIX, int(number)) if number else SignalRef(SourceKind.MAIN_L)
+
+
+def with_wire_value(state: StripState, path: str, value: WireValue) -> StripState:
+    """A strip state with one written parameter set from its wire value (the undo direction).
+
+    Raises:
+        UnsafeWrite: The address is not a strip parameter, or the value is not valid for it.
+    """
+    match = _STRIP_RE.fullmatch(path)
+    if match is None:
+        raise UnsafeWrite(f"not a strip parameter a plan may write: {path}", path=path)
+    _, what, band_no, kind, mix = match.groups()
+    is_switch = what == "eq/on" or mix == "on" or kind == "type"
+    if is_switch != isinstance(value, int) or isinstance(value, bool):
+        raise UnsafeWrite(f"bad value {value!r} for {path}", path=path)
+    if is_switch:
+        limit = len(params.EQ_TYPES) if kind == "type" else 2
+        if not 0 <= int(value) < limit:
+            raise UnsafeWrite(f"bad value {value!r} for {path}", path=path)
+    elif not 0.0 <= float(value) <= 1.0:
+        raise UnsafeWrite(f"bad normalized value {value!r} for {path}", path=path)
+    if what == "eq/on":
+        return replace(state, eq=state.eq.with_on(bool(value)))
+    if mix == "on":
+        return replace(state, on=bool(value))
+    if mix == "fader":
+        return replace(state, fader_db=params.norm_to_fader(float(value)))
+    band = state.eq.band(int(band_no))
+    if kind == "type":
+        band = replace(band, type=params.EQ_TYPES[int(value)])
+    elif kind == "f":
+        band = replace(band, freq_hz=params.norm_to_freq(float(value)))
+    elif kind == "g":
+        band = replace(band, gain_db=params.norm_to_gain(float(value)))
+    else:
+        band = replace(band, q=params.norm_to_q(float(value)))
+    return replace(state, eq=state.eq.with_band(band))
+
+
+def wire_value(state: StripState, path: str, laws: ValueLaws) -> WireValue:
+    """The wire value of one strip parameter in a state (as a node read gave it).
+
+    Raises:
+        UnsafeWrite: The address is not a strip parameter a plan may write.
+    """
+    match = _STRIP_RE.fullmatch(path)
+    if match is None:
+        raise UnsafeWrite(f"not a strip parameter a plan may write: {path}", path=path)
+    _, what, band_no, kind, mix = match.groups()
+    if what == "eq/on":
+        return _switch(state.eq.on)[0]
+    if mix == "on":
+        return _switch(state.on)[0]
+    if mix == "fader":
+        return laws.fader_wire(state.fader_db)
+    return laws.band_wire_values(state.eq.band(int(band_no)))[0][kind]

@@ -202,6 +202,10 @@ def test_delay_and_polarity_need_the_unverified_opt_in():
         ("/mtx/01/preamp/invert", 1, POLARITY),  # polarity of the sub path only
         ("/mtx/03/preamp/invert", 2, POLARITY),
         ("/mtx/03/mix/on", 0, POLARITY),
+        ("/outputs/main/08/delay/on", 2, DELAY),
+        ("/outputs/main/08/delay/on", 0.5, DELAY),
+        ("/outputs/main/08/delay/time", 1.5, DELAY),
+        ("/outputs/main/08/delay/time", 1, DELAY),
     ],
 )
 def test_delay_and_polarity_limits(path, value, scope):

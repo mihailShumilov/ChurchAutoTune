@@ -13,6 +13,7 @@ from hypothesis import strategies as st
 from churchtune.domain.eq import Band, EqType, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
+from churchtune.safety import order
 from churchtune.safety.order import Step, StripState, check_order, order_steps
 
 FS = 48000.0
@@ -95,6 +96,23 @@ def test_a_fader_down_is_never_too_loud_even_from_minus_infinity():
     before = {MAIN: state(), TOPS: state(fader=-math.inf), SUB: state()}
     after = {MAIN: state(), TOPS: state(fader=-20.0), SUB: state()}
     assert [s.what for s in plan(before, after)] == ["fader"]
+
+
+def test_a_band_without_a_safe_order_is_refused(monkeypatch):
+    cut = flat_eq().with_band(Band(2, EqType.PEQ, 480.0, -9.0, 1.5))
+    before = {MAIN: state(cut), TOPS: state(), SUB: state()}
+    after = {MAIN: state(), TOPS: state(), SUB: state()}
+    monkeypatch.setattr(order._Simulation, "safe", lambda self, steps: False)
+    with pytest.raises(UnsafeWrite, match="no safe order for band 2"):
+        order_steps(before, after, CHAINS, FS)
+
+
+def test_late_steps_that_would_still_be_too_loud_are_refused(monkeypatch):
+    before = {MAIN: state(), TOPS: state(on=False), SUB: state()}
+    after = {MAIN: state(), TOPS: state(), SUB: state()}
+    monkeypatch.setattr(order._Simulation, "safe", lambda self, steps: False)
+    with pytest.raises(UnsafeWrite, match="unmuting last"):
+        order_steps(before, after, CHAINS, FS)
 
 
 band_strategy = st.builds(

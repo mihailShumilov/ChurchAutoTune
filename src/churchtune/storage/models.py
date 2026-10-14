@@ -141,16 +141,21 @@ WireNumber = StrictInt | Annotated[float, Field(strict=True, allow_inf_nan=False
 
 
 class ChangeModel(FileModel):
-    """One planned parameter write. Values must be real JSON numbers, finite, not strings."""
+    """One planned parameter write. Values must be real JSON numbers, finite, not strings.
+
+    ``scope`` is set in plans that span several write scopes (applied packages, M5): the undo of
+    each write is then validated in the scope it was written in.
+    """
 
     path: str
     old_value: WireNumber
     new_value: WireNumber
     old_display: str
     new_display: str
+    scope: WriteScope | None = None
 
     @classmethod
-    def from_domain(cls, change: Change) -> "ChangeModel":
+    def from_domain(cls, change: Change, scope: WriteScope | None = None) -> "ChangeModel":
         """Build from a domain change."""
         return cls(
             path=change.path,
@@ -158,6 +163,7 @@ class ChangeModel(FileModel):
             new_value=change.new_value,
             old_display=change.old_display,
             new_display=change.new_display,
+            scope=scope,
         )
 
     def to_domain(self) -> Change:
