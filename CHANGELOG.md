@@ -27,13 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Console driver (M1): discovery of X32/M32 consoles (`/xinfo` only; loopback only in dev-safe
   mode), a full read-only snapshot parsed into console-neutral models (inputs, buses, matrices,
   mains, outputs, headamps, USB routing, clock), speaker topology inference with confidence and
-  reasons (multilingual names, cut filters, stereo links), the USB audio map, model capabilities
-  (`full` / `suggest_only`), meters as a stream and link quality.
+  reasons (multilingual names in en/ru/uk/es/pt, cut filters and crutch shelves, stereo links, what
+  feeds each matrix), sub pairs, speakers in other rooms (`zone`), the issues the wizard must explain,
+  the USB audio map, model capabilities (`full` only for a verified model and firmware pair, today
+  X32 Producer 4.09), meters as a stream and link quality.
 - `ctune doctor` (computer, console, link, snapshot, topology, USB card, capabilities; also
   `--from-file`), `ctune snapshot` (saved to `console/<ts>-snapshot.json`), `ctune emulator` and the
   global `--emulator` option.
 - The X32 emulator moved into the package `churchtune_emulator` with model variants, reply latency
-  and packet loss (ADR 0006); eight topology fixtures in `tests/fixtures/x32/topologies/`.
+  and packet loss (ADR 0006); fourteen topology fixtures in `tests/fixtures/x32/topologies/`.
+- A `/node` reply that arrives late for an earlier path is skipped instead of costing the current
+  path an attempt, so one slow answer no longer shifts the replies of all later nodes; a snapshot
+  read stops with "console unreachable" after 20 silent nodes in a row.
 
 ### Changed (compared with the original tool)
 - Output delay and matrix polarity are written only with `--write-unverified`; by default `sub align` prints

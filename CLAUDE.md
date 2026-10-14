@@ -65,8 +65,9 @@ State after M1. Modules marked (M2+) are in SPEC §5 but not written yet.
 - `mixers/base.py` driver contract (`MixerDriver`, `Capabilities`/`Feature`/`Support`, meters, discovery result)
 - `mixers/x32/` `transport` (the only socket; also `/xinfo`-only discovery), `codec`, `client` (read-only allowlist),
   `params`, `nodes`, `dump`, `snapshot` (node list, read, tolerant parse), `routing` (source ids, blocks, headamps),
-  `names` (multilingual speaker names), `topology` (`infer_topology`; M0 `detect_roles`), `usb`, `models`
-  (model strings, capabilities), `driver` (`X32Driver`, `discover_consoles`), `laws`, `writer` (the only writer)
+  `names` (multilingual speaker names), `topology` (`infer_topology`; M0 `detect_roles`), `filters`,
+  `speaker_paths`, `topology_issues`, `usb`, `models`
+  (model strings, `VERIFIED_CONSOLES`), `driver` (`X32Driver`, `discover_consoles`), `laws`, `writer` (the only writer)
 - `churchtune_emulator/` (separate top-level package, loopback only, ADR 0006): `x32` emulator with model variants,
   latency and loss; seeded from the packaged reference dump
 - `audio/` `base` (protocol, −6 dBFS limiter), `sounddevice_backend`, `factory`, `fake/` (room simulation)

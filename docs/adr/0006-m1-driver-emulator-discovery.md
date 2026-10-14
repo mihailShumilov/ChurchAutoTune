@@ -32,6 +32,17 @@ M1 adds discovery, a full read-only snapshot, topology inference and the `doctor
    reply lines only. The parsed `ConsoleSnapshot` is rebuilt by the driver, so a newer parser reads
    an old file better than the old one did. M3 moves the directory under `venues/<slug>/`.
 
+4. The `MixerDriver` contract differs from the sketch in SPEC §6.3 where M1 showed the need:
+   discovery is a family-level function (`discover_consoles`), not a method, because it runs
+   before any console is connected; the entry point hands it to the wizard. The protocol gains
+   `link_quality()` (SPEC S2 needs round trips and loss) and `parse_snapshot()` (rebuilding a stored
+   snapshot), and `meters()` takes the listening time.
+5. Writes are `full` only for a model and firmware pair that was checked on hardware
+   (`VERIFIED_CONSOLES`, today X32 Producer 4.09). Other X32 models and other 4.x firmware are
+   suggest-only although they share the protocol: the family is recognised by prefix, trust is not.
+6. Topology inference uses a role for speakers in other rooms (`zone`: foyer, nursery, overflow),
+   which are never tuned but hear every sweep, and groups subs into pairs (one stereo sub).
+
 Topology fixtures are TOML files (base dump + line overrides + expected roles) instead of YAML, so no
 new dependency is needed.
 
