@@ -5,7 +5,7 @@ codes with parameters, rendered into words by the UI. Pure data.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from churchtune.domain.snapshot import OutputKind, SignalRef
@@ -136,3 +136,37 @@ class TopologyGuess:
         """Lowest confidence among the outputs that drive speakers (1.0 when there are none)."""
         speakers = [g.confidence for g in self.outputs if g.role is not SpeakerRole.UNUSED]
         return min(speakers, default=1.0)
+
+
+def output_key(kind: OutputKind | str, number: int) -> str:
+    """Key of an output in a roles mapping: ``"main 8"``."""
+    return f"{OutputKind(kind).value} {number}"
+
+
+def with_roles(guess: TopologyGuess, roles: Mapping[str, str]) -> TopologyGuess:
+    """The guess with the roles the person confirmed or corrected.
+
+    ``roles`` maps an output key (``"main 8"``, ``kind number``) to a ``SpeakerRole`` value; outputs
+    not in it keep their guessed role. The speaker paths are grouped again from the roles, with
+    confidence 1 for every confirmed output. ``variant`` and ``issues`` stay those of the guess:
+    they explain what was read, not what the person corrected.
+    """
+    outputs = tuple(
+        replace(g, role=SpeakerRole(roles[key]), confidence=1.0)
+        if (key := output_key(g.kind, g.number)) in roles
+        else g
+        for g in guess.outputs
+    )
+
+    def by_role(*wanted: SpeakerRole) -> tuple[SignalRef, ...]:
+        refs = {g.path for g in outputs if g.role in wanted}
+        return tuple(sorted(refs, key=lambda r: (r.kind.value, r.number)))
+
+    return replace(
+        guess,
+        outputs=outputs,
+        tops=by_role(*TOP_ROLES),
+        subs=by_role(SpeakerRole.SUB),
+        others=by_role(SpeakerRole.DELAY, SpeakerRole.FILL),
+        zones=by_role(SpeakerRole.ZONE),
+    )
