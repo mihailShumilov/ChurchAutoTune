@@ -87,7 +87,8 @@ def _sweep_irs(
 ) -> tuple[list[FloatArray], list[int]]:
     """Circular impulse response and peak index of every single sweep."""
     irs = [deconvolve(rec, ref, fs_hz, sweep.f1_hz, sweep.f2_hz) for rec in recs]
-    return irs, [int(np.argmax(np.abs(ir))) for ir in irs]
+    # The direct sound lies in the first half of the circular response (as in ``extract_ir``).
+    return irs, [int(np.argmax(np.abs(ir[: len(ir) // 2]))) for ir in irs]
 
 
 def repeat_difference_db(
@@ -102,20 +103,23 @@ def repeat_difference_db(
     return float(np.max(np.abs(curves[0] - curves[1])))
 
 
-def _aligned_mean(
-    recs: Sequence[FloatArray], peaks: Sequence[int], n_fft: int
-) -> tuple[FloatArray, int]:
-    """Mean of the recordings after shifting each to the first sweep's peak; the largest shift."""
-    shifts = []
-    for peak in peaks:
-        shift = peak - peaks[0]
-        if shift > n_fft // 2:  # circular wrap of the impulse response
-            shift -= n_fft
-        elif shift < -n_fft // 2:
-            shift += n_fft
-        shifts.append(shift)
+def _stream_shifts(peaks_by_mic: Sequence[Sequence[int]]) -> list[int]:
+    """One shift per sweep, shared by every microphone: the median change of their peaks.
+
+    The latency belongs to the stream, so it is the same for every microphone of a sweep; a mic
+    whose peak hops to a strong reflection between sweeps does not move its recording.
+    """
+    n_sweeps = len(peaks_by_mic[0])
+    return [
+        round(float(np.median([peaks[k] - peaks[0] for peaks in peaks_by_mic])))
+        for k in range(n_sweeps)
+    ]
+
+
+def _aligned_mean(recs: Sequence[FloatArray], shifts: Sequence[int]) -> FloatArray:
+    """Mean of the recordings after shifting each sweep back by its stream shift."""
     aligned = [np.roll(rec, -shift) for rec, shift in zip(recs, shifts, strict=True)]
-    return np.asarray(np.mean(aligned, axis=0), dtype=np.float64), max(abs(s) for s in shifts)
+    return np.asarray(np.mean(aligned, axis=0), dtype=np.float64)
 
 
 def with_repeatability(
@@ -126,7 +130,7 @@ def with_repeatability(
     A latency that moved between sweeps (each sweep is its own stream) is reported even when the
     levels agree: the sweeps were aligned before averaging, but the system was not steady.
     """
-    if repeat_db <= gates.max_repeat_db and shift_samples == 0:
+    if repeat_db <= gates.max_repeat_db and shift_samples <= gates.max_sweep_shift_samples:
         return quality
     bad = repeat_db > gates.bad_repeat_db
     params = {"repeat_db": round(repeat_db, 1), "bad": bad, "shift_samples": shift_samples}
@@ -167,11 +171,16 @@ def measure_round(  # noqa: PLR0913 - explicit configuration instead of globals
             on_sweep(index + 1, n_avg)
         takes.append(backend.playrec_multi(stimulus, inputs, stop=stop))
     flags = [flag for take in takes for flag in take.flags]
+    columns = [
+        [np.asarray(take.channel(column), dtype=np.float64) for take in takes]
+        for column in range(len(inputs))
+    ]
+    sweep_irs = [_sweep_irs(recs, ref, fs_hz, sweep) for recs in columns]
+    shifts = _stream_shifts([peaks for _, peaks in sweep_irs])
+    largest_shift = max(abs(s) for s in shifts)
     results = []
-    for column, usb_input in enumerate(inputs):
-        recs = [np.asarray(take.channel(column), dtype=np.float64) for take in takes]
-        single_irs, peaks = _sweep_irs(recs, ref, fs_hz, sweep)
-        mean_rec, shift = _aligned_mean(recs, peaks, len(single_irs[0]))
+    for usb_input, recs, (single_irs, _) in zip(inputs, columns, sweep_irs, strict=True):
+        mean_rec = _aligned_mean(recs, shifts)
         ir_full = deconvolve(mean_rec, ref, fs_hz, sweep.f1_hz, sweep.f2_hz)
         ir, peak_idx = extract_ir(ir_full, fs_hz, sweep.ir_length_s, sweep.ir_pre_ms)
         abs_max = np.asarray(np.max(np.abs(recs), axis=0), dtype=np.float64)
@@ -181,6 +190,6 @@ def measure_round(  # noqa: PLR0913 - explicit configuration instead of globals
         repeat_db = None
         if len(recs) >= MIN_SWEEPS_FOR_REPEATABILITY:
             repeat_db = repeat_difference_db(single_irs[0], single_irs[1], fs_hz, sweep)
-            quality = with_repeatability(quality, repeat_db, gates, shift)
+            quality = with_repeatability(quality, repeat_db, gates, largest_shift)
         results.append(MicResult(usb_input, ir, ir_full, peak_idx, quality, repeat_db))
     return RoundMeasurement(tuple(results), level, n_avg, fs_hz)

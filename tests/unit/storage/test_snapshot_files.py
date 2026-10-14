@@ -6,8 +6,14 @@ from datetime import datetime
 import pytest
 
 from churchtune.errors import UnsupportedSchema
-from churchtune.storage.files import latest_snapshot, read_snapshot, write_snapshot
-from churchtune.storage.models import SnapshotFile
+from churchtune.storage.files import (
+    latest_snapshot,
+    read_snapshot,
+    reusable_mic_calibration,
+    write_mic_calibration,
+    write_snapshot,
+)
+from churchtune.storage.models import MicCalibrationFile, MicCalibrationModel, SnapshotFile
 from churchtune.storage.paths import Workspace
 
 STORED = SnapshotFile(
@@ -52,3 +58,22 @@ def test_two_snapshots_in_the_same_second_keep_both(tmp_path):
     third = write_snapshot(workspace, STORED, now)
     assert len({first, second, third}) == 3
     assert second.name == "20261014_090000_2-snapshot.json"
+
+
+def test_a_calibration_with_a_rejected_mic_is_not_reused(tmp_path):
+    def mic(usb, problems=()):
+        return MicCalibrationModel(
+            usb_input=usb, model="ECM8000", sensitivity_db=0.0, delay_ms=0.0, inverted=False,
+            shape_db=(0.0,), problems=problems,
+        )  # fmt: skip
+
+    workspace = Workspace(tmp_path)
+    now = datetime(2026, 10, 14, 9, 0, 0)
+    good = MicCalibrationFile(set_id="good1", created=now.isoformat(), centres_hz=(1000.0,),
+                              mics=(mic(10), mic(11)))  # fmt: skip
+    bad = MicCalibrationFile(set_id="bad1", created=now.isoformat(), centres_hz=(1000.0,),
+                             mics=(mic(10), mic(11, ("polarity",))))  # fmt: skip
+    write_mic_calibration(workspace, good)
+    write_mic_calibration(workspace, bad)
+    assert reusable_mic_calibration(workspace, "good1", now) == good
+    assert reusable_mic_calibration(workspace, "bad1", now) is None

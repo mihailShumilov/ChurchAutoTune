@@ -5,7 +5,7 @@ import threading
 import pytest
 
 from churchtune.audio.fake.hall import FakeHall, FakeMic
-from churchtune.errors import MeasurementAborted
+from churchtune.errors import LevelError, MeasurementAborted
 from churchtune.measure.config import SweepConfig
 from churchtune.measure.speakers import (
     Polarity,
@@ -99,3 +99,29 @@ def test_bad_arguments_are_refused_before_any_mute():
 )
 def test_side_from_arrival(left_ms, right_ms, side):
     assert side_from_arrival(left_ms, right_ms) is side
+
+
+def test_level_is_checked_before_any_mute():
+    console = Console()
+    hall = FakeHall(FS, {10: FakeMic()})
+    with pytest.raises(LevelError):
+        measure_speakers_one_by_one(hall, [10], console.switch, list(Speaker), fs_hz=FS,
+                                    sweep=SWEEP, level_dbfs=-3.0)  # fmt: skip
+    assert console.calls == []
+
+
+def test_a_stop_between_speakers_does_not_switch_to_the_next_one():
+    console = Console()
+    stop = threading.Event()
+    original = console.switch
+
+    def switch_then_stop(speaker):
+        original(speaker)
+        if speaker is Speaker.TOP_L:
+            stop.set()
+
+    console.switch = switch_then_stop
+    with pytest.raises(MeasurementAborted):
+        _run(console, stop=stop)
+    assert Speaker.TOP_R not in console.calls
+    assert console.calls[-1] is None

@@ -93,11 +93,21 @@ def test_a_fractional_delay_is_measured_to_a_fraction_of_a_sample():
     assert cal.of(13).ok
 
 
-def test_half_inverted_set_is_ambiguous_and_blames_nobody():
+def test_half_inverted_set_is_ambiguous_and_flags_every_mic():
     mics = {10: FakeMic(), 11: FakeMic(), 12: FakeMic(inverted=True), 13: FakeMic(inverted=True)}
     cal = calibrate(measure_round(_hall(mics), list(mics), fs_hz=FS, sweep=SWEEP, gates=GATES))
     assert cal.polarity_ambiguous
-    assert not any(MicProblem.POLARITY in m.problems for m in cal.mics)
+    assert all(MicProblem.POLARITY in m.problems for m in cal.mics)
+
+
+def test_a_late_mic_in_a_pair_flags_both():
+    mics = {10: FakeMic(), 11: FakeMic(delay_ms=0.9)}
+    cal = calibrate(
+        measure_round(_co_located(mics), list(mics), fs_hz=FS, sweep=SWEEP, gates=GATES)
+    )
+    assert cal.pair
+    assert all(MicProblem.DELAY in m.problems for m in cal.mics)
+    assert cal.of(11).delay_ms - cal.of(10).delay_ms == pytest.approx(0.9, abs=0.02)
 
 
 def test_a_pair_with_one_damaged_mic_flags_both():
@@ -206,16 +216,16 @@ def test_stop_silences_the_output_within_50_ms():
 
 
 class LateSecondSweep:
-    """The second sweep's stream starts one sample later (a latency jump between streams)."""
+    """The second sweep's stream starts a few samples later (a latency jump between streams)."""
 
-    def __init__(self, hall):
-        self.hall, self.count = hall, 0
+    def __init__(self, hall, shift=3):
+        self.hall, self.count, self.shift = hall, 0, shift
 
     def playrec_multi(self, out, inputs, events=None, stop=None):
         self.count += 1
         recording = self.hall.playrec_multi(out, inputs, events, stop)
         if self.count == 2:
-            shifted = np.roll(recording.samples, 1, axis=0)
+            shifted = np.roll(recording.samples, self.shift, axis=0)
             return type(recording)(shifted, recording.flags)
         return recording
 
@@ -226,8 +236,15 @@ def test_a_latency_jump_between_sweeps_is_reported_and_aligned():
     single = measure_round(hall, [10], fs_hz=FS, sweep=SWEEP, gates=GATES, n_avg=1).mics[0]
     result = measure_round(LateSecondSweep(hall), [10], fs_hz=FS, sweep=SWEEP, gates=GATES).mics[0]
     warning = next(w for w in result.quality.warnings if w.code is WarningCode.UNSTEADY)
-    assert warning.params["shift_samples"] == 1
+    assert warning.params["shift_samples"] == 3
     at_12k = np.array([12000.0])
     aligned = magnitude_db(result.ir, FS, grid_hz=at_12k)[0]
     reference = magnitude_db(single.ir, FS, grid_hz=at_12k)[0]
     assert aligned == pytest.approx(reference, abs=0.3)
+
+
+def test_a_one_sample_latency_change_is_tolerated():
+    hall = FakeHall(FS, {10: FakeMic()})
+    hall.place(10, "p1")
+    result = measure_round(LateSecondSweep(hall, 1), [10], fs_hz=FS, sweep=SWEEP, gates=GATES)
+    assert WarningCode.UNSTEADY not in [w.code for w in result.mics[0].quality.warnings]

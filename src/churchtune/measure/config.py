@@ -58,6 +58,8 @@ class QualityGates:
         max_repeat_db: Largest 1/3-octave difference between two sweeps (100 Hz-8 kHz) of a
             clean point; above it warn.
         bad_repeat_db: Above this the point is bad (something moved or made noise).
+        max_sweep_shift_samples: Latency change between the streams of two sweeps tolerated
+            without a warning (UNVERIFIED on CoreAudio: docs/hardware-checklist.md #21).
     """
 
     clip_dbfs: float = -0.5
@@ -71,3 +73,4 @@ class QualityGates:
     noise_guard_s: float = 0.05
     max_repeat_db: float = 1.0
     bad_repeat_db: float = 2.0
+    max_sweep_shift_samples: int = 1

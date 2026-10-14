@@ -202,6 +202,7 @@ class SoundDeviceBackend:
             AudioDeviceError: The audio callback failed.
         """
         try:
+            _check_stop(stop)  # a stop raised before the start: abort without playing a block
             stream.start()
             while keep_going() and stream.active:
                 _check_stop(stop)

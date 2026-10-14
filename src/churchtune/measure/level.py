@@ -83,9 +83,12 @@ class RampConfig:
     stall_mic_db: float = 6.0
 
     def __post_init__(self) -> None:
-        values = (self.start_dbfs, self.step_db, self.step_s, self.settle_s)
-        if not all(math.isfinite(v) for v in values):
-            raise ValueError("ramp settings must be finite numbers")
+        values = (
+            self.start_dbfs, self.step_db, self.step_s, self.settle_s, self.target_low_dbfs,
+            self.target_high_dbfs, self.jump_db, self.stall_output_db, self.stall_mic_db,
+        )  # fmt: skip
+        if not all(math.isfinite(v) for v in values) or self.settle_s < 0:
+            raise ValueError("ramp settings must be finite numbers and the settle time positive")
         if self.start_dbfs > HARD_LIMIT_DBFS:
             raise ValueError(f"the ramp cannot start above {HARD_LIMIT_DBFS} dBFS")
         if self.step_db <= 0 or self.step_s <= self.settle_s:
@@ -220,7 +223,10 @@ class SweepLevelSearch:
 # ------------------------------------------------------------------ driving a backend
 @dataclass(slots=True)
 class _NoiseFeed:
-    """Pink noise at the ramp's level, faded in; faded out fast on a stop or an alarm."""
+    """Pink noise at the ramp's level, faded in; faded out fast on a stop, an alarm or the end.
+
+    Only the audio thread changes the fade counter; other threads ask for it with ``stopping``.
+    """
 
     loop: FloatArray
     fs_hz: float
@@ -228,11 +234,14 @@ class _NoiseFeed:
     stop: StopFlag | None
     position: int = 0
     fade_out_frames: int | None = None
-    alarm: threading.Event = field(default_factory=threading.Event)
+    alarm: RampStop | None = None
+    stopping: threading.Event = field(default_factory=threading.Event)
 
     def block(self, frames: int) -> Float32Array | None:
-        stopping = self.alarm.is_set() or (self.stop is not None and self.stop.is_set())
-        if self.fade_out_frames is None and stopping:
+        asked = self.stopping.is_set() or self.alarm is not None
+        if self.fade_out_frames is None and (
+            asked or (self.stop is not None and self.stop.is_set())
+        ):
             self.fade_out_frames = int(STOP_FADE_S * self.fs_hz)
         if self.fade_out_frames is not None and self.fade_out_frames <= 0:
             return None
@@ -265,18 +274,20 @@ class _RampDriver:
         """Audio thread: keep the block; raise the alarm on clipping or a jump right away."""
         cfg = self.ramp.config
         loud = float(np.sqrt(np.mean(np.square(block[:, self.reference], dtype=np.float64))))
-        clipped = float(np.max(np.abs(block))) >= db_to_lin(CLIP_PEAK_DBFS)
-        if clipped or loud > db_to_lin(cfg.target_high_dbfs + cfg.jump_db):
-            self.feed.alarm.set()
+        if self.feed.alarm is None:
+            if float(np.max(np.abs(block))) >= db_to_lin(CLIP_PEAK_DBFS):
+                self.feed.alarm = RampStop.CLIP
+            elif loud > db_to_lin(cfg.target_high_dbfs + cfg.jump_db):
+                self.feed.alarm = RampStop.JUMP
         with self.lock:
             self.blocks.append(block)
             self.frames += len(block)
 
     def _take(self) -> FloatArray:
-        with self.lock:
-            data = np.concatenate(self.blocks) if self.blocks else np.zeros((1, 1))
-            self.blocks.clear()
+        with self.lock:  # only swap the list under the lock; the audio thread never waits long
+            blocks, self.blocks = self.blocks, []
             self.frames = 0
+        data = np.concatenate(blocks) if blocks else np.zeros((1, 1))
         return np.asarray(data, dtype=np.float64)
 
     def on_tick(self) -> None:
@@ -285,10 +296,17 @@ class _RampDriver:
         if self.ramp.stopped is not None:
             return
         user = self.feed.stop is not None and self.feed.stop.is_set()
+        alarm = self.feed.alarm
         ready = self.frames >= int(cfg.step_s * self.fs_hz)
-        if not (ready or user or self.feed.alarm.is_set()):
+        if not (ready or user or alarm):
             return
         data = self._take()
+        if alarm is not None and not user:
+            # Clipping or a jump: stop for that reason, never average it into a "target".
+            history = (*self.ramp.history, (self.ramp.output_dbfs, self.last.mic_rms_dbfs))
+            self.ramp = replace(self.ramp, history=history, stopped=alarm)
+            self.feed.stopping.set()
+            return
         settle = int(cfg.settle_s * self.fs_hz)
         steady = data[settle:] if len(data) > settle else data
         levels = tuple(rms_dbfs(steady[:, c]) for c in range(steady.shape[1]))
@@ -299,8 +317,8 @@ class _RampDriver:
             self.on_step(self.ramp, self.last)
         if self.ramp.stopped is None:
             self.feed.level_dbfs = self.ramp.output_dbfs
-        elif self.feed.fade_out_frames is None:
-            self.feed.fade_out_frames = int(STOP_FADE_S * self.fs_hz)
+        else:
+            self.feed.stopping.set()
 
 
 def run_level_ramp(  # noqa: PLR0913 - every argument is a knob of the step
@@ -344,7 +362,7 @@ def run_level_ramp(  # noqa: PLR0913 - every argument is a knob of the step
     final = driver.ramp
     if final.stopped is None:
         user = stop is not None and stop.is_set()
-        final = replace(final, stopped=RampStop.USER if user else RampStop.CLIP)
+        final = replace(final, stopped=RampStop.USER if user else feed.alarm or RampStop.USER)
     return final, driver.last
 
 
@@ -379,13 +397,17 @@ def find_sweep_level(  # noqa: PLR0913 - explicit configuration instead of globa
 
     Raises:
         MeasurementAborted: Stopped; the output is already silent.
-        ValueError: ``reference`` is not among ``inputs``.
+        ValueError: ``reference`` is not among ``inputs``, or a level is not a finite number.
     """
     ref = inputs[0] if reference is None else reference
     if ref not in inputs:
         raise ValueError(f"the reference microphone {ref} is not among {list(inputs)}")
     column = list(inputs).index(ref)
     state = search or SweepLevelSearch()
+    if not (math.isfinite(state.level_dbfs) and math.isfinite(state.max_level_dbfs)):
+        raise ValueError("sweep levels must be finite numbers")
+    # The first try never passes the ceiling (the level the ramp found) or the hard limit.
+    state = replace(state, level_dbfs=min(state.level_dbfs, state.max_level_dbfs, HARD_LIMIT_DBFS))
     shape = trial or TrialSweep()
     config = SweepConfig(
         duration_s=shape.duration_s, preroll_s=shape.preroll_s, tail_s=shape.tail_s

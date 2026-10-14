@@ -12,7 +12,8 @@ same sweeps in one stream. Each one is compared with the set:
 * noise: room noise against the set median, corrected by the sensitivity.
 
 A microphone is rejected when its shape deviates more than ±3 dB, its delay differs more than
-0.5 ms, its polarity is inverted against a clear majority, or it is much noisier. With two
+0.5 ms, its polarity is inverted against a clear majority (every microphone when there is no
+majority), or it is much noisier. With two
 microphones the pair is compared and both are flagged ("one of the two differs"). The calibration
 is relative; a manufacturer's file, when given, applies first (SPEC S9).
 """
@@ -33,6 +34,7 @@ from churchtune.measure.multi import MicResult, RoundMeasurement
 MIN_MICS = 2
 PAIR = 2
 SET_ID_CHARS = 12
+SHORT_WINDOW_PRE_S = 0.001
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +47,7 @@ class CalibrationConfig:
         sensitivity_band_hz: Band of the sensitivity average.
         shape_band_hz: Band where the shape is checked and applied.
         short_window_from_hz: Above this the shape uses the short window.
-        short_window_s: Short window after the direct sound.
+        short_window_s: Short window, starting 1 ms before the direct sound.
         max_shape_db: Shape deviation that rejects a microphone.
         max_delay_ms: Delay difference that rejects a microphone.
         max_extra_noise_db: Noise above the set (after sensitivity) that rejects a microphone.
@@ -91,7 +93,8 @@ class MicCalibration:
         usb_input: 1-based USB input of the microphone.
         sensitivity_db: Level above the set (subtract it from this mic's curves).
         delay_ms: Arrival later than the set.
-        inverted: True when the direct sound has the opposite sign of a clear majority.
+        inverted: True when the direct sound has the opposite sign of a clear majority, or when
+            there is no majority (then every microphone of the set is flagged).
         shape_db: Response deviation after the sensitivity, per band of ``centres_hz``.
         max_shape_db: Largest ``|shape_db|`` in the shape band.
         noise_db: Room noise above the set, after the sensitivity.
@@ -120,7 +123,8 @@ class MicSetCalibration:
     Attributes:
         centres_hz: 1/3-octave centres of the shape curves.
         mics: One entry per microphone, in input order.
-        polarity_ambiguous: No clear majority of polarities: check every cable.
+        polarity_ambiguous: No clear majority of polarities: every microphone is flagged; check
+            every cable.
         pair: Two microphones only: a flagged problem may belong to either one.
     """
 
@@ -178,6 +182,12 @@ def _curves(
     return centres, long_curves, shape_curves
 
 
+def _from_direct(ir: FloatArray, fs_hz: float) -> FloatArray:
+    """The response from 1 ms before its peak, so the short window measures the direct sound."""
+    start = max(0, int(np.argmax(np.abs(ir))) - int(SHORT_WINDOW_PRE_S * fs_hz))
+    return np.asarray(ir[start:], dtype=np.float64)
+
+
 def _direct(ir: FloatArray, peak: int, fs_hz: float, cfg: CalibrationConfig) -> FloatArray:
     sos = signal.butter(2, cfg.polarity_band_hz, "bandpass", fs=fs_hz, output="sos")
     filtered = signal.sosfiltfilt(sos, ir)
@@ -205,9 +215,12 @@ def _timing(measurement: RoundMeasurement, cfg: CalibrationConfig) -> tuple[Floa
     """Delay (ms, against the set) and correlation sign of every microphone."""
     fs = measurement.fs_hz
     mics = measurement.mics
-    anchor = int(np.median([m.peak_idx for m in mics]))
+    peaks = np.array([m.peak_idx for m in mics])
+    anchor = int(np.median(peaks))
     windows = [_direct(m.ir_full, anchor, fs, cfg) for m in mics]
-    reference = np.median(np.array(windows), axis=0)
+    # The reference is one real microphone (the one nearest the median arrival): a sample-wise
+    # median of two windows would be their mean, and each mic would correlate with its own half.
+    reference = windows[int(np.argmin(np.abs(peaks - anchor)))]
     max_lag = int(cfg.max_lag_ms * 1e-3 * fs)
     results = [_lag_and_sign(w, reference, max_lag) for w in windows]
     lags = np.array([r[0] for r in results])
@@ -254,11 +267,12 @@ def calibrate(
         delays_checked = np.abs(delays)
         noise_checked = noise - np.median(noise)
     total = float(np.sum(signs))
-    ambiguous = abs(total) < 1  # as many of each sign: nobody can tell which are wrong
+    # As many of each sign: nobody can tell which are wrong, so every microphone is suspect.
+    ambiguous = abs(total) < 1
     majority = 1.0 if total > 0 else -1.0
     result = []
     for index, mic in enumerate(mics):
-        inverted = not ambiguous and bool(signs[index] != majority)
+        inverted = ambiguous or bool(signs[index] != majority)
         problems = [
             problem
             for problem, bad in (
