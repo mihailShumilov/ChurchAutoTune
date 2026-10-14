@@ -68,3 +68,9 @@ class MeasurementAborted(ChurchTuneError):
     """Playback was interrupted; the output was silenced at once."""
 
     i18n_key: ClassVar[str] = "err-measurement-aborted"
+
+
+class UnsupportedConsole(ChurchTuneError):
+    """The console that answered is not a model this version can work with."""
+
+    i18n_key: ClassVar[str] = "err-unsupported-console"
