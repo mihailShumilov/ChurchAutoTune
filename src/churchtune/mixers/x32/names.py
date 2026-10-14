@@ -41,7 +41,8 @@ _STAGE_WORDS = frozenset({"drum", "drums", "side", "sidefill", "sidefil"})
 # Feeds that are not loudspeakers: effects, streams, recordings, broadcast, translation, loops.
 _NON_SPEAKER_STEMS = (
     "fx", "efx", "effect", "efekt", "efect", "rev$", "reverb", "plate$", "echo", "stream",
-    "strim", "rec$", "record", "zapis", "live$", "broadcast", "trans$", "transl", "transm",
+    "strim", "rec$", "record", "zapis", "live$", "livestr", "broadcast", "trans$", "transl",
+    "transm",
     "video", "cam$", "kamer", "online", "youtube", "air$", "radio", "click", "talkback", "tb$",
     "usb", "obs$", "zoom", "web", "cast", "podcast", "feed", "traduc", "tradu", "perevod",
     "pereklad", "cabina", "booth", "hearing", "loop", "als$", "assist", "petl",
@@ -74,7 +75,7 @@ _ROLE_STEMS: tuple[tuple[SpeakerRole, tuple[str, ...]], ...] = (
         "main", "top", "pa$", "lr$", "portal", "front", "zal$", "zala", "osnov", "kolon",
         "mono$", "center", "centre", "centr", "tsentr", "cluster", "cnt$", "ctr$", "sala",
         "altavo", "bafle", "cornet", "caixas$", "igrej", "iglesi", "templo", "nave$", "sanctuar",
-        "santuar", "auditor", "platea", "plateia", "hall$", "hram", "tserkv", "foh$",
+        "santuar", "auditor", "platea", "plateia", "hall$", "hram", "tserkv", "foh$", "princip",
     )),
 )  # fmt: skip
 
@@ -129,16 +130,12 @@ def _any(parts: list[str], stems: tuple[str, ...]) -> bool:
     return any(_matches(word, stem) for word in parts for stem in stems)
 
 
-_KNOWN_STEMS = (*_MONITOR_STEMS, *(stem for _, stems in _ROLE_STEMS for stem in stems))
-
-
-def _known(word: str) -> bool:
-    return any(_matches(word, stem) for stem in _KNOWN_STEMS)
-
-
-def _whole_word(word: str) -> bool:
-    """True when a stem covers the whole word ("foyer", "rear"): it is not "foye" + "r"."""
-    return any(len(stem.rstrip("$")) >= len(word) and _matches(word, stem) for stem in _KNOWN_STEMS)
+# Base words that take a glued side letter ("MainL", "SubR", "ПорталЛ"). Exact words only: a stem
+# would also split "Central", "Monitor", "Subwoofer" or "Infill".
+_GLUE_BASES = frozenset({
+    "main", "mains", "top", "tops", "sub", "subs", "sab", "saby", "pa", "portal", "zal", "mon",
+    "mtx", "delay", "dly", "fill", "ff", "balkon", "balcon", "front", "kolon",
+})  # fmt: skip
 
 
 def words(name: str) -> list[str]:
@@ -146,10 +143,7 @@ def words(name: str) -> list[str]:
     found: list[str] = []
     for word in _WORD_RE.findall(normalize(name)):
         glued = (
-            len(word) >= _MIN_GLUED_CHARS
-            and word[-1] in _SIDE_LETTERS
-            and _known(word[:-1])
-            and not _whole_word(word)
+            len(word) >= _MIN_GLUED_CHARS and word[-1] in _SIDE_LETTERS and word[:-1] in _GLUE_BASES
         )
         found += [word[:-1], word[-1]] if glued else [word]
     return found

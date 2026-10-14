@@ -123,12 +123,8 @@ def _alignmenttopology_issues(snapshot: ConsoleSnapshot, guesses: list[OutputGue
 
 
 def needs_confirmation(guess: OutputGuess) -> bool:
-    """True when the wizard must ask about this output."""
-    if guess.confidence >= LOW_CONFIDENCE:
-        return False
-    # A silent path is "unused", but one with crossover filters may be a muted sub or top.
-    filters = any(r.code in ("lpf", "hpf") for r in guess.reasons)
-    return guess.role is not SpeakerRole.UNUSED or filters
+    """True when the wizard must ask about this output (low confidence on a speaker path)."""
+    return guess.role is not SpeakerRole.UNUSED and guess.confidence < LOW_CONFIDENCE
 
 
 def topology_issues(
