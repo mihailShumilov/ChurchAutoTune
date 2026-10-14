@@ -7,32 +7,39 @@ description: Contract for ChurchTune console drivers (MixerDriver protocol, Cons
 
 ## Contract (`src/churchtune/mixers/base.py`)
 ```python
-class MixerDriver(Protocol):
-    @classmethod
-    def discover(cls, timeout_s: float) -> list[DiscoveredConsole]: ...
-    model: ConsoleModel            # family, model string, firmware, Capabilities
-    def read_snapshot(self, progress: ProgressCb) -> ConsoleSnapshot: ...      # read-only, ≤ 20 s
+class MixerDriver(Protocol):            # as built in M1 (ADR 0006)
+    model: ConsoleModel                 # identity (family, model string, firmware, host) + Capabilities
+    def read_snapshot(self, progress: ProgressCb | None = None) -> ConsoleSnapshot: ...  # read-only, ≤ 20 s
+    def parse_snapshot(self, identity, raw, taken_at) -> ConsoleSnapshot: ...  # pure, rebuild from a file
     def infer_topology(self, snap: ConsoleSnapshot) -> TopologyGuess: ...       # pure, uses snapshot only
     def usb_audio_map(self, snap: ConsoleSnapshot) -> UsbAudioMap: ...          # pure
-    def meters(self, which: MeterSet) -> Iterator[MeterFrame]: ...
-    def writer(self, auth: WriteAuthorization) -> ScopedWriter: ...  # auth issued by safety.authorize()
+    def meters(self, which: MeterSet, duration_s: float) -> Iterator[MeterFrame]: ...
+    def link_quality(self, count: int, timeout_s: float) -> LinkQuality: ...    # SPEC S2
+    # M5: def writer(self, auth: WriteAuthorization) -> ScopedWriter
+# Discovery is a family-level function, e.g. mixers.x32.driver.discover_consoles(timeout_s, extra).
 ```
-- `Capabilities` declares what this model/firmware supports per scope: `full` (verified write+readback),
+- `Capabilities` declares per `Feature` what this model/firmware supports: `full` (verified write+readback,
+  only for pairs listed in `VERIFIED_CONSOLES`),
   `suggest_only` (addresses UNVERIFIED → the wizard shows instructions instead of writing), `none`.
 - `ConsoleSnapshot` is console-neutral (inputs, buses, matrices, mains, outputs, USB routing, clock, model)
   plus `raw: dict[str, str]` of original lines for undo/debugging. Its JSON is versioned.
 
 ## Topology inference
 - Input: snapshot only. Output: per physical output → path (main L/R/mono, matrix N, bus N) → role guess
-  (`top_l`, `top_r`, `top_mono`, `sub`, `fill`, `delay`, `monitor`, `unused`) with confidence 0..1 and reasons.
+  (`top_l`, `top_r`, `top_mono`, `sub`, `fill`, `delay`, `zone`, `monitor`, `unused`) with confidence 0..1
+  and reason codes; `subs` may hold a stereo pair; issues explain what the wizard must ask or warn about.
 - Evidence, in order: output source routing; sends into matrices; existing HPF/LPF on the path; names
-  (multilingual dictionary in `mixers/x32/names.py`, lowercase, transliteration-insensitive); fader position (−∞ → unused?).
+  (multilingual dictionary in `mixers/x32/names.py`: en/ru/uk/es/pt, transliterated, glued names split,
+  groups and stage words checked first); what feeds a matrix (Main, Mono, buses); fader position.
+- Code: `topology.py` (evidence, sides, variant), `filters.py` (HPF 55–250 Hz, subsonic 15–50 Hz, LPF,
+  crutch shelves), `speaker_paths.py` (feeders, silence, links), `topology_issues.py` (issue codes).
 - Never decide silently: the wizard always shows the guess for confirmation.
 
 ## Tests every driver must have
 1. Codec round-trip and parsing of real `/node` lines (fixtures from dumps).
 2. Snapshot from emulator == snapshot from fixture parsing.
-3. Topology on each fixture in `tests/fixtures/<family>/topologies/*.yaml` (expected roles) — add one per real dump users share.
+3. Topology on each fixture in `tests/fixtures/<family>/topologies/*.toml` (base dump + line overrides +
+   expected roles/subs/issues) — add one per real dump users share.
 4. Writer: every allowed path accepted, neighbours rejected; readback mismatch raises; emulator quantization equals real.
 5. Meters: blob decoding (BE size, LE count + LE floats for X32), renew timing with an injected clock.
 
