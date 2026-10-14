@@ -21,8 +21,10 @@ from churchtune.storage.models import (
     FileModel,
     JunctionMeta,
     MicCalibrationFile,
+    PackagesFile,
     PendingMutes,
     PointMeta,
+    PointPlanFile,
     ProposalFile,
     SessionFile,
     SnapshotFile,
@@ -419,3 +421,39 @@ def read_wizard_state(session_dir: Path) -> WizardStateFile:
         ValueError: The file is not a valid wizard state.
     """
     return WizardStateFile.model_validate(_read_json(session_dir / WIZARD_FILE, "wizard"))
+
+
+# ------------------------------------------------------------ proposals and plans
+PACKAGES_FILE = "proposal.json"
+PLAN_FILE = "plan.json"
+
+
+def write_packages(session_dir: Path, packages: PackagesFile) -> Path:
+    """Save the proposal packages of a session."""
+    path = session_dir / PACKAGES_FILE
+    write_json(path, packages)
+    return path
+
+
+def read_packages(path: Path) -> PackagesFile:
+    """Read proposal packages.
+
+    Raises:
+        ValueError: The file is not a valid packages file.
+    """
+    return PackagesFile.model_validate(_read_json(path, "packages"))
+
+
+def write_plan(workspace: Workspace, venue: str, plan: PointPlanFile) -> Path:
+    """Save the point plan of a venue (reused by verify)."""
+    path = workspace.venue_dir(venue) / PLAN_FILE
+    write_json(path, plan)
+    return path
+
+
+def read_plan(workspace: Workspace, venue: str) -> PointPlanFile | None:
+    """The point plan of a venue, or None."""
+    path = workspace.venue_dir(venue) / PLAN_FILE
+    if not path.exists():
+        return None
+    return PointPlanFile.model_validate(_read_json(path, "plan"))
