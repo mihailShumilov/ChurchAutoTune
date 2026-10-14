@@ -22,5 +22,5 @@ class DumpReader:
             if line.startswith("/")
         }
 
-    def node(self, path: str) -> str | None:
+    def node(self, path: str, timeout_s: float = 0.0) -> str | None:
         return self.lines.get(path.lstrip("/"))
