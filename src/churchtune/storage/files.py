@@ -4,6 +4,7 @@ JSON files are written atomically and flushed to disk, because an undo file must
 the first console write.
 """
 
+import hashlib
 import json
 import os
 from collections.abc import Mapping
@@ -40,6 +41,11 @@ RECORDING_FILE = "recording.wav"
 FR_FILE = "fr.csv"
 JUNCTION_BLOCKS = ("sub", "tops", "all")
 EQ_CHANGED_WARNING = "EQ changed during session"
+
+
+def sha256_of(path: Path) -> str:
+    """SHA-256 of a file's bytes (binds an authorization to an undo or pending file)."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def write_json(path: Path, model: FileModel) -> None:

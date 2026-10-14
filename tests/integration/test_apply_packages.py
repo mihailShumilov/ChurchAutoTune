@@ -493,3 +493,63 @@ def test_the_non_interactive_flag_confirms_without_the_word(emu, home, run, clie
     assert result.exit_code == EXIT_OK, result.output
     assert emu.writes
     assert undo_files(home)  # the undo file is there as always
+
+
+# ------------------------------------------------------------ the brief mute of a crossover slope
+def _sub_crossover(client):
+    before = read_console_state(client).matrices[SUB_MATRIX].eq
+    after = before.with_band(replace(before.band(6), type=EqType.LR24, freq_hz=100.0, gain_db=0.0))
+    ref = PathRefModel(kind="matrix", number=SUB_MATRIX)
+    path = PathEqModel(path=ref, before=EqModel.from_domain(before),
+                       after=EqModel.from_domain(after))  # fmt: skip
+    return PackageModel(kind="crossover", suggest_only=False, risk="medium", selected=True,
+                        eq=(path,))  # fmt: skip
+
+
+def test_a_stop_inside_the_mute_window_never_leaves_the_sub_muted(emu, client, transport, tmp_path):
+    port = _port(client, transport)
+    plan = port.plan_packages([_sub_crossover(client)])
+    switches = [w for w in plan.writes if w.param == "on"]
+    assert [w.after_value for w in switches] == [False, True]  # the slope needs the brief mute
+    asked = []
+
+    def stop_after_the_first_write():
+        asked.append(1)
+        return len(asked) > 1
+
+    outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json",
+                         stop_after_the_first_write)  # fmt: skip
+    assert emu.mtx[SUB_MATRIX]["on"]
+    assert outcome.still_muted == ()
+    assert files.read_pending_mutes(port.workspace) is None
+
+
+def test_a_failed_write_inside_the_mute_window_switches_the_sub_back_on(
+    emu, client, transport, tmp_path
+):
+    port = _port(client, transport)
+    plan = port.plan_packages([_sub_crossover(client)])
+    emu.ignored.add(f"/mtx/{SUB_MATRIX:02d}/eq/6/type")
+    outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
+    assert not outcome.complete
+    assert emu.mtx[SUB_MATRIX]["on"]
+    assert outcome.still_muted == ()
+    assert files.read_pending_mutes(port.workspace) is None
+
+
+def test_a_sub_that_will_not_come_back_is_named_and_recorded(emu, client, transport, tmp_path):
+    port = _port(client, transport)
+    plan = port.plan_packages([_sub_crossover(client)])
+    emu.ignored.add(f"/mtx/{SUB_MATRIX:02d}/eq/6/type")  # a write fails inside the mute window
+    original_write = emu._write
+    switch = f"/mtx/{SUB_MATRIX:02d}/mix/on"
+
+    def mutes_but_never_switches_back(addr, args):
+        if addr == switch and args and args[0] == 1:
+            return  # the console takes the mute but not the switch back on
+        original_write(addr, args)
+
+    emu._write = mutes_but_never_switches_back
+    outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
+    assert outcome.still_muted == (SUB_MATRIX,)
+    assert files.read_pending_mutes(port.workspace) is not None  # the wizard will not finish

@@ -263,8 +263,13 @@ class WritePolicy:
             )
 
     def _validate_temp_mute(self, path: str, value: WireValue) -> None:
-        if not MATRIX_MUTE_RE.fullmatch(path):
+        match = MATRIX_MUTE_RE.fullmatch(path)
+        if not match:
             raise UnsafeWrite(f"only matrix mutes are temporary mutes: {path}", path=path)
+        speaker = int(match.group(1)) in self.sub_matrices | self.top_matrices
+        if value != 0 and not speaker:
+            # Muting is never louder; switching on is only for the sub's and the tops' matrices.
+            raise UnsafeWrite(f"only a speaker matrix is switched back on: {path}", path=path)
         originals = dict(self.mute_originals)
         if path not in originals:
             raise UnsafeWrite(f"no original value recorded for {path}", path=path)

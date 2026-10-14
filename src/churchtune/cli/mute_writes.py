@@ -7,7 +7,7 @@ value. The originals come back after the measurement whatever happens; a restore
 leaves the file, and the next run puts them back only after a fresh read, a table and the word.
 """
 
-import hashlib
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +19,7 @@ from churchtune.errors import ConsoleUnreachable, UnsafeWrite
 from churchtune.measure.junction import JunctionBlock
 from churchtune.mixers.x32.laws import X32ValueLaws
 from churchtune.mixers.x32.nodes import read_console_state
+from churchtune.mixers.x32.topology import detect_roles
 from churchtune.safety.authorize import TypedWord, authorize_typed
 from churchtune.safety.policy import WritePolicy
 from churchtune.storage import files
@@ -26,6 +27,7 @@ from churchtune.storage.models import PendingMutes
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.services import PlannedWrite, WritePlan
 
+logger = logging.getLogger(__name__)
 LAWS = X32ValueLaws()
 MATRICES = range(1, 7)
 
@@ -35,10 +37,18 @@ def mute_path(matrix: int) -> str:
     return f"/mtx/{matrix:02d}/mix/on"
 
 
-def mute_policy(originals: Mapping[int, bool]) -> WritePolicy:
-    """Only these matrices, only muted or back to their recorded value."""
+def mute_policy(
+    originals: Mapping[int, bool], sub: Sequence[int], tops: Sequence[int]
+) -> WritePolicy:
+    """Only these speaker matrices, only muted or back to their recorded value."""
     recorded = tuple((mute_path(n), int(on)) for n, on in sorted(originals.items()))
-    return WritePolicy(LAWS, frozenset(originals), mute_originals=recorded)
+    return WritePolicy(
+        LAWS,
+        frozenset(originals),
+        sub_matrices=frozenset(sub),
+        top_matrices=frozenset(tops),
+        mute_originals=recorded,
+    )
 
 
 def _switch_text(on: bool) -> str:
@@ -66,10 +76,6 @@ def block_target(
     return dict(originals)
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def send_mutes(
     console: Console, changes: Sequence[Change], pending: Path, word: TypedWord,
     policy: WritePolicy,
@@ -84,7 +90,7 @@ def send_mutes(
     if not changes:
         return []
     auth = authorize_typed(
-        WriteScope.TEMP_MUTES, changes, pending, word, policy, undo_sha256=_sha256(pending)
+        WriteScope.TEMP_MUTES, changes, pending, word, policy, undo_sha256=files.sha256_of(pending)
     )
     results = list(ScopedWriter(console.transport, console.client, auth).apply())
     confirmed = [r.path for r in results if r.ok]
@@ -115,18 +121,36 @@ class X32MuteSession:
         target = block_target(block, self.originals, self.sub, self.tops)
         changes = mute_changes(self.current, target)
         pending = self.workspace.pending_mutes_file
-        confirmed = send_mutes(self.console, changes, pending, self.word,
-                               mute_policy(self.originals))  # fmt: skip
+        try:
+            confirmed = send_mutes(self.console, changes, pending, self.word,
+                                   mute_policy(self.originals, self.sub, self.tops))  # fmt: skip
+        except UnsafeWrite as error:
+            # What did read back is on the console: remember it before giving up.
+            self._take(target, str(error.context.get("confirmed", "")).split(", "))
+            raise
+        self._take(target, confirmed)
+
+    def _take(self, target: Mapping[int, bool], confirmed: Sequence[str]) -> None:
         for matrix in target:
             if mute_path(matrix) in confirmed:
                 self.current[matrix] = target[matrix]
 
     def restore(self) -> bool:
-        """Put every original back; True (and the pending file gone) when it is confirmed."""
+        """Put every original back from a fresh read; True (and no pending file) when confirmed.
+
+        The changes are worked out from what the console has now, not from what this session
+        believes it wrote: a switch that half failed must still come back.
+        """
         try:
-            self.switch(JunctionBlock.ORIGINAL)
-        except (UnsafeWrite, ConsoleUnreachable):
+            state = read_console_state(self.console.client)
+            self.current = {n: state.matrices[n].on for n in self.originals}
+            send_mutes(self.console, mute_changes(self.current, self.originals),
+                       self.workspace.pending_mutes_file, self.word,
+                       mute_policy(self.originals, self.sub, self.tops))  # fmt: skip
+        except (UnsafeWrite, ConsoleUnreachable) as error:
+            logger.warning("temporary mutes not restored yet: %s", error)
             return False
+        self.current = dict(self.originals)
         files.clear_pending_mutes(self.workspace)
         return True
 
@@ -135,6 +159,7 @@ def start_junction_mutes(
     console: Console,
     workspace: Workspace,
     created: str,
+    host: str | None,
     sub: Sequence[int],
     tops: Sequence[int],
     word: TypedWord,
@@ -165,7 +190,9 @@ def start_junction_mutes(
     if missing:
         raise UnsafeWrite(f"the console has no matrix {missing}")
     originals = {n: state.matrices[n].on for n in chosen}
-    files.write_pending_mutes(workspace, PendingMutes(created=created, mtx_on=originals))
+    record = PendingMutes(created=created, mtx_on=originals, ip=host, sub=tuple(sub),
+                          tops=tuple(tops))  # fmt: skip
+    files.write_pending_mutes(workspace, record)
     return X32MuteSession(console, workspace, word, originals, tuple(sub), tuple(tops),
                           dict(originals))  # fmt: skip
 
@@ -176,36 +203,80 @@ class _RestorePlan:
 
     changes: tuple[Change, ...]
     originals: dict[int, bool]
+    sub: tuple[int, ...]
+    tops: tuple[int, ...]
 
 
-def plan_pending_restore(console: Console, workspace: Workspace) -> WritePlan | None:
+def _pending_for(workspace: Workspace, host: str | None) -> PendingMutes | None:
+    """The pending record, when it belongs to this console.
+
+    Raises:
+        UnsafeWrite: The record was written for another console (``other_console``).
+    """
+    pending = files.read_pending_mutes(workspace)
+    if pending is not None and pending.ip and host and pending.ip != host:
+        raise UnsafeWrite(f"the pending mutes belong to the console at {pending.ip}",
+                          other_console=pending.ip)  # fmt: skip
+    return pending
+
+
+def plan_pending_restore(
+    console: Console, workspace: Workspace, host: str | None = None
+) -> WritePlan | None:
     """The writes that put pending mutes back, from a fresh read; None without pending mutes.
 
-    A matrix whose switch already has its original value is left out.
+    A matrix whose switch already has its original value is left out; only the sub's and the
+    tops' matrices of the record (or, for an older record, of a fresh role detection) are ever
+    switched.
+
+    Raises:
+        UnsafeWrite: The record belongs to another console.
+        ConsoleUnreachable: The console did not answer.
+    """
+    pending = _pending_for(workspace, host)
+    if pending is None:
+        return None
+    state = read_console_state(console.client)
+    sub, tops = pending.sub, pending.tops
+    if not sub and not tops:
+        try:
+            roles = detect_roles(state)
+            sub, tops = roles.sub, roles.mains
+        except ValueError:
+            sub, tops = (), ()
+    speakers = {*sub, *tops}
+    originals = {n: on for n, on in pending.mtx_on.items() if n in state.matrices and n in speakers}
+    current = {n: state.matrices[n].on for n in originals}
+    changes = tuple(mute_changes(current, originals))
+    rows = tuple(
+        PlannedWrite(mute_path(n), SignalRef(SourceKind.MATRIX, n), None, "on",
+                     _switch_text(current[n]), _switch_text(on), current[n], on)
+        for n, on in sorted(originals.items())
+        if current[n] != on
+    )  # fmt: skip
+    return WritePlan(rows, _RestorePlan(changes, originals, tuple(sub), tuple(tops)))
+
+
+def clear_settled_mutes(console: Console, workspace: Workspace, host: str | None = None) -> bool:
+    """Remove the pending record when a fresh read shows every original switch; True if so.
+
+    Nothing is written, so no word is needed.
 
     Raises:
         ConsoleUnreachable: The console did not answer.
     """
-    pending = files.read_pending_mutes(workspace)
-    if pending is None:
-        return None
-    state = read_console_state(console.client)
-    originals = {n: on for n, on in pending.mtx_on.items() if n in state.matrices}
-    current = {n: state.matrices[n].on for n in originals}
-    changes = tuple(mute_changes(current, originals))
-    rows = tuple(
-        PlannedWrite(c.path, SignalRef(SourceKind.MATRIX, int(c.path[5:7])), None, "on",
-                     c.old_display, c.new_display, bool(c.old_value), bool(c.new_value))
-        for c in changes
-    )  # fmt: skip
-    return WritePlan(rows, _RestorePlan(changes, originals))
+    plan = plan_pending_restore(console, workspace, host)
+    if plan is None:
+        return True
+    if plan.writes:
+        return False
+    files.clear_pending_mutes(workspace)
+    return True
 
 
-def restore_pending(console: Console, workspace: Workspace, plan: WritePlan, word: TypedWord
-                    ) -> bool:  # fmt: skip
-    """Put pending mutes back as shown, after a fresh read; True when the file is cleared.
-
-    A plan with nothing to write only removes the record (no word is needed for that).
+def restore_pending(console: Console, workspace: Workspace, plan: WritePlan, word: TypedWord,
+                    host: str | None = None) -> None:  # fmt: skip
+    """Put pending mutes back as shown, after a fresh read; the record is removed after it.
 
     Raises:
         UnsafeWrite: The word does not match, the plan is not this port's, or the console
@@ -215,16 +286,12 @@ def restore_pending(console: Console, workspace: Workspace, plan: WritePlan, wor
     token = plan.token
     if type(token) is not _RestorePlan:
         raise UnsafeWrite("the plan was not made by this console's write port")
-    if not token.changes:  # every switch has its original value: only the record goes
-        files.clear_pending_mutes(workspace)
-        return True
     if not word.matches():
         raise UnsafeWrite("the confirmation word does not match; nothing is written")
-    fresh = plan_pending_restore(console, workspace)
+    fresh = plan_pending_restore(console, workspace, host)
     now = fresh.token.changes if fresh is not None and type(fresh.token) is _RestorePlan else ()
     if [(c.path, c.old_value) for c in now] != [(c.path, c.old_value) for c in token.changes]:
         raise UnsafeWrite("the console changed while the list was shown", mismatches="mutes")
     send_mutes(console, token.changes, workspace.pending_mutes_file, word,
-               mute_policy(token.originals))  # fmt: skip
+               mute_policy(token.originals, token.sub, token.tops))  # fmt: skip
     files.clear_pending_mutes(workspace)
-    return True

@@ -39,3 +39,17 @@ def test_a_difference_is_refused_with_the_writes_named():
     with pytest.raises(UnsafeWrite, match="changed while the plan was shown") as refused:
         require_same_plan([change()], [])
     assert refused.value.context["mismatches"] == "/main/st/eq/3/g"
+
+
+def test_a_fader_far_from_the_first_reading_is_named():
+    from churchtune.cli.apply_packages import far_levels  # noqa: PLC0415
+
+    near = PlannedChange(WriteScope.LEVELS, Change("/mtx/03/mix/fader", 0.5,
+                                                   P.fader_to_norm(-35.0), "x", "y"))  # fmt: skip
+    far = PlannedChange(WriteScope.LEVELS, Change("/mtx/03/mix/fader", 0.5,
+                                                  P.fader_to_norm(-15.0), "x", "y"))  # fmt: skip
+    assert far_levels([near, change()], {3: -30.0}) == []
+    lines = far_levels([far], {3: -30.0})
+    assert len(lines) == 1
+    assert "/mtx/03/mix/fader" in lines[0]
+    assert far_levels([far], {}) == []  # no first reading: nothing to compare with

@@ -8,7 +8,7 @@ that is on disk before the first write. No user-facing text here: refusals are `
 """
 
 import dataclasses
-import hashlib
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,14 +18,16 @@ from churchtune.cli import records
 from churchtune.cli.context import FS_HZ, Console
 from churchtune.cli.mute_writes import (
     X32MuteSession,
+    clear_settled_mutes,
+    mute_path,
     plan_pending_restore,
     restore_pending,
     start_junction_mutes,
 )
-from churchtune.domain.changes import WireValue, WriteScope
+from churchtune.domain.changes import Change, WireValue, WriteScope
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.snapshot import SignalRef, SourceKind
-from churchtune.errors import UnsafeWrite
+from churchtune.errors import ConsoleUnreachable, UnsafeWrite
 from churchtune.mixers.x32 import params
 from churchtune.mixers.x32.laws import X32ValueLaws
 from churchtune.mixers.x32.nodes import read_console_state
@@ -45,7 +47,7 @@ from churchtune.safety.order import order_steps
 from churchtune.safety.plan import same_step
 from churchtune.safety.policy import WritePolicy
 from churchtune.storage import files
-from churchtune.storage.models import ChangeModel, PackageModel, UndoFile
+from churchtune.storage.models import ChangeModel, PackageModel, PendingMutes, UndoFile
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.applying import (
     CROSSOVER,
@@ -61,14 +63,14 @@ from churchtune.wizard.applying import (
 )
 from churchtune.wizard.services import PlannedWrite, WriteOutcome, WritePlan
 
+logger = logging.getLogger(__name__)
 LAWS = X32ValueLaws()
+SWITCH_BACK_TRIES = 3
+# The pending record of a plan's brief mutes (not of a junction measurement).
+PLAN_RECORD = "package plan"
 # Scopes a package plan writes; an undo file naming any other is refused.
 PACKAGE_SCOPES = frozenset({WriteScope.SYSTEM_EQ, WriteScope.LEVELS, WriteScope.TEMP_MUTES})
 PACKAGES, UNDO_OF_PACKAGES = "packages", "undo of packages"
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def package_policy(
@@ -83,7 +85,7 @@ def package_policy(
     # A speaker matrix may be muted for a change that has no never-louder order otherwise, and
     # only switched back to the state it has now.
     speakers = (*roles.sub, *roles.mains)
-    switches = tuple((f"/mtx/{n:02d}/mix/on", int(state.matrices[n].on)) for n in speakers)
+    switches = tuple((mute_path(n), int(state.matrices[n].on)) for n in speakers)
     return WritePolicy(
         LAWS,
         frozenset(roles.all),
@@ -101,8 +103,9 @@ def undo_policy(undo: UndoFile, policy: WritePolicy) -> WritePolicy:
     After a stop half-way a matrix may still be muted; its original is the old value of the
     first write, not what the console has now.
     """
+    speakers = {mute_path(n) for n in policy.sub_matrices | policy.top_matrices}
     recorded = {c.path: int(c.old_value) for c in collapsed_changes(undo.changes)
-                if c.path.endswith("/mix/on")}  # fmt: skip
+                if c.path in speakers}  # fmt: skip
     switches = dict(policy.mute_originals) | recorded
     return dataclasses.replace(policy, mute_originals=tuple(sorted(switches.items())))
 
@@ -185,6 +188,75 @@ def require_same_plan(shown: Sequence[PlannedChange], fresh: Sequence[PlannedCha
         )
 
 
+@dataclass(frozen=True, slots=True)
+class MuteGuard:
+    """Where a plan that mutes a speaker matrix for a moment records it (the pending file).
+
+    Attributes:
+        workspace: Home of the pending-restore file.
+        host: The console the record belongs to.
+    """
+
+    workspace: Workspace
+    host: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SendResult:
+    """How a sent plan went.
+
+    Attributes:
+        results: The writes sent so far, in order.
+        complete: Every planned write was confirmed.
+        still_muted: Speaker matrices the plan muted and could not switch back on.
+    """
+
+    results: list[records.WriteResultLike]
+    complete: bool
+    still_muted: tuple[int, ...] = ()
+
+
+SWITCH_PARTS = 5  # /mtx/NN/mix/on
+
+
+def _matrix_of_switch(path: str) -> int | None:
+    parts = path.split("/")
+    is_switch = len(parts) == SWITCH_PARTS and parts[1] == "mtx" and parts[3:] == ["mix", "on"]
+    return int(parts[2]) if is_switch else None
+
+
+def _switch_back(
+    console: Console, muted: set[int], undo_path: Path, word: TypedWord, policy: WritePolicy
+) -> tuple[int, ...]:
+    """Switch back on the matrices a stopped plan left muted; those that would not come back."""
+    from churchtune.mixers.x32.writer import ScopedWriter  # noqa: PLC0415 - lazy by design
+
+    left = set(muted)
+    for _ in range(SWITCH_BACK_TRIES):
+        try:
+            state = read_console_state(console.client)
+            left = {n for n in left if not state.matrices[n].on}
+            if not left:
+                return ()
+            changes = [Change(mute_path(n), 0, 1, "OFF", "ON") for n in sorted(left)]
+            auth = authorize_typed(
+                WriteScope.TEMP_MUTES,
+                changes,
+                undo_path,
+                word,
+                policy,
+                undo_sha256=files.sha256_of(undo_path),
+            )
+            sent = ScopedWriter(console.transport, console.client, auth).apply()
+            back = {r.path for r in sent if r.ok}
+            left = {n for n in left if mute_path(n) not in back}
+        except (UnsafeWrite, ConsoleUnreachable) as error:
+            logger.warning("a muted matrix did not come back yet: %s", error)
+        if not left:
+            return ()
+    return tuple(sorted(left))
+
+
 def send_runs(
     console: Console,
     planned: Sequence[PlannedChange],
@@ -192,39 +264,92 @@ def send_runs(
     word: TypedWord,
     policy: WritePolicy,
     should_stop: Callable[[], bool] | None = None,
-) -> tuple[list[records.WriteResultLike], bool]:
+    guard: MuteGuard | None = None,
+) -> SendResult:
     """Send the runs of one scope each, in order; stop at the first write that fails.
 
     The undo file gets the results after every run, so an interruption leaves an honest record.
+    A plan that mutes a speaker matrix for a moment records it in the pending file first (the
+    wizard does not finish and the terminal writes nothing while it is there), is not stopped
+    between the mute and the switch back on, and switches the matrix back on at once if a write
+    fails in between.
 
     Returns:
-        The results so far and whether every planned write was confirmed. A run refused after
-        an earlier run was written ends the plan there as incomplete (the undo file holds what
-        was written).
+        The results, whether every planned write was confirmed, and the matrices still muted.
+        A run refused after an earlier run was written ends the plan there as incomplete.
 
     Raises:
-        UnsafeWrite: The first run was refused: nothing was written.
+        UnsafeWrite: The first run was refused (nothing was written), or mutes of an earlier
+            measurement are still pending.
     """
     from churchtune.mixers.x32.writer import ScopedWriter  # noqa: PLC0415 - lazy by design
 
+    muting: dict[int, bool] = {}
+    for item in planned:
+        matrix = _matrix_of_switch(item.change.path)
+        if matrix is not None and item.change.new_value == 0:
+            muting[matrix] = bool(item.change.old_value)
+    recorded = bool(muting) and guard is not None
+    if recorded and guard is not None:
+        if files.read_pending_mutes(guard.workspace) is not None:
+            raise UnsafeWrite("mutes of an earlier measurement are still pending", pending="yes")
+        record = PendingMutes(
+            created=PLAN_RECORD,
+            mtx_on=muting,
+            ip=guard.host,
+            sub=tuple(sorted(policy.sub_matrices)),
+            tops=tuple(sorted(policy.top_matrices)),
+        )
+        files.write_pending_mutes(guard.workspace, record)
     results: list[records.WriteResultLike] = []
+    window: set[int] = set()
     for scope, changes in runs_by_scope(planned):
         try:
             auth = authorize_typed(
-                scope, changes, undo_path, word, policy, undo_sha256=_sha256(undo_path)
+                scope, changes, undo_path, word, policy, undo_sha256=files.sha256_of(undo_path)
             )
         except UnsafeWrite:
             if not results:
+                if recorded and guard is not None:
+                    files.clear_pending_mutes(guard.workspace)
                 raise
-            return results, False
-        sent = list(ScopedWriter(console.transport, console.client, auth).apply(should_stop))
+            return _stopped(console, results, window, undo_path, word, policy, guard)
+        stop = None if window else should_stop  # never stopped with a speaker matrix muted
+        sent = list(ScopedWriter(console.transport, console.client, auth).apply(stop))
         results.extend(sent)
+        for result in sent:
+            matrix = _matrix_of_switch(result.path)
+            if matrix is not None and result.ok:
+                if result.wanted == 0:
+                    window.add(matrix)
+                else:
+                    window.discard(matrix)
         undo = files.read_undo(undo_path)
         update = {"results": records.result_models(results)}
         files.write_json(undo_path, undo.model_copy(update=update))
         if len(sent) != len(changes) or not all(r.ok for r in sent):
-            return results, False
-    return results, True
+            return _stopped(console, results, window, undo_path, word, policy, guard)
+    if recorded and guard is not None:
+        files.clear_pending_mutes(guard.workspace)
+    return SendResult(results, True)
+
+
+def _stopped(
+    console: Console,
+    results: list[records.WriteResultLike],
+    window: set[int],
+    undo_path: Path,
+    word: TypedWord,
+    policy: WritePolicy,
+    guard: MuteGuard | None,
+) -> SendResult:
+    """A plan that stopped: switch back on what it muted; its record goes only if that worked."""
+    still = _switch_back(console, window, undo_path, word, policy) if window else ()
+    if not still and guard is not None:
+        pending = files.read_pending_mutes(guard.workspace)
+        if pending is not None and pending.created == PLAN_RECORD:
+            files.clear_pending_mutes(guard.workspace)
+    return SendResult(results, False, still)
 
 
 def package_undo_file(
@@ -282,7 +407,7 @@ def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) 
     target = dict(fresh)
     already_old: list[str] = []
     by_hand: list[str] = []
-    written = written_values(undo.changes)
+    written = written_values(undo.changes, undo.results)
     for stored in collapsed_changes(undo.changes):
         if stored.scope not in PACKAGE_SCOPES:
             raise UnsafeWrite(f"undo file names a write outside the packages: {stored.path}")
@@ -296,7 +421,7 @@ def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) 
         now = wire_value(target[strip], stored.path, LAWS)
         if same_step(LAWS, kind, now, stored.old_value):
             already_old.append(stored.path)
-        elif any(same_step(LAWS, kind, now, value) for value in written[stored.path]):
+        elif any(same_step(LAWS, kind, now, value) for value in written.get(stored.path, [])):
             # The last value, or an earlier one when the plan stopped half-way.
             target[strip] = with_wire_value(target[strip], stored.path, stored.old_value)
         else:
@@ -347,19 +472,25 @@ class X32WritePort:
         self, sub: Sequence[int], tops: Sequence[int], typed: str, expected: str
     ) -> X32MuteSession:
         """Temporary matrix mutes for a junction round (``cli.mute_writes``)."""
-        _, console = self.connection()
+        host, console = self.connection()
         created = self.now().isoformat(timespec="seconds")
-        return start_junction_mutes(console, self.workspace, created, sub, tops,
+        return start_junction_mutes(console, self.workspace, created, host, sub, tops,
                                     TypedWord(typed, expected))  # fmt: skip
 
     def pending_mutes(self) -> WritePlan | None:
         """Mutes of an interrupted measurement to put back, from a fresh read."""
-        return plan_pending_restore(self.connection()[1], self.workspace)
+        host, console = self.connection()
+        return plan_pending_restore(console, self.workspace, host)
 
-    def restore_pending_mutes(self, plan: WritePlan, typed: str, expected: str) -> bool:
+    def restore_pending_mutes(self, plan: WritePlan, typed: str, expected: str) -> None:
         """Put pending mutes back as shown."""
-        return restore_pending(self.connection()[1], self.workspace, plan,
-                               TypedWord(typed, expected))  # fmt: skip
+        host, console = self.connection()
+        restore_pending(console, self.workspace, plan, TypedWord(typed, expected), host)
+
+    def clear_settled_mutes(self) -> bool:
+        """Remove the pending record when the console already has every original switch."""
+        host, console = self.connection()
+        return clear_settled_mutes(console, self.workspace, host)
 
     def _fresh(self, allow_cut_filters: bool) -> tuple[str, Console, ConsoleState, WritePolicy]:
         host, console = self.connection()
@@ -419,11 +550,15 @@ class X32WritePort:
         files.write_json(
             undo_path, package_undo_file(created, host, token.planned, reverts=reverts)
         )
-        results, complete = send_runs(console, token.planned, undo_path, word, policy, should_stop)
+        guard = MuteGuard(self.workspace, host)
+        sent_plan = send_runs(console, token.planned, undo_path, word, policy, should_stop, guard)
+        results = sent_plan.results
         stopped = any(r.error == STOPPED for r in results)
         failed = next((r.path for r in results if not r.ok and r.error != STOPPED), None)
         sent = sum(1 for r in results if r.ok)
-        return WriteOutcome(undo_path, sent, complete, stopped, failed)
+        return WriteOutcome(
+            undo_path, sent, sent_plan.complete, stopped, failed, sent_plan.still_muted
+        )
 
 
 def plain_value(param: str, value: WireValue) -> float | bool | str:

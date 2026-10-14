@@ -350,3 +350,48 @@ def test_a_boost_or_a_cut_already_held_is_never_copied():
     cut = flat_eq().with_band(Band(1, EqType.PEQ, 60.0, -3.0, 1.4))
     stuck = [(MAIN, cut.band(1), moved.band(1))]
     assert order._hold_a_cut(sim, stuck, after, {(MAIN, 1)}) is None
+
+
+shelf_q_band = st.builds(
+    lambda kind, n, f, g, q: Band(n, kind, f, g, q),
+    st.sampled_from([EqType.PEQ, EqType.VEQ, EqType.LSHV, EqType.HSHV]),
+    st.integers(1, 6),
+    st.sampled_from([57.3, 101.4, 333.0, 751.7, 2400.0]),
+    st.sampled_from([-15.0, -6.0, 0.0, 2.0, 4.5]),
+    st.sampled_from([0.7, 2.0, 6.4, 10.0]),
+)
+
+
+@settings(max_examples=40, deadline=None)
+@given(
+    st.lists(shelf_q_band, max_size=3).map(lambda b: _apply(flat_eq(), b)),
+    st.lists(shelf_q_band, max_size=3).map(lambda b: _apply(flat_eq(), b)),
+    st.lists(shelf_q_band, max_size=3).map(lambda b: _apply(flat_eq(), b)),
+    st.lists(shelf_q_band, max_size=3).map(lambda b: _apply(flat_eq(), b)),
+)
+def test_with_mutable_matrices_every_order_is_never_louder_and_main_is_never_muted(
+    main_before, main_after, sub_before, sub_after
+):
+    before = {MAIN: state(main_before), TOPS: state(), SUB: state(sub_before)}
+    after = {MAIN: state(main_after), TOPS: state(), SUB: state(sub_after)}
+    try:
+        steps = order_steps(before, after, CHAINS, FS, mutable={TOPS, SUB})
+    except UnsafeWrite:
+        return  # a refusal writes nothing
+    check_order(before, steps, after, CHAINS, FS)
+    _dense_check(before, steps, after, CHAINS)
+    switches = [s for s in steps if s.what == "on"]
+    assert all(s.strip != MAIN for s in switches)
+    for strip in {s.strip for s in switches}:
+        values = [s.value for s in switches if s.strip == strip]
+        assert values == [False, True] * (len(values) // 2)  # every mute is switched back on
+
+
+def test_the_grid_keeps_to_the_audible_range_and_refines_around_steep_shelves():
+    outside = flat_eq().with_band(Band(1, EqType.PEQ, 15.0, -3.0, 1.4))
+    shelf = flat_eq().with_band(Band(2, EqType.HSHV, 751.7, -15.0, 2.0))
+    grid = order.plan_grid({MAIN: state(outside)}, {MAIN: state(shelf)})
+    assert grid.min() >= order.GRID_HZ[0]
+    assert 15.0 not in grid
+    near = grid[(grid > 751.7 / 2) & (grid < 751.7 * 2)]
+    assert len(near) > 2 * 384  # 1/384 octave around the shelf's corner

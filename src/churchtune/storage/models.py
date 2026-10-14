@@ -200,11 +200,19 @@ class UndoFile(FileModel):
 
 
 class PendingMutes(FileModel):
-    """Matrix switch states to restore after a junction measurement (True = on)."""
+    """Matrix switch states to restore after a junction measurement (True = on).
+
+    ``ip``, ``sub`` and ``tops`` (written by the wizard and ``apply-packages``) bind the record
+    to the console and say which matrices are the sub's and the tops': a record of another
+    console, or a matrix outside them, is never switched.
+    """
 
     schema_version: Literal[1] = SCHEMA_VERSION
     created: str
     mtx_on: dict[int, bool]
+    ip: str | None = None
+    sub: tuple[int, ...] = ()
+    tops: tuple[int, ...] = ()
 
     @field_validator("mtx_on")
     @classmethod

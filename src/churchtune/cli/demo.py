@@ -10,7 +10,7 @@ behave as in a hall. Development only (loopback emulator, simulated audio).
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
-from churchtune.audio.fake.hall import FakeHall
+from churchtune.audio.fake.hall import FakeHall, SpeakerChain
 from churchtune.domain.eq import SystemEq
 from churchtune.domain.snapshot import SourceKind
 from churchtune.mixers.x32.client import X32Client
@@ -32,7 +32,7 @@ class DemoConsole(Protocol):
         ...
 
     @property
-    def mtx(self) -> Mapping[int, Mapping[str, Any]]:
+    def mtx(self) -> Mapping[int, Mapping[str, Any]]:  # emulator matrix state
         """Matrix states by number ("on", "fader", ...)."""
         ...
 
@@ -42,6 +42,14 @@ class DemoConsole(Protocol):
 
     def main_eq(self) -> SystemEq:
         """The Main LR EQ as the emulator holds it."""
+        ...
+
+    def matrix_eq(self, number: int) -> SystemEq:
+        """A matrix EQ as the emulator holds it."""
+        ...
+
+    def matrix_fader_db(self, number: int) -> float:
+        """A matrix fader in dB."""
         ...
 
 
@@ -79,5 +87,23 @@ def prepare_demo(emulator: DemoConsole) -> HallLink:
             "top_r": switch(tops, 1),
             "sub": switch(subs, 0),
         }
+        backend.speaker_chains = speaker_chains(emulator, tops, subs)
 
     return link
+
+
+def speaker_chains(
+    emulator: DemoConsole, tops: list[int], subs: list[int]
+) -> Callable[[], dict[str, SpeakerChain]]:
+    """Each simulated speaker behind its matrix: EQ and fader change since now."""
+    feeds = {"top_l": tops[:1], "top_r": tops[1:2] or tops[:1], "sub": subs[:1]}
+    matrices = {speaker: numbers[0] for speaker, numbers in feeds.items() if numbers}
+    baseline = {n: emulator.matrix_fader_db(n) for n in set(matrices.values())}
+
+    def chains() -> dict[str, SpeakerChain]:
+        return {
+            speaker: SpeakerChain(emulator.matrix_eq(n), emulator.matrix_fader_db(n) - baseline[n])
+            for speaker, n in matrices.items()
+        }
+
+    return chains
