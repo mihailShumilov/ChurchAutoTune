@@ -55,13 +55,15 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M1. Modules marked (M2+) are in SPEC §5 but not written yet.
+State after M2. Modules marked (M3+) are in SPEC §5 but not written yet.
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
   `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`,
-  `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`)
+  `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
+  `noise`, `pathcheck`)
 - `app/` Textual UI (M3) · `wizard/` UI-agnostic step engine (M3) · `i18n/` catalogues (M3)
 - `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`,
-  `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants)
+  `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants),
+  `recording` (`MultiRecording`, `StopFlag`, ADR 0007)
 - `mixers/base.py` driver contract (`MixerDriver`, `Capabilities`/`Feature`/`Support`, meters, discovery result)
 - `mixers/x32/` `transport` (the only socket; also `/xinfo`-only discovery), `codec`, `client` (read-only allowlist),
   `params`, `nodes`, `dump`, `snapshot` (node list, read, tolerant parse), `routing` (source ids, blocks, headamps),
@@ -70,8 +72,11 @@ State after M1. Modules marked (M2+) are in SPEC §5 but not written yet.
   (model strings, `VERIFIED_CONSOLES`), `driver` (`X32Driver`, `discover_consoles`), `laws`, `writer` (the only writer)
 - `churchtune_emulator/` (separate top-level package, loopback only, ADR 0006): `x32` emulator with model variants,
   latency and loss; seeded from the packaged reference dump
-- `audio/` `base` (protocol, −6 dBFS limiter), `sounddevice_backend`, `factory`, `fake/` (room simulation)
-- `measure/` `config`, `stimulus`, `deconvolution`, `gates`, `point`, `junction` · mic mapping/calibration (M2)
+- `audio/` `base` (protocols incl. `MultiChannelBackend`, −6 dBFS limiter), `sounddevice_backend`, `factory`,
+  `devices` (card ranking), `fake/` (`backend` rooms, `hall` multi-mic simulator and dev rig)
+- `measure/` `config`, `stimulus`, `deconvolution`, `gates`, `point`, `junction` (also multi-mic with injected mute
+  switch), `multi` (rounds, repeatability), `calibration`, `mic_mapping`, `level` (ramp, sweep level), `noise`,
+  `path_check`, `rounds`
 - `analysis/` `bands`, `response`, `rt60`, `points` · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
   `alignment`, `proposal`
 - `safety/` `policy`, `plan`, `sub_plan`, `authorize`, `laws` (protocol; never imports `mixers`)
