@@ -6,6 +6,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+from churchtune.audio.fake.hall import FakeHall, FakeMic
 from churchtune.cli.context import EXIT_OK, EXIT_USER
 from churchtune.cli.main import app
 from churchtune.cli.mics import parse_inputs
@@ -107,3 +108,17 @@ def test_an_unknown_set_has_no_calibration(tmp_path):
 def test_a_set_id_must_be_alphanumeric(tmp_path):
     with pytest.raises(ValueError, match="alphanumeric"):
         Workspace(tmp_path).mic_calibration_file("../x")
+
+
+def test_a_pair_with_one_inverted_mic_fails_and_is_not_reused(tmp_path, monkeypatch):
+    def rig(fs_hz):
+        hall = FakeHall(fs_hz, {10: FakeMic(), 11: FakeMic(inverted=True)}, gain_db=-6.0)
+        hall.place(10, "p1")
+        hall.place(11, "p2")
+        return hall
+
+    monkeypatch.setattr("churchtune.audio.factory.demo_rig", rig)
+    first = invoke(tmp_path, "mics", "calibrate", "--inputs", "10,11", answers=["y"])
+    assert first.exit_code == EXIT_USER, first.output
+    second = invoke(tmp_path, "mics", "calibrate", "--inputs", "10,11", answers=["n"])
+    assert "уже откалиброван" not in second.output

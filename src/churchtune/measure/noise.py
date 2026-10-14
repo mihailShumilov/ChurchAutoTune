@@ -62,7 +62,7 @@ class MicNoise:
 
 
 def hum_frequency(x: FloatArray, fs_hz: float) -> float | None:
-    """Mains frequency (50 or 60 Hz) whose even harmonics stand out as narrow lines, or None."""
+    """Mains frequency (50 or 60 Hz) whose harmonics stand out as narrow lines, or None."""
     spectrum = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
     freqs = np.fft.rfftfreq(len(x), 1 / fs_hz)
     floor = 1e-30

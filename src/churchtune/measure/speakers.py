@@ -16,9 +16,11 @@ from scipy import signal
 
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.recording import StopFlag
+from churchtune.errors import MeasurementAborted
 from churchtune.measure.backend import MeasureBackend
 from churchtune.measure.config import QualityGates, SweepConfig
 from churchtune.measure.multi import measure_round
+from churchtune.measure.stimulus import check_level
 
 HEARD_PNR_DB = 20.0
 POLARITY_BAND_HZ = (300.0, 3000.0)
@@ -62,12 +64,15 @@ class SpeakerCheck:
     Attributes:
         speaker: Which path sounded.
         heard: Per microphone input: True when the speaker stood out of the noise.
+        verdicts: Per microphone input: the quality verdict of the sweep (a clipped or noisy sweep
+            makes "heard" unreliable).
         irs: Per microphone input: impulse response.
         arrival_ms: Per microphone input: arrival of the direct sound (system latency included).
     """
 
     speaker: Speaker
     heard: dict[int, bool]
+    verdicts: dict[int, str]
     irs: dict[int, FloatArray]
     arrival_ms: dict[int, float]
 
@@ -81,28 +86,40 @@ def measure_speakers_one_by_one(  # noqa: PLR0913 - explicit configuration inste
     fs_hz: float,
     sweep: SweepConfig,
     level_dbfs: float,
+    gates: QualityGates | None = None,
     stop: StopFlag | None = None,
 ) -> tuple[SpeakerCheck, ...]:
     """Play one sweep per speaker with the others muted; restore the mutes whatever happens.
 
     Raises:
         MeasurementAborted: Stopped; the output is silent and the mutes are restored.
+        LevelError: The level is above the hard output limit; nothing is played or muted.
         ValueError: No speaker or the inputs repeat; nothing is played or muted.
     """
     if not speakers or not inputs or len(set(inputs)) != len(inputs):
         raise ValueError("the speaker check needs speakers and distinct microphone inputs")
+    check_level(level_dbfs)
     checks = []
     try:
         for speaker in speakers:
+            if stop is not None and stop.is_set():
+                raise MeasurementAborted("stopped before the next speaker")
             switch(speaker)
             measurement = measure_round(
-                backend, inputs, fs_hz=fs_hz, sweep=sweep, gates=QualityGates(),
-                level_dbfs=level_dbfs, n_avg=1, stop=stop,
-            )  # fmt: skip
+                backend,
+                inputs,
+                fs_hz=fs_hz,
+                sweep=sweep,
+                gates=gates or QualityGates(),
+                level_dbfs=level_dbfs,
+                n_avg=1,
+                stop=stop,
+            )
             checks.append(
                 SpeakerCheck(
                     speaker,
                     {m.usb_input: m.quality.pnr_db >= HEARD_PNR_DB for m in measurement.mics},
+                    {m.usb_input: m.quality.verdict.value for m in measurement.mics},
                     {m.usb_input: m.ir for m in measurement.mics},
                     {m.usb_input: m.quality.latency_ms for m in measurement.mics},
                 )

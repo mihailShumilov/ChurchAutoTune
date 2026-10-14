@@ -222,3 +222,93 @@ def test_sweep_level_search_stops_on_request():
 def test_sweep_level_reference_must_be_recorded():
     with pytest.raises(ValueError, match="reference"):
         find_sweep_level(_hall(), [10], FS, reference=11)
+
+
+class CallbackOrderBackend:
+    """Like a PortAudio callback: asks for the block first, the stop is seen only between polls."""
+
+    def __init__(self, hall, poll_blocks=3):
+        self.hall, self.poll_blocks = hall, poll_blocks
+        self.played = []
+
+    def run_stream_multi(self, next_block, inputs, on_input, stop=None, on_tick=None):
+        count = 0
+        while True:
+            block = next_block(BLOCK_FRAMES)
+            if block is None:
+                return
+            self.played.append(block)
+            on_input(np.zeros((len(block), len(inputs)), dtype=np.float32) + 1e-4)
+            count += 1
+            if count % self.poll_blocks == 0 and on_tick is not None:
+                on_tick()
+
+
+def test_the_audio_block_itself_fades_out_on_a_stop():
+    stop = threading.Event()
+    backend = CallbackOrderBackend(None)
+    original = backend.run_stream_multi
+
+    def stop_after_ten_blocks(next_block, inputs, on_input, stop_flag=None, on_tick=None):
+        def counting(frames):
+            if len(backend.played) == 10:
+                stop.set()
+            return next_block(frames)
+
+        original(counting, inputs, on_input, stop_flag, on_tick)
+
+    backend.run_stream_multi = stop_after_ten_blocks
+    ramp, _ = run_level_ramp(backend, [10], 10, FS, stop=stop)
+    assert ramp.stopped is RampStop.USER
+    after = np.concatenate(backend.played[10:])
+    sounding = np.nonzero(np.any(after != 0, axis=1))[0]
+    assert (int(sounding.max()) + 1 if len(sounding) else 0) / FS <= MAX_STOP_S
+
+
+@pytest.mark.parametrize(("level", "reason"), [(0.999, RampStop.CLIP), (0.7, RampStop.JUMP)])
+def test_a_loud_block_stops_the_ramp_for_that_reason(level, reason):
+    class Loud(CallbackOrderBackend):
+        def run_stream_multi(self, next_block, inputs, on_input, stop=None, on_tick=None):
+            for count in range(1000):
+                block = next_block(BLOCK_FRAMES)
+                if block is None:
+                    return
+                self.played.append(block)
+                value = level if count == 30 else 1e-4
+                on_input(np.full((len(block), len(inputs)), value, dtype=np.float32))
+                if on_tick is not None:
+                    on_tick()
+
+    backend = Loud(None)
+    ramp, _ = run_level_ramp(backend, [10], 10, FS)
+    assert ramp.stopped is reason
+    after = np.concatenate(backend.played[31:]) if len(backend.played) > 31 else np.zeros((1, 2))
+    sounding = np.nonzero(np.any(after != 0, axis=1))[0]
+    assert (int(sounding.max()) + 1 if len(sounding) else 0) / FS <= MAX_STOP_S
+
+
+def test_an_abort_without_a_stop_is_not_swallowed():
+    class Broken:
+        def run_stream_multi(self, next_block, inputs, on_input, stop=None, on_tick=None):
+            raise MeasurementAborted("the stream died")
+
+    with pytest.raises(MeasurementAborted):
+        run_level_ramp(Broken(), [10], 10, FS)
+
+
+def test_the_first_trial_sweep_never_passes_the_ramp_level():
+    hall = _hall(gain_db=-40.0, mics={10: FakeMic()})
+    peaks = []
+
+    class Recording:
+        def playrec_multi(self, out, inputs, events=None, stop=None):
+            peaks.append(peak_dbfs(out))
+            return hall.playrec_multi(out, inputs, events, stop)
+
+    find_sweep_level(Recording(), [10], FS, search=SweepLevelSearch(max_level_dbfs=-36.0))
+    assert max(peaks) <= -36.0 + 0.01
+
+
+def test_sweep_levels_must_be_finite():
+    with pytest.raises(ValueError, match="finite"):
+        find_sweep_level(_hall(), [10], FS, search=SweepLevelSearch(level_dbfs=float("nan")))
