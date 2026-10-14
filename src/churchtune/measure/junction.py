@@ -5,14 +5,18 @@ the mutes are switched in the silent gap between blocks. One stream means one la
 relative timing of sub and tops is exact.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
+from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
 
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.console import ConsoleState, Roles
+from churchtune.domain.levels import peak_dbfs
+from churchtune.domain.recording import MultiRecording, StopFlag
 from churchtune.measure.config import SweepConfig
 from churchtune.measure.deconvolution import deconvolve
 from churchtune.measure.stimulus import build_stimulus, make_sweep
@@ -101,3 +105,96 @@ def split_irs(
         )
         for i in range(len(rec) // block_len)
     ]
+
+
+class JunctionBlock(StrEnum):
+    """Which paths sound in a block of the junction measurement."""
+
+    SUB_ONLY = "sub_only"
+    TOPS_ONLY = "tops_only"
+    ORIGINAL = "original"
+
+
+# Called with the block whose mutes must be in place; must raise if the console does not confirm.
+MuteSwitch = Callable[[JunctionBlock], None]
+MUTE_SWITCH_AFTER_S = 0.3
+
+
+@dataclass(frozen=True, slots=True)
+class JunctionMic:
+    """Sub, tops and both impulse responses of one microphone, on one time base.
+
+    Attributes:
+        usb_input: 1-based USB input.
+        sub: Circular impulse response of block A (sub only).
+        tops: ... of block B (tops only).
+        both: ... of block C (everything).
+        peaks_dbfs: Recorded peak of each block.
+    """
+
+    usb_input: int
+    sub: FloatArray
+    tops: FloatArray
+    both: FloatArray
+    peaks_dbfs: tuple[float, float, float]
+
+
+class JunctionBackend(Protocol):
+    """The part of a multichannel backend the junction round needs."""
+
+    def playrec_multi(
+        self,
+        out: npt.NDArray[np.float32],
+        inputs: Sequence[int],
+        events: Sequence[tuple[int, Callable[[], None]]] | None = None,
+        stop: StopFlag | None = None,
+    ) -> MultiRecording:
+        """Play and record in one stream; events fire between blocks."""
+        ...
+
+
+def measure_junction_round(  # noqa: PLR0913 - explicit configuration instead of globals
+    backend: JunctionBackend,
+    inputs: Sequence[int],
+    switch: MuteSwitch,
+    *,
+    fs_hz: float,
+    sweep: SweepConfig,
+    level_dbfs: float,
+    stop: StopFlag | None = None,
+) -> tuple[JunctionMic, ...]:
+    """Measure the sub / top junction at every microphone of a round (SPEC S10).
+
+    The mutes for block A are set before the stream starts, switched to block B and back to the
+    original between blocks, and restored in ``finally`` whatever happens: an interrupt, a
+    failed switch or a stream error. The caller writes the pending-restore file before calling.
+
+    Raises:
+        MeasurementAborted: Stopped; the output is silent and the mutes are restored.
+        LevelError: The level is above the hard output limit; nothing is played or muted.
+    """
+    stimulus = block_stimulus(fs_hz, sweep, level_dbfs)
+    switch_after = int(MUTE_SWITCH_AFTER_S * fs_hz)
+    events = [
+        (stimulus.block_len + switch_after, lambda: switch(JunctionBlock.TOPS_ONLY)),
+        (2 * stimulus.block_len + switch_after, lambda: switch(JunctionBlock.ORIGINAL)),
+    ]
+    restored = False
+    try:
+        switch(JunctionBlock.SUB_ONLY)
+        recording = backend.playrec_multi(stimulus.out, inputs, events, stop)
+        switch(JunctionBlock.ORIGINAL)
+        restored = True
+    finally:
+        if not restored:
+            switch(JunctionBlock.ORIGINAL)
+    mics = []
+    length = stimulus.block_len
+    for column, usb_input in enumerate(inputs):
+        rec = np.asarray(recording.channel(column), dtype=np.float64)
+        sub, tops, both = split_irs(rec, stimulus, fs_hz, sweep)[:BLOCKS]
+        peaks = tuple(
+            round(peak_dbfs(rec[i * length : (i + 1) * length]), 1) for i in range(BLOCKS)
+        )
+        mics.append(JunctionMic(usb_input, sub, tops, both, (peaks[0], peaks[1], peaks[2])))
+    return tuple(mics)
