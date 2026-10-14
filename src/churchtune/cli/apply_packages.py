@@ -34,6 +34,7 @@ from churchtune.cli.package_writes import (
     plan_package_writes,
     require_same_plan,
     send_runs,
+    undo_policy,
 )
 from churchtune.domain.changes import Change
 from churchtune.domain.console import ConsoleState
@@ -150,6 +151,7 @@ def undo_packages(
 ) -> int:
     """Put back the values of an ``apply-packages`` undo file where they were not touched since."""
     state, policy = _fresh(console, allow_cut_filters=True)
+    policy = undo_policy(undo, policy)
     try:
         plan = plan_package_undo(undo, state, policy)
     except UnsafeWrite as error:
@@ -172,6 +174,7 @@ def undo_packages(
         say("Отменено — ничего не записано.")
         return EXIT_USER
     state, policy = _fresh(console, allow_cut_filters=True)
+    policy = undo_policy(undo, policy)
     try:
         require_same_plan(plan.planned, plan_package_undo(undo, state, policy).planned)
     except UnsafeWrite as error:

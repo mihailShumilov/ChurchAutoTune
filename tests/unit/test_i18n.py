@@ -95,6 +95,8 @@ def used_keys() -> set[str]:
     keys |= {f"audio-problem-{p}" for p in ("channels", "sample-rate")}
     keys |= {f"verify-{v}" for v in ("better", "no-change", "worse")}
     keys |= {"apply-word", "undo-word", "apply-word-mismatch", "undo-word-mismatch"}
+    keys |= {"mute-word", "mute-word-mismatch"}
+    keys |= {f"apply-advice-side-{side}" for side in ("sub", "tops")}
     keys |= {f"write-{p}" for p in ("eq-on", "fader", "on")}
     keys |= {f"write-band-{p}" for p in ("type", "freq", "gain", "q")}
     keys |= {"step-equipment-model-other"} if "other" in MIC_MODELS else set()
@@ -105,7 +107,7 @@ def used_keys() -> set[str]:
     }
     keys |= {f"step-{s}-title" for s in ("welcome", "mac", "connect", "read", "topology", "equipment",
                                           "mics", "path", "level", "calibration", "points", "results",
-                                          "apply", "verify", "finish")}  # fmt: skip
+                                          "junction", "apply", "verify", "finish")}  # fmt: skip
     return keys
 
 

@@ -277,3 +277,26 @@ def test_narrow_bands_stay_inside_the_envelope_on_a_dense_grid(before_eq, after_
     except UnsafeWrite:
         return  # a refusal writes nothing
     _dense_check(before, steps, after, chains)
+
+
+def test_a_high_q_shelf_turning_into_a_crossover_is_done_with_the_matrix_muted():
+    shelf = flat_eq().with_band(Band(6, EqType.HSHV, 752.0, -15.0, 2.0))
+    lpf = flat_eq().with_band(Band(6, EqType.LR24, 100.0, 0.0, 1.4))
+    before = {MAIN: state(), TOPS: state(), SUB: state(shelf)}
+    after = {MAIN: state(), TOPS: state(), SUB: state(lpf)}
+    with pytest.raises(UnsafeWrite, match="no safe order"):
+        order_steps(before, after, CHAINS, FS)
+    steps = order_steps(before, after, CHAINS, FS, mutable={SUB})
+    assert (steps[0].what, steps[0].value) == ("on", False)
+    assert (steps[-1].what, steps[-1].value) == ("on", True)
+    assert all(s.strip == SUB for s in steps)
+    check_order(before, steps, after, CHAINS, FS)
+
+
+def test_main_lr_is_never_muted_for_a_change():
+    shelf = flat_eq().with_band(Band(6, EqType.HSHV, 752.0, -15.0, 2.0))
+    lpf = flat_eq().with_band(Band(6, EqType.LR24, 100.0, 0.0, 1.4))
+    before = {MAIN: state(shelf), TOPS: state(), SUB: state()}
+    after = {MAIN: state(lpf), TOPS: state(), SUB: state()}
+    with pytest.raises(UnsafeWrite, match="no safe order"):
+        order_steps(before, after, CHAINS, FS, mutable={SUB, TOPS})

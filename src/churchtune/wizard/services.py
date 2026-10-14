@@ -16,6 +16,7 @@ from typing import Protocol
 from churchtune.audio.base import MultiChannelBackend
 from churchtune.domain.snapshot import SignalRef
 from churchtune.measure.config import SweepConfig
+from churchtune.measure.junction import JunctionBlock
 from churchtune.mixers.base import DiscoveredConsole, MixerDriver
 from churchtune.storage.models import PackageModel
 from churchtune.storage.paths import Workspace
@@ -124,6 +125,23 @@ class WriteOutcome:
     failed_path: str | None = None
 
 
+class MuteSession(Protocol):
+    """The temporary matrix mutes of one junction round (SPEC S10)."""
+
+    def switch(self, block: JunctionBlock) -> None:
+        """Put the mutes of a block in place, confirmed by readback.
+
+        Raises:
+            UnsafeWrite: A switch was refused or did not read back.
+            ConsoleUnreachable: The console did not answer.
+        """
+        ...
+
+    def restore(self) -> bool:
+        """Put every original switch back; True when confirmed (the pending file is gone)."""
+        ...
+
+
 class WritePort(Protocol):
     """The only way the wizard changes the console (SPEC S12, §9.2-9.3).
 
@@ -163,6 +181,31 @@ class WritePort(Protocol):
 
         Raises:
             UnsafeWrite: The word does not match or the plan was refused; nothing was sent.
+        """
+        ...
+
+    def start_junction_mutes(
+        self, sub: Sequence[int], tops: Sequence[int], typed: str, expected: str
+    ) -> MuteSession:
+        """Read the matrix switches fresh and record them before the first temporary mute.
+
+        Raises:
+            UnsafeWrite: The word does not match, the matrices are not distinct, or mutes of
+                an earlier measurement are still pending (``pending``).
+            ConsoleUnreachable: The console did not answer.
+        """
+        ...
+
+    def pending_mutes(self) -> WritePlan | None:
+        """The writes that put the mutes of an interrupted measurement back; None if none."""
+        ...
+
+    def restore_pending_mutes(self, plan: WritePlan, typed: str, expected: str) -> bool:
+        """Put pending mutes back as shown, after a fresh read.
+
+        Raises:
+            UnsafeWrite: The word does not match or the console changed (``mismatches``).
+            ConsoleUnreachable: The console did not answer.
         """
         ...
 

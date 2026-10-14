@@ -5,8 +5,10 @@ Never weaken, skip or xfail these tests: they are part of the safety suite.
 
 import dataclasses
 import json
+import tempfile
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -26,6 +28,7 @@ from churchtune.storage.models import (
     PathEqModel,
     PathRefModel,
 )
+from churchtune.storage.paths import Workspace
 from tests.emulator.x32_emulator import LOOPBACK
 from tests.fixtures.venues import REFERENCE_VENUE_TOML, SUB_MATRIX
 
@@ -254,7 +257,8 @@ def _port(client, transport):
     from churchtune.cli.context import Console  # noqa: PLC0415
     from churchtune.cli.package_writes import X32WritePort  # noqa: PLC0415
 
-    return X32WritePort(lambda: (LOOPBACK, Console(transport, client)), datetime.now)
+    home = Workspace(Path(tempfile.mkdtemp()))
+    return X32WritePort(lambda: (LOOPBACK, Console(transport, client)), datetime.now, home)
 
 
 def _two_packages(client, sub_step_db):
@@ -339,7 +343,9 @@ def test_a_shelf_that_moves_keeps_its_gain(emu, home, run, client):
     assert band.gain_db == pytest.approx(2.0, abs=0.13)
 
 
-def test_a_package_that_needs_an_advice_package_is_left_out(emu, home, run, client):
+def test_a_package_designed_on_an_advice_package_is_written_and_the_advice_shown(
+    emu, home, run, client
+):
     state = read_console_state(client)
     align = PackageModel(kind="alignment", suggest_only=False, risk="unverified", selected=True,
                          delay_side="sub", delay_ms=1.5)  # fmt: skip
@@ -352,7 +358,9 @@ def test_a_package_that_needs_an_advice_package_is_left_out(emu, home, run, clie
     files.write_json(home / "proposal.json", stored)
     result = run(["apply-packages", str(home / "proposal.json")], answers=["применить"])
     assert result.exit_code == EXIT_OK, result.output
-    assert emu.writes == []
+    assert "руками" in result.output  # the delay is advice
+    assert emu.writes
+    assert all(a.startswith("/main/st/eq/") for a, _ in emu.writes)
 
 
 def test_a_run_refused_after_an_earlier_run_reports_a_partial_write(

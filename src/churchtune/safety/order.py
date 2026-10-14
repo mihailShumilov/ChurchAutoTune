@@ -13,7 +13,7 @@ rule (if none does, its gain goes to 0 dB first); boosts and faders up last.
 """
 
 import itertools
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal
 
@@ -234,14 +234,21 @@ def order_steps(
     after: Mapping[SignalRef, StripState],
     chains: Chains,
     fs_hz: float,
+    *,
+    mutable: Collection[SignalRef] = (),
 ) -> tuple[Step, ...]:
     """The writes from ``before`` to ``after`` in an order that is never louder.
+
+    When no order of a band's parameters stays inside the envelope (a high-Q shelf that turns
+    into a crossover slope overshoots on its other side), a strip in ``mutable`` is muted for
+    the change and switched back on right after it: a muted path is never louder.
 
     Args:
         before: State of every strip that changes (and of every strip on the same paths).
         after: Wanted state of the same strips.
         chains: Each speaker path as the strips it goes through, in order.
         fs_hz: Sample rate of the EQ model.
+        mutable: Strips that may be muted briefly (speaker matrices; never Main LR).
 
     Returns:
         The ordered steps.
@@ -262,7 +269,11 @@ def order_steps(
     ]
     pending.sort(key=lambda item: item[2].gain_db - item[1].gain_db)
     for ref, old_band, new_band in pending:
-        for steps in _band_orders(ref, old_band, new_band):
+        orders = _band_orders(ref, old_band, new_band)
+        if ref in mutable and sim.states[ref].on:
+            muted = [Step(ref, "on", value=False), *orders[0], Step(ref, "on", value=True)]
+            orders.append(muted)
+        for steps in orders:
             if sim.safe(steps):
                 sim.take(steps)
                 break

@@ -6,6 +6,7 @@ the session's ``proposal.json`` for the apply step (M5).
 """
 
 from churchtune.analysis.points import Analysis
+from churchtune.design.alignment import JunctionPoint
 from churchtune.design.channel_audit import Finding, audit_channels
 from churchtune.design.packages import (
     DesignContext,
@@ -18,7 +19,7 @@ from churchtune.design.packages import (
 from churchtune.domain.eq import Band
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.domain.topology import with_roles
-from churchtune.storage.files import write_packages
+from churchtune.storage.files import JUNCTION_DIR, load_junction_points, write_packages
 from churchtune.wizard.labels import issue_args, output_text, signal_text
 from churchtune.wizard.proposals import packages_file
 from churchtune.wizard.protocol import Option, Table, Text
@@ -154,7 +155,11 @@ def propose(ctx: WizardContext, analysis: Analysis) -> None:
     snapshot = load_snapshot(ctx)
     driver = ensure_driver(ctx)
     topology = with_roles(driver.infer_topology(snapshot), ctx.box.state.roles)
-    context = DesignContext(analysis, snapshot, topology, driver.eq_grid, FS_HZ)
+    measured = load_junction_points(ctx.session_dir / JUNCTION_DIR)
+    junction = {name: JunctionPoint(p.sub, p.tops, p.both) for name, p in measured.items()}
+    context = DesignContext(
+        analysis, snapshot, topology, driver.eq_grid, FS_HZ, junction=junction or None
+    )
     left_out: set[PackageKind] = set()
     packages = build_packages(context)
     intro = (

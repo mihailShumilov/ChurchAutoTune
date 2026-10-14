@@ -246,9 +246,15 @@ def save_junction_point(
     return directory
 
 
+# The wizard keeps junction points apart from the ordinary points of the same name.
+JUNCTION_DIR = "junction"
+
+
 def load_junction_points(session_dir: Path) -> dict[str, StoredJunctionPoint]:
-    """Load every junction point of a session."""
-    points = {}
+    """Load every junction point of a session (none when the directory does not exist)."""
+    points: dict[str, StoredJunctionPoint] = {}
+    if not session_dir.is_dir():
+        return points
     directories = sorted(p for p in session_dir.iterdir() if (p / "ir_sub.wav").exists())
     for directory in directories:
         responses = [read_wav(directory / f"ir_{name}.wav") for name in JUNCTION_BLOCKS]

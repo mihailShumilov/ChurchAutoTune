@@ -504,6 +504,8 @@ class WizardStateFile(FileModel):
     points: tuple[str, ...] = ()
     measured: dict[str, str] = {}
     junction_points: tuple[str, ...] = ()
+    # S10b: junction points measured with the sub and the tops apart.
+    junction_measured: dict[str, str] = {}
     proposal_file: str | None = None
     # Undo file of the packages written in S12 (relative to the home directory).
     applied_undo: str | None = None

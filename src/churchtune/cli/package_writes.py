@@ -7,6 +7,7 @@ every run of one scope is authorized on its own with the typed word, bound to th
 that is on disk before the first write. No user-facing text here: refusals are ``UnsafeWrite``.
 """
 
+import dataclasses
 import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -15,6 +16,12 @@ from pathlib import Path
 
 from churchtune.cli import records
 from churchtune.cli.context import FS_HZ, Console
+from churchtune.cli.mute_writes import (
+    X32MuteSession,
+    plan_pending_restore,
+    restore_pending,
+    start_junction_mutes,
+)
 from churchtune.domain.changes import WireValue, WriteScope
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.snapshot import SignalRef, SourceKind
@@ -39,6 +46,7 @@ from churchtune.safety.plan import same_step
 from churchtune.safety.policy import WritePolicy
 from churchtune.storage import files
 from churchtune.storage.models import ChangeModel, PackageModel, UndoFile
+from churchtune.storage.paths import Workspace
 from churchtune.wizard.applying import (
     CROSSOVER,
     collapsed_changes,
@@ -55,7 +63,7 @@ from churchtune.wizard.services import PlannedWrite, WriteOutcome, WritePlan
 
 LAWS = X32ValueLaws()
 # Scopes a package plan writes; an undo file naming any other is refused.
-PACKAGE_SCOPES = frozenset({WriteScope.SYSTEM_EQ, WriteScope.LEVELS})
+PACKAGE_SCOPES = frozenset({WriteScope.SYSTEM_EQ, WriteScope.LEVELS, WriteScope.TEMP_MUTES})
 PACKAGES, UNDO_OF_PACKAGES = "packages", "undo of packages"
 
 
@@ -72,14 +80,31 @@ def package_policy(
     of one.
     """
     baselines = tuple((f"/mtx/{n:02d}/mix/fader", state.matrices[n].fader_db) for n in roles.sub)
+    # A speaker matrix may be muted for a change that has no never-louder order otherwise, and
+    # only switched back to the state it has now.
+    speakers = (*roles.sub, *roles.mains)
+    switches = tuple((f"/mtx/{n:02d}/mix/on", int(state.matrices[n].on)) for n in speakers)
     return WritePolicy(
         LAWS,
         frozenset(roles.all),
         sub_matrices=frozenset(roles.sub),
         top_matrices=frozenset(roles.mains),
+        mute_originals=switches,
         level_baselines=baselines,
         allow_cut_filters=allow_cut_filters,
     )
+
+
+def undo_policy(undo: UndoFile, policy: WritePolicy) -> WritePolicy:
+    """The policy of an undo: a matrix switch goes back to the value the undo file recorded.
+
+    After a stop half-way a matrix may still be muted; its original is the old value of the
+    first write, not what the console has now.
+    """
+    recorded = {c.path: int(c.old_value) for c in collapsed_changes(undo.changes)
+                if c.path.endswith("/mix/on")}  # fmt: skip
+    switches = dict(policy.mute_originals) | recorded
+    return dataclasses.replace(policy, mute_originals=tuple(sorted(switches.items())))
 
 
 def fresh_inputs(
@@ -122,7 +147,7 @@ def plan_package_writes(
     """
     fresh = strip_states(state)
     target = combined_target(packages, fresh, LAWS, path_roles(policy))
-    steps = ordered_steps(target, fresh, FS_HZ)
+    steps = ordered_steps(target, fresh, FS_HZ, mutable=path_roles(policy).keys())
     planned = plan_writes(steps, fresh, LAWS)
     for item in planned:
         policy.validate(item.change.path, item.change.new_value, item.scope)
@@ -283,7 +308,7 @@ def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) 
                 ref.label(), role_of(ref, roles), fresh[ref].eq, wanted.eq,
                 lambda a, b: same_band(LAWS, a, b), may_remove=True,
             )  # fmt: skip
-    steps = order_steps(fresh, target, speaker_chains(fresh), FS_HZ)
+    steps = order_steps(fresh, target, speaker_chains(fresh), FS_HZ, mutable=roles.keys())
     planned = plan_writes(steps, fresh, LAWS)
     for item in planned:
         policy.validate(item.change.path, item.change.new_value, item.scope)
@@ -301,6 +326,7 @@ class _PortPlan:
     recipe: Recipe
     planned: tuple[PlannedChange, ...]
     allow_cut_filters: bool
+    adjust: Callable[[WritePolicy], WritePolicy] = lambda policy: policy
 
 
 @dataclass(slots=True)
@@ -310,10 +336,30 @@ class X32WritePort:
     Attributes:
         connection: The console the wizard connected last, as (address, transport and client).
         now: Wall clock for the undo files.
+        workspace: Where the pending-restore file of temporary mutes lives.
     """
 
     connection: Callable[[], tuple[str, Console]]
     now: Callable[[], datetime]
+    workspace: Workspace
+
+    def start_junction_mutes(
+        self, sub: Sequence[int], tops: Sequence[int], typed: str, expected: str
+    ) -> X32MuteSession:
+        """Temporary matrix mutes for a junction round (``cli.mute_writes``)."""
+        _, console = self.connection()
+        created = self.now().isoformat(timespec="seconds")
+        return start_junction_mutes(console, self.workspace, created, sub, tops,
+                                    TypedWord(typed, expected))  # fmt: skip
+
+    def pending_mutes(self) -> WritePlan | None:
+        """Mutes of an interrupted measurement to put back, from a fresh read."""
+        return plan_pending_restore(self.connection()[1], self.workspace)
+
+    def restore_pending_mutes(self, plan: WritePlan, typed: str, expected: str) -> bool:
+        """Put pending mutes back as shown."""
+        return restore_pending(self.connection()[1], self.workspace, plan,
+                               TypedWord(typed, expected))  # fmt: skip
 
     def _fresh(self, allow_cut_filters: bool) -> tuple[str, Console, ConsoleState, WritePolicy]:
         host, console = self.connection()
@@ -341,12 +387,12 @@ class X32WritePort:
         host, _, state, policy = self._fresh(True)
         if undo.ip and host and undo.ip != host:
             raise UnsafeWrite(f"the undo file was written for another console ({undo.ip})")
-        plan = plan_package_undo(undo, state, policy)
+        plan = plan_package_undo(undo, state, undo_policy(undo, policy))
 
         def recipe(fresh: ConsoleState, rules: WritePolicy) -> tuple[PlannedChange, ...]:
             return plan_package_undo(undo, fresh, rules).planned
 
-        token = _PortPlan(recipe, plan.planned, True)
+        token = _PortPlan(recipe, plan.planned, True, lambda rules: undo_policy(undo, rules))
         return WritePlan(_rows(plan.planned), token, plan.already_old, plan.changed_by_hand)
 
     def apply(
@@ -366,7 +412,8 @@ class X32WritePort:
         if not word.matches():
             raise UnsafeWrite("the confirmation word does not match; nothing is written")
         token = _planned_of(plan)
-        host, console, state, policy = self._fresh(token.allow_cut_filters)
+        host, console, state, fresh_policy = self._fresh(token.allow_cut_filters)
+        policy = token.adjust(fresh_policy)
         require_same_plan(token.planned, token.recipe(state, policy))
         created = self.now().isoformat(timespec="seconds")
         files.write_json(

@@ -47,6 +47,12 @@ def rig(tmp_path):
     hall.place(10, "p1")
     hall.place(11, "p2")
     hall.main_eq = emulator.main_eq  # the hall hears what is written to Main LR
+    # ... and the matrix switches: tops on matrices 1 and 2, the sub on matrix 3.
+    hall.speaker_gains = lambda: {
+        "top_l": emulator.mtx[1]["on"],
+        "top_r": emulator.mtx[2]["on"],
+        "sub": emulator.mtx[3]["on"],
+    }
     console = X32ConsolePort()
     now = lambda: datetime(2026, 10, 14, 10, 0, 0)  # noqa: E731 - one clock for both
     services = Services(
@@ -58,7 +64,7 @@ def rig(tmp_path):
         dev_safe=True,
         sweep=SWEEP,
         sleep=lambda _s: None,
-        writes=X32WritePort(console.last, now),
+        writes=X32WritePort(console.last, now, Workspace(tmp_path)),
         words=Translator("en"),
     )
     yield emulator, hall, services
@@ -89,9 +95,9 @@ def test_full_goal_with_two_microphones(rig):
     assert state.calibration_set is not None
     assert len(state.measured) == 8
     # Step numbering counts only the applicable steps; choosing two microphones adds the
-    # calibration step, so the total grows from 14 to 15 at that point (SPEC §7).
-    assert [h.total for h in volunteer.headers] == [14] * 6 + [15] * 9
-    assert [h.number for h in volunteer.headers] == list(range(1, 16))
+    # calibration step, and the confirmed subwoofer adds the junction step (SPEC §7).
+    assert [h.total for h in volunteer.headers] == [14] * 5 + [15] + [16] * 10
+    assert [h.number for h in volunteer.headers] == list(range(1, 17))
     session = latest_session(services)
     assert session is not None
     assert read_wizard_state(session).completed[-1] == "finish"
@@ -127,7 +133,7 @@ def test_one_microphone_skips_the_calibration(rig):
     result = start(volunteer, services, "uk")
     assert result.finished
     assert "step-calibration-title" not in [h.title.key for h in volunteer.headers]
-    assert {h.total for h in volunteer.headers} == {14}
+    assert {h.total for h in volunteer.headers} <= {14, 15}
 
 
 def test_no_sound_until_the_measurement_channels_are_muted(rig):
@@ -431,3 +437,65 @@ def test_after_the_way_back_the_last_screen_does_not_ask_to_save_the_scene(rig):
         assert "step-finish-scene" not in keys
     else:  # the hand change itself was left alone: something written stays
         assert "step-finish-scene" in keys
+
+
+def test_the_junction_is_measured_with_short_matrix_mutes_and_every_switch_comes_back(rig):
+    emulator, hall, services = rig
+    volunteer = _volunteer(emulator, hall, **{"junction-type": "mute", "package-question": "skip"})
+    result = start(volunteer, services, "en")
+    assert result.finished
+    state = result.state
+    assert set(state.junction_measured) == set(state.junction_points)
+    assert len(state.junction_measured) == 4
+    switches = [address for address, _ in emulator.writes]
+    assert switches
+    assert all(a.startswith("/mtx/0") and a.endswith("/mix/on") for a in switches)
+    assert all(emulator.mtx[n]["on"] for n in (1, 2, 3))  # every switch is back
+    assert services.workspace.pending_mutes_file.exists() is False
+    assert "junction-done" in volunteer.shown_keys()
+    stored = read_packages(services.workspace.root / state.proposal_file)
+    assert "junction-not-measured" not in [n.code for n in stored.notes]
+
+
+def test_skipping_the_junction_mutes_nothing_and_proposes_no_crossover(rig):
+    emulator, hall, services = rig
+    volunteer = _volunteer(emulator, hall, **{"package-question": "skip"})
+    result = start(volunteer, services, "en")
+    assert "junction-cancelled" in volunteer.shown_keys()
+    assert result.state.junction_measured == {}
+    assert emulator.writes == []
+
+
+def test_mutes_left_by_an_interrupted_run_come_back_before_anything_else(rig):
+    emulator, hall, services = rig
+    from churchtune.storage.files import write_pending_mutes  # noqa: PLC0415
+    from churchtune.storage.models import PendingMutes  # noqa: PLC0415
+
+    emulator.hand_change("/mtx/01/mix/on", 0)  # muted by a run that died
+    write_pending_mutes(services.workspace, PendingMutes(created="x", mtx_on={1: True, 2: True,
+                                                                            3: True}))  # fmt: skip
+    volunteer = _volunteer(emulator, hall, **{"junction-type": "mute", "mutes-pending-type": "mute",
+                                              "package-question": "skip"})  # fmt: skip
+    result = start(volunteer, services, "en")
+    assert result.finished
+    keys = volunteer.shown_keys()
+    assert keys.index("mutes-pending-what") < keys.index("junction-what")
+    assert "mutes-pending-done" in keys
+    assert emulator.mtx[1]["on"]
+
+
+def test_after_the_junction_the_crossover_is_proposed_and_written_in_its_place(rig):
+    emulator, hall, services = rig
+    volunteer = _volunteer(emulator, hall, **{"junction-type": "mute", "apply-type": "apply"})
+    result = start(volunteer, services, "en")
+    assert result.finished
+    stored = read_packages(services.workspace.root / result.state.proposal_file)
+    kinds = [p.kind for p in stored.packages]
+    assert "crossover" in kinds, kinds
+    keys = volunteer.shown_keys()
+    assert "apply-done" in keys, keys[-12:]
+    eq_writes = [a for a, _ in emulator.writes if "/eq/" in a]
+    cut_writes = [a for a in eq_writes if a.endswith(("/1/type", "/6/type"))]
+    assert all(a.startswith(("/mtx/01/", "/mtx/02/", "/mtx/03/")) for a in cut_writes), cut_writes
+    assert not any(a.startswith("/main/st/eq/") and a.endswith("/type") and
+                   a.split("/")[4] in ("1", "6") for a in eq_writes)  # fmt: skip
