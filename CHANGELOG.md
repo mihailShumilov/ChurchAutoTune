@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Open-source project files: contributing guide, Contributor Covenant code of conduct, security and safety
   policy with private reporting, support page, issue forms (bug, feature, hardware check result), pull request
   template with a safety checklist, CODEOWNERS, Dependabot, CodeQL, `.editorconfig`, `.gitattributes`.
+- Project website in English, Ukrainian and Spanish (`site/`: landing page, roadmap, guide), published to
+  GitHub Pages by `.github/workflows/pages.yml`.
 
 - Console driver (M1): discovery of X32/M32 consoles (`/xinfo` only; loopback only in dev-safe
   mode), a full read-only snapshot parsed into console-neutral models (inputs, buses, matrices,

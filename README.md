@@ -6,6 +6,9 @@
 [![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)](#project-status)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 
+**Website:** <https://mihailshumilov.github.io/ChurchAutoTune/> (English, Українська, Español): project status,
+roadmap and a guide.
+
 A free, open-source terminal app for macOS that guides church sound volunteers through measuring the room
 and tuning a **Behringer X32 / Midas M32** system: sub/top crossover, sub alignment, system EQ,
 verification and a report.
