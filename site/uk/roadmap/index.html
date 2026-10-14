@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>План і стан проєкту — ChurchTune</title>
+<meta name="description" content="Де ChurchTune зараз і що далі: етапи M0–M7, від драйвера пульта до першого випуску після пілоту в справжніх церквах.">
+<link rel="canonical" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/roadmap/">
+<link rel="alternate" hreflang="en" href="https://mihailshumilov.github.io/ChurchAutoTune/en/roadmap/"><link rel="alternate" hreflang="uk" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/roadmap/"><link rel="alternate" hreflang="es" href="https://mihailshumilov.github.io/ChurchAutoTune/es/roadmap/"><link rel="alternate" hreflang="x-default" href="https://mihailshumilov.github.io/ChurchAutoTune/en/roadmap/">
+<link rel="icon" href="../../assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../assets/style.css">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f141c" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ChurchTune">
+<meta property="og:title" content="План і стан проєкту — ChurchTune">
+<meta property="og:description" content="Де ChurchTune зараз і що далі: етапи M0–M7, від драйвера пульта до першого випуску після пілоту в справжніх церквах.">
+<meta property="og:url" content="https://mihailshumilov.github.io/ChurchAutoTune/uk/roadmap/">
+<meta property="og:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ChurchTune: безкоштовне налаштування звуку для церков з Behringer X32 або Midas M32">
+<meta property="og:locale" content="uk_UA">
+<meta property="og:locale:alternate" content="en_US"><meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="План і стан проєкту — ChurchTune">
+<meta name="twitter:description" content="Де ChurchTune зараз і що далі: етапи M0–M7, від драйвера пульта до першого випуску після пілоту в справжніх церквах.">
+<meta name="twitter:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
+<meta name="twitter:image:alt" content="ChurchTune: безкоштовне налаштування звуку для церков з Behringer X32 або Midas M32">
+</head>
+
+<body>
+<a class="skip" href="#main">Перейти до змісту</a>
+<header class="site-header">
+<div class="wrap">
+<a class="brand" href="../../uk/"><img src="../../assets/logo.svg" alt="" width="34" height="34">ChurchTune</a>
+<nav class="main-nav" aria-label="Головне меню"><ul><li><a href="../../uk/#how">Як це працює</a></li><li><a href="../../uk/roadmap/" aria-current="page">План</a></li><li><a href="../../uk/guide/">Інструкція</a></li><li><a href="../../uk/#help">Долучитися</a></li><li><a href="../../uk/#faq">Питання</a></li><li><a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a></li></ul></nav>
+<nav class="lang-switch" aria-label="Мова"><ul><li><a href="../../en/roadmap/" hreflang="en" lang="en"><abbr title="English" style="text-decoration:none">EN</abbr></a></li><li><a href="../../uk/roadmap/" hreflang="uk" lang="uk" aria-current="page"><abbr title="Українська" style="text-decoration:none">UK</abbr></a></li><li><a href="../../es/roadmap/" hreflang="es" lang="es"><abbr title="Español" style="text-decoration:none">ES</abbr></a></li></ul></nav>
+</div>
+</header>
+
+<main id="main">
+<div class="page-head"><div class="wrap">
+<p class="eyebrow">План</p>
+<h1>Де ChurchTune зараз</h1>
+<p class="lead">ChurchTune створюється у вісім етапів, один за одним. Етап завершується лише тоді, коли проходять його тести. Ця сторінка оновлюється щоразу, коли етап просувається.</p>
+<p class="updated">Оновлено: <time datetime="2026-10-14">14 жовтня 2026</time></p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> Не для роботи з живою системою. Зараз існують лише інструменти для розробників.</p></div>
+</div></div>
+<section class="section" id="summary" aria-labelledby="summary-title"><div class="wrap prose"><h2 id="summary-title">Коротко</h2><ul><li><strong>Готово:</strong> M0, основа. Робочий інструмент із реальної сесії в залі став чистим, протестованим ядром програми.</li><li><strong>Триває:</strong> M1, драйвер пульта: знайти пульт, безпечно прочитати всі налаштування й визначити, які виходи живлять основні колонки й сабвуфер.</li><li><strong>Далі:</strong> M2, рушій аудіо й вимірювань.</li></ul><p>Хочете спробувати те, що вже є? Дивіться <a href="../../uk/guide/">інструкцію</a>.</p></div></section>
+<section class="section section-alt" id="milestones" aria-labelledby="milestones-title">
+<div class="wrap">
+<h2 id="milestones-title">Етапи</h2>
+<p class="section-intro">Етапи взято зі <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/SPEC.md">специфікації проєкту</a> (російською). Деталі можуть змінюватися в процесі роботи.</p>
+<ol class="milestones"><li class="milestone is-done" id="m0"><header><h3>M0. Основа</h3><span class="badge badge-done">Готово</span></header><p>Перенести перевірений інструмент у нову, впорядковану й протестовану програму, не змінивши його поведінки.</p><p class="label">Зроблено</p><ul><li>Робочий інструмент розкладено на чисті шари: протокол пульта, політика безпеки, вимірювання, аналіз, розрахунок і звіти.</li><li>Клієнт пульта лише для читання й окремий модуль запису, якому потрібен обмежений дозвіл від політики безпеки, із перевіркою кожного значення.</li><li>«Еталонні» тести на реальній сесії в залі 2 жовтня 2026 року: новий код мусить давати ті самі пропозиції.</li><li>Безпечний режим розробки: з <code>CTUNE_DEV_SAFE=1</code> приймаються лише емулятор на 127.0.0.1 та імітований звук.</li><li>Тимчасовий експертний командний рядок (<code>ctune</code>, поки з російськими текстами) і <code>ctune hwcheck</code> для двох записів, які ще не перевіряли на пульті.</li><li>Файли відкритого проєкту: посібник для учасників, кодекс поведінки, політика безпеки, форми issue, CI.</li></ul></li><li class="milestone is-progress" id="m1"><header><h3>M1. Драйвер пульта</h3><span class="badge badge-progress">Триває</span></header><p>Знайти пульт у мережі й зрозуміти, як підключена система церкви, — лише читаючи.</p><p class="label">Що це дасть</p><ul><li>Пошук X32 чи M32 у мережі без введення адреси.</li><li>Визначення моделі й прошивки.</li><li>Повний знімок налаштувань пульта лише для читання.</li><li>Відповідність USB-аудіоканалів.</li><li>Визначення топології: яка матриця, шина чи вихід живить основні колонки й сабвуфер, із рівнем упевненості.</li><li>Емулятор із кількома варіантами пультів для тестів.</li><li><code>ctune doctor</code> і <code>ctune snapshot</code> працюють на емуляторі.</li></ul><p class="label">Готово, коли</p><ul><li>Топологію правильно визначено щонайменше на шести реальних конфігураціях, зокрема зал 2026-10-02, саб на шині, саб на Mono, без саба, основні колонки на Main LR і M32.</li><li>Повне читання займає не більше 20 секунд на емуляторі із затримкою відповіді 5 мс.</li></ul><p class="label">Як допомогти</p><ul><li>Дампи пультів (лише читання) інших моделей, прошивок і маршрутизацій. Дивіться <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">посібник для учасників</a> (англ.).</li></ul></li><li class="milestone " id="m2"><header><h3>M2. Рушій аудіо й вимірювань</h3><span class="badge badge-planned">Заплановано</span></header><p>Надійно вимірювати одним або кількома мікрофонами на безпечному рівні.</p><p class="label">Що це дасть</p><ul><li>Пошук USB-аудіопристрою пульта й запис кількох каналів.</li><li>Визначення, на якому вході який мікрофон («пошкрябайте мікрофон»).</li><li>Перевірка шляху сигналу, перевірка колонок по одній, підбір рівня, фоновий шум.</li><li>Взаємне калібрування комплекту мікрофонів.</li><li>Замір точки з перевіркою якості, раунди з кількома мікрофонами, окремі заміри сабвуфера й основних колонок із тимчасовим mute.</li></ul><p class="label">Готово, коли</p><ul><li>Калібрування відновлює задані відмінності між чотирма імітованими мікрофонами з точністю ±0,3 дБ, а несправний мікрофон виявляється.</li><li>Обмеження −6 dBFS доведено тестом; Ctrl+C дає тишу за 50 мс і відновлює mute.</li></ul></li><li class="milestone " id="m3"><header><h3>M3. Покроковий майстер</h3><span class="badge badge-planned">Заплановано</span></header><p>Екранна покрокова програма для волонтерів.</p><p class="label">Що це дасть</p><ul><li>Повноекранний майстер у терміналі з індикаторами рівня, простою схемою залу й таблицею змін.</li><li>Збереження прогресу: можна зупинитися й продовжити пізніше.</li><li>Інтерфейс англійською, російською й українською.</li></ul><p class="label">Готово, коли</p><ul><li>Наскрізні сценарії проходять, кожен екран має snapshot-тест, усі тексти перекладено.</li></ul></li><li class="milestone " id="m4"><header><h3>M4. Аналіз і пропозиції</h3><span class="badge badge-planned">Заплановано</span></header><p>Перетворити заміри на короткий список безпечних і пояснених змін.</p><p class="label">Що це дасть</p><ul><li>План точок вимірювання, аналіз частотної характеристики, розкиду й реверберації.</li><li>Пропозиції щодо кросовера, вирівнювання й рівня сабвуфера, еквалайзера системи та поради щодо еквалайзерів каналів — кожна з простим поясненням.</li></ul><p class="label">Готово, коли</p><ul><li>На імітованому залі з відомими дефектами (провал на стику, горб на 500 Гц, кімнатна мода на 50 Гц, вузький провал на 800 Гц) пропозиції виправляють перші три й не чіпають четвертий.</li></ul></li><li class="milestone " id="m5"><header><h3>M5. Застосування, скасування, перевірка</h3><span class="badge badge-planned">Заплановано</span></header><p>Безпечно записати зміни, перевірити їх і скасувати, якщо стало не краще.</p><p class="label">Що це дасть</p><ul><li>Області запису й безпечний порядок запису, файли скасування й відновлення.</li><li>Повторний замір і чітке правило «краще чи ні».</li></ul><p class="label">Готово, коли</p><ul><li>Усі тести безпеки проходять, зокрема з навмисними збоями: розбіжність при перевірці чи втрата зв'язку.</li></ul></li><li class="milestone " id="m6"><header><h3>M6. Звіт</h3><span class="badge badge-planned">Заплановано</span></header><p>Звіт, який можна зберегти, надрукувати чи комусь показати.</p><p class="label">Що це дасть</p><ul><li>Звіти в HTML, Markdown і JSON із графіками, що відкриваються без інтернету, плюс короткий підсумок для форуму чи чату.</li></ul></li><li class="milestone " id="m7"><header><h3>M7. Пілот і випуск 0.1.0</h3><span class="badge badge-planned">Заплановано</span></header><p>Перевірити в справжніх церквах і зробити перший випуск.</p><p class="label">Що це дасть</p><ul><li>Чек-лист обладнання, пройдений людьми за справжніми пультами, і виправлення.</li><li>README трьома мовами, встановлення однією командою, версія 0.1.0.</li></ul><p class="label">Готово, коли</p><ul><li>Повний майстер проходить на справжньому X32 Producer без втручання в код, а результати не гірші за ручну сесію 2026-10-02.</li></ul></li></ol>
+</div>
+</section>
+<section class="section" id="not-in-first-version" aria-labelledby="nonGoals-title">
+<div class="wrap prose">
+<h2 id="nonGoals-title">Чого не буде в першій версії</h2>
+<p>Щоб перша версія була невеликою й безпечною, це свідомо залишено поза її межами:</p>
+<ul><li>Інші пульти (X Air, WING, Allen &amp; Heath, Yamaha). Драйвер спроєктовано так, щоб їх можна було додати пізніше.</li><li>Графічна програма, застосунки для планшета чи телефона. Windows і Linux як підтримувані платформи.</li><li>Зміна маршрутизації, фантомного живлення, підсилення входів, сцен, ефектів чи insert. ChurchTune лише читає їх і підказує, що зробити.</li><li>Запис еквалайзера на вхідні канали. Лише аналіз і поради.</li><li>Придушення зворотного зв'язку (ring-out), оцінка розбірливості мови (STI), сценічні монітори, фронтфіли й балкон з окремою затримкою (балкон лише виявляється з попередженням).</li><li>Хмара, телеметрія, облікові записи, ліцензування й оплата.</li></ul>
+<p>Щоб стежити за прогресом, увімкніть сповіщення про випуски на <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> або читайте <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CHANGELOG.md">журнал змін</a> (англ.).</p>
+</div>
+</section>
+</main>
+<footer class="site-footer">
+<div class="wrap">
+<div class="cols">
+<div>
+<h2>ChurchTune</h2>
+<p>Вільне програмне забезпечення за ліцензією <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/LICENSE">GPL-3.0-or-later</a>.</p>
+<p>Цей сайт не використовує cookies, аналітику чи трекери.</p>
+</div>
+<div>
+<h2>Сторінки</h2>
+<ul>
+<li><a href="../../uk/">Головна</a></li>
+<li><a href="../../uk/roadmap/">План</a></li>
+<li><a href="../../uk/guide/">Інструкція</a></li>
+<li><a href="../../uk/#faq">Питання</a></li>
+</ul>
+</div>
+<div>
+<h2>Проєкт</h2>
+<ul>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune">Код на GitHub</a></li>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">Як долучитися (англ.)</a></li>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CHANGELOG.md">Журнал змін (англ.)</a></li>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune/security/advisories/new">Повідомити про проблему безпеки</a></li>
+</ul>
+</div>
+<div>
+<h2>Мова</h2>
+<ul><li><a href="../../en/roadmap/" hreflang="en" lang="en">English</a></li><li><a href="../../uk/roadmap/" hreflang="uk" lang="uk">Українська</a></li><li><a href="../../es/roadmap/" hreflang="es" lang="es">Español</a></li></ul>
+</div>
+</div>
+<p>Behringer, X32, Midas і M32 — торговельні марки їхніх власників. ChurchTune — незалежний проєкт, не пов&#x27;язаний із ними й не схвалений ними.</p>
+<p>Оновлено: <time datetime="2026-10-14">14 жовтня 2026</time></p>
+</div>
+</footer>
+</body>
+</html>
