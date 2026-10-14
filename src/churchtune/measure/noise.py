@@ -9,14 +9,14 @@ turns them into advice ("turn the stage lights off").
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
 
 import numpy as np
 
 from churchtune.analysis.bands import OCTAVES_HZ, octave_levels
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.levels import rms_dbfs
-from churchtune.domain.recording import MultiRecording, StopFlag
+from churchtune.domain.recording import StopFlag
+from churchtune.measure.backend import MeasureBackend
 
 NOISE_SECONDS = 3.0
 # Above this broadband level the room is too loud for clean sweeps at the default level.
@@ -24,7 +24,8 @@ LOUD_ROOM_DBFS = -50.0
 # Hum: a narrow spectral line this far above the median of its neighbourhood.
 HUM_PROMINENCE_DB = 15.0
 HUM_FAMILIES_HZ = (50.0, 60.0)
-HUM_HARMONICS = (2, 4, 6)
+# Fundamental and harmonics: even ones come from dimmers, odd ones from ground loops.
+HUM_HARMONICS = (1, 2, 3, 4, 5, 6)
 HUM_NEIGHBOURHOOD_HZ = 15.0
 HUM_LINE_HZ = 1.5
 # Rumble: the 63 and 125 Hz octaves this far above the 1 and 2 kHz octaves.
@@ -60,16 +61,6 @@ class MicNoise:
     hints: tuple[NoiseHint, ...]
 
 
-class Recorder(Protocol):
-    """The part of a multichannel backend the noise step needs."""
-
-    def record_multi(
-        self, duration_s: float, inputs: Sequence[int], stop: StopFlag | None = None
-    ) -> MultiRecording:
-        """Record ``inputs`` while playing silence."""
-        ...
-
-
 def hum_frequency(x: FloatArray, fs_hz: float) -> float | None:
     """Mains frequency (50 or 60 Hz) whose even harmonics stand out as narrow lines, or None."""
     spectrum = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
@@ -96,8 +87,8 @@ def analyse_noise(x: FloatArray, fs_hz: float, usb_input: int) -> MicNoise:
     level = rms_dbfs(x)
     octaves = octave_levels(x, fs_hz, OCTAVES_HZ)
     hum = hum_frequency(x, fs_hz)
-    low = max(octaves[b] for b in LOW_OCTAVES if b in octaves)
-    mid = max(octaves[b] for b in MID_OCTAVES if b in octaves)
+    low = max((octaves[b] for b in LOW_OCTAVES if b in octaves), default=level)
+    mid = max((octaves[b] for b in MID_OCTAVES if b in octaves), default=level)
     hints = [
         hint
         for hint, present in (
@@ -111,7 +102,7 @@ def analyse_noise(x: FloatArray, fs_hz: float, usb_input: int) -> MicNoise:
 
 
 def measure_background(
-    backend: Recorder,
+    backend: MeasureBackend,
     inputs: Sequence[int],
     fs_hz: float,
     *,

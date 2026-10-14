@@ -60,3 +60,15 @@ def test_a_clipping_scratch_is_flagged(hall):
 def test_column_count_must_match():
     with pytest.raises(ValueError, match="columns"):
         find_scratch(np.zeros((100, 3)), [1, 2], FS)
+
+
+def test_a_stray_sample_on_a_silent_input_does_not_beat_a_real_scratch():
+    rng = np.random.default_rng(1)
+    n = int(2 * FS)
+    mic = rng.normal(scale=1e-4, size=n)  # -80 dBFS self-noise
+    mic[int(0.5 * FS) : int(0.75 * FS)] += rng.normal(scale=0.1, size=int(0.25 * FS))  # scratch
+    silent = np.zeros(n)
+    silent[1000] = 3e-5
+    result = find_scratch(np.stack([mic, silent], axis=1), [10, 25], FS)
+    assert result.outcome is MappingOutcome.FOUND
+    assert result.usb_input == 10
