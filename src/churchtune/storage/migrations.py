@@ -75,7 +75,19 @@ def _snapshot_v0(data: Raw) -> Raw:
     raise UnsupportedSchema(f"a snapshot file without schema_version: {sorted(data)[:5]}")
 
 
+def _packages_v0(data: Raw) -> Raw:
+    """Package files appeared with schema version 1; a file without a version is not ours."""
+    raise UnsupportedSchema(f"a proposal packages file without schema_version: {sorted(data)[:5]}")
+
+
+def _plan_v0(data: Raw) -> Raw:
+    """Point plans appeared with schema version 1; a file without a version is not ours."""
+    raise UnsupportedSchema(f"a point plan file without schema_version: {sorted(data)[:5]}")
+
+
 _FROM_V0: Mapping[str, Callable[[Raw], Raw]] = {
+    "packages": _packages_v0,
+    "plan": _plan_v0,
     "snapshot": _snapshot_v0,
     "mic_calibration": _mic_calibration_v0,
     "wizard": _wizard_v0,
@@ -93,7 +105,8 @@ def migrate(kind: str, data: Raw) -> Raw:
 
     Args:
         kind: Which file this is: ``session``, ``point_meta``, ``junction_meta``, ``undo``,
-            ``pending``, ``proposal``, ``snapshot``, ``mic_calibration`` or ``wizard``.
+            ``pending``, ``proposal``, ``snapshot``, ``mic_calibration``, ``wizard``,
+            ``packages`` or ``plan``.
         data: The parsed JSON object.
 
     Returns:

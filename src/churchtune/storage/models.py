@@ -267,6 +267,133 @@ class ProposalFile(FileModel):
     eq_current: EqModel | None = None
 
 
+Finite = Annotated[float, Field(allow_inf_nan=False)]
+PackageKindName = Literal["crossover", "alignment", "sub_level", "system_eq"]
+
+
+class PathRefModel(FileModel):
+    """A mix path that may carry a speaker: a matrix, a bus, Main LR or Mono, and its number.
+
+    Input channels are not paths: the channel advice never becomes a change.
+    """
+
+    kind: Literal["matrix", "bus", "main_l", "mono"]
+    number: Annotated[int, Field(ge=0, le=16)] = 0
+
+
+class PathEqModel(FileModel):
+    """The EQ block of one path, before and after a package."""
+
+    path: PathRefModel
+    before: EqModel
+    after: EqModel
+
+
+class OutputDelayModel(FileModel):
+    """Delay of one main output, before and after, in ms."""
+
+    output: Annotated[int, Field(ge=1, le=16)]
+    before_ms: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    after_ms: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+
+
+class LevelModel(FileModel):
+    """A fader, before and after, in dB (never above 0 dB in a package the program may write).
+
+    ``before_db`` may be ``-inf`` (fader down); the apply step compares it with a fresh read
+    within the console's fader step.
+    """
+
+    path: PathRefModel
+    before_db: float
+    after_db: Finite
+
+
+class PolarityModel(FileModel):
+    """Polarity of a path, before and after (True = inverted)."""
+
+    path: PathRefModel
+    before: bool
+    after: bool
+
+
+class EffectModel(FileModel):
+    """Modelled effect of a package."""
+
+    metric: str
+    before_db: Finite
+    after_db: Finite
+
+
+class PackageModel(FileModel):
+    """One change package and whether the person chose it.
+
+    The file is not trusted by the apply step (M5): every value is validated again against the
+    write scopes, re-read from the console and refused when ``before`` no longer matches, and a
+    package is applied only together with every package it ``requires``. ``suggest_only``
+    packages are never written.
+    """
+
+    kind: PackageKindName
+    suggest_only: bool
+    risk: Literal["low", "medium", "unverified"]
+    selected: bool
+    requires: tuple[PackageKindName, ...] = ()
+    eq: tuple[PathEqModel, ...] = ()
+    delays: tuple[OutputDelayModel, ...] = ()
+    delay_side: Literal["sub", "tops"] | None = None
+    delay_ms: Annotated[float, Field(ge=0, allow_inf_nan=False)] = 0.0
+    levels: tuple[LevelModel, ...] = ()
+    polarities: tuple[PolarityModel, ...] = ()
+    notes: tuple[CodedText, ...] = ()
+    effect: EffectModel | None = None
+
+
+class AuditModel(FileModel):
+    """One piece of channel advice."""
+
+    code: str
+    channels: tuple[int, ...]
+    freq_hz: float | None = None
+    gain_db: float | None = None
+
+
+class PackagesFile(FileModel):
+    """``proposal.json`` of a wizard session: the packages and the channel advice (SPEC S11).
+
+    Nothing in it has been written to the console; applying it is a separate step (M5).
+    """
+
+    schema_version: Literal[1] = SCHEMA_VERSION
+    created: str
+    session: str
+    fc_hz: Annotated[float, Field(gt=0, allow_inf_nan=False)]
+    packages: tuple[PackageModel, ...]
+    notes: tuple[CodedText, ...] = ()
+    audit: tuple[AuditModel, ...] = ()
+
+
+class PlanPointModel(FileModel):
+    """One planned measurement position."""
+
+    id: str
+    x_m: float
+    y_m: float
+    row: Literal["front", "middle", "back"]
+    side: Literal["left", "centre", "right"]
+    junction: bool = False
+
+
+class PointPlanFile(FileModel):
+    """``venues/<slug>/plan.json``: the point plan, reused by verify (SPEC §8.3)."""
+
+    schema_version: Literal[1] = SCHEMA_VERSION
+    width_m: float
+    depth_m: float
+    from_template: bool
+    points: tuple[PlanPointModel, ...]
+
+
 class SnapshotFile(FileModel):
     """``console/<ts>-snapshot.json``: a full read-only snapshot of the console (SPEC §6.4).
 
