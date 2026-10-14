@@ -28,6 +28,8 @@ from churchtune.audio.base import (
 )
 from churchtune.audio.fake.room import DIRECT_DELAY_S, synthetic_room
 from churchtune.domain.arrays import FloatArray
+from churchtune.domain.eq import SystemEq
+from churchtune.domain.eq_model import band_sos
 from churchtune.domain.levels import db_to_lin
 from churchtune.errors import AudioDeviceError, MeasurementAborted
 
@@ -92,6 +94,8 @@ class FakeHall:
             when omitted.
         input_count: Inputs of the simulated device.
         seed: Seed of the noise.
+        main_eq: Returns the console's Main LR EQ now; the playback goes through it (every
+            speaker hangs behind Main LR), so a check measurement hears what was written.
     """
 
     fs_hz: float
@@ -99,6 +103,7 @@ class FakeHall:
     gain_db: float = -10.0
     latency_samples: int = 1800
     speaker_gains: SpeakerGains | None = None
+    main_eq: Callable[[], SystemEq] | None = None
     input_count: int = DEFAULT_INPUTS
     seed: int = 11
     name: str = "simulator-hall"
@@ -239,12 +244,27 @@ class FakeHall:
     ) -> dict[str, FloatArray]:
         """Signal of each speaker; ``gains`` may vary per sample (mutes switched mid-buffer)."""
         level = gains if gains is not None else self._gains_now()
+        out = self._through_main_eq(out)
         left, right = out[:, 0], out[:, 1]
         return {
             "top_l": left * level["top_l"],
             "top_r": right * level["top_r"],
             "sub": (left + right) / 2 * level["sub"],
         }
+
+    def _through_main_eq(self, out: FloatArray) -> FloatArray:
+        """The playback after the console's Main LR EQ (unchanged without one)."""
+        if self.main_eq is None:
+            return out
+        eq = self.main_eq()
+        if not eq.on:
+            return out
+        filtered = np.asarray(out, dtype=np.float64)
+        for band in eq.bands:
+            sos = band_sos(band, self.fs_hz)
+            if sos is not None:
+                filtered = signal.sosfilt(sos, filtered, axis=0)
+        return filtered
 
     def _noise(self, usb_input: int, n: int) -> FloatArray:
         """Self-noise of the input; a more sensitive capsule hears the room noise louder too."""

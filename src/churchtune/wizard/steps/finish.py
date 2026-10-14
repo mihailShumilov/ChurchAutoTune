@@ -4,7 +4,9 @@ S11 explains the analysis in plain words. Change proposals (crossover, alignment
 applying them arrive with M4 and M5; until then the wizard says so honestly and keeps the data.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -73,6 +75,34 @@ def findings(analysis: Analysis) -> list[Text]:
     return found
 
 
+def session_analysis(
+    ctx: WizardContext, directory: Path, names: Collection[str] | None = None
+) -> Analysis | None:
+    """The analysis of the points stored in a directory (only ``names``, when given).
+
+    Each point is corrected by the microphone that measured it, from the session's own copy of
+    the calibration, whatever its age: the points were measured with it.
+
+    Returns:
+        None when there is no such point.
+    """
+    stored = {
+        name: point
+        for name, point in load_points(directory).items()
+        if names is None or name in names
+    }
+    if not stored:
+        return None
+    calibration = None
+    if ctx.box.state.calibration_set is not None:
+        calibration = read_session_mic_calibration(ctx.session_dir)
+    mics = {name: point.meta.mic_input if point.meta else None for name, point in stored.items()}
+    return analyze_points(
+        {name: PointResponse(p.ir, p.fs_hz) for name, p in stored.items()},
+        point_cal_db=_point_corrections(calibration, mics),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class Results:
     """S11: the analysis in plain words, then the change packages to choose from."""
@@ -87,23 +117,12 @@ class Results:
 
     def run(self, ctx: WizardContext) -> Outcome:
         """Analyse the stored points of this session and explain the findings."""
-        stored = load_points(ctx.session_dir)
-        if not stored:
+        analysis = session_analysis(ctx, ctx.session_dir)
+        if analysis is None:
             info(ctx.prompter, t("step-results-no-points"))
             return Outcome.BACK
-        state = ctx.box.state
-        calibration = None
-        if state.calibration_set is not None:
-            # The session's own copy, whatever its age: the points were measured with it.
-            calibration = read_session_mic_calibration(ctx.session_dir)
-        mics = {
-            name: point.meta.mic_input if point.meta else None for name, point in stored.items()
-        }
-        analysis = analyze_points(
-            {name: PointResponse(p.ir, p.fs_hz) for name, p in stored.items()},
-            point_cal_db=_point_corrections(calibration, mics),
-        )
-        info(ctx.prompter, t("step-results-what", count=len(stored)), *findings(analysis))
+        count = len(analysis.point_names)
+        info(ctx.prompter, t("step-results-what", count=count), *findings(analysis))
         propose(ctx, analysis)
         info(ctx.prompter, t("step-results-next-milestones"))
         return Outcome.DONE
@@ -123,12 +142,23 @@ class Finish:
 
     def run(self, ctx: WizardContext) -> Outcome:
         """The checklist for the person."""
+        state = ctx.box.state
+        written = []
+        if state.applied_undo is not None:
+            written = [
+                t("step-finish-scene"),
+                t(
+                    "step-finish-undo-later",
+                    command=f"ctune undo {ctx.services.workspace.root / state.applied_undo}",
+                ),
+            ]
         task(
             ctx.prompter,
             t("step-finish-what"),
+            *written,
             t("step-finish-undo-by-hand"),
             t("step-finish-listen"),
-            t("step-finish-mics", count=len(ctx.box.state.mic_inputs)),
+            t("step-finish-mics", count=len(state.mic_inputs)),
         )
         info(ctx.prompter, t("step-finish-saved", path=str(ctx.session_dir)))
         return Outcome.DONE
