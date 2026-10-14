@@ -29,3 +29,6 @@ htmlcov/
 # Claude Code local settings
 .claude/settings.local.json
 .claude/worktrees/
+
+# pytest-textual-snapshot failure report
+snapshot_report.html
