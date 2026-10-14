@@ -40,7 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path an attempt, so one slow answer no longer shifts the replies of all later nodes; a snapshot
   read stops with "console unreachable" after 20 silent nodes in a row.
 
+- Measurement engine (M2): several microphones in one stream (`MultiChannelBackend`, real and
+  simulated), a stop flag that silences within 50 ms, mic-set calibration (sensitivity, delay,
+  polarity, shape; rejection rules of SPEC S9; stored for 30 days), auto-mapping by a scratch, the
+  pink-noise level ramp with every stop condition of SPEC S8, the sweep-level search, background
+  noise per octave with hum and rumble hints, the path check (latency, heard or not, speaker
+  polarity), multi-mic rounds and the sub/top junction with restored mutes (ADR 0007).
+- `ctune devices`, `ctune mics map`, `ctune mics calibrate`, `ctune noise`, `ctune pathcheck`; a
+  four-microphone simulated rig behind `--audio fake`.
+
 ### Changed (compared with the original tool)
+- A stream dropout (xrun) makes a point BAD (SPEC §8.2); two sweeps must agree within 1 dB.
 - Output delay and matrix polarity are written only with `--write-unverified`; by default `sub align` prints
   them as advice and `undo` refuses a file that holds them (ADR 0005).
 - An output delay is written time first, switch second.
