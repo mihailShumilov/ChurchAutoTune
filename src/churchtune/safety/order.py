@@ -1,0 +1,274 @@
+"""The order of writes: never louder than before or after (SPEC §9.3).
+
+One rule for every plan: in every intermediate state the modelled response of every speaker
+path stays at most ``max(before, after) + 0.5 dB`` at every frequency from 20 Hz to 20 kHz.
+
+The order is built on console-neutral strip states (EQ block, fader, mute) and then checked by
+simulating every prefix of the plan; a plan that cannot be ordered safely is refused. The driver
+turns the ordered steps into console writes in the same order.
+
+Base algorithm (§9.3): faders down and mutes first; then each EQ band — gains that only go down
+at once, a band that moves (type, frequency, Q) in the first order of its writes that keeps the
+rule (if none does, its gain goes to 0 dB first); boosts and faders up last.
+"""
+
+import itertools
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from typing import Literal
+
+import numpy as np
+
+from churchtune.domain.arrays import FloatArray
+from churchtune.domain.eq import Band, SystemEq
+from churchtune.domain.eq_model import eq_response_db
+from churchtune.domain.snapshot import SignalRef
+from churchtune.errors import UnsafeWrite
+
+TOLERANCE_DB = 0.5
+GRID_HZ: FloatArray = 20.0 * 2 ** (np.arange(0, int(np.log2(20000 / 20) * 24) + 1) / 24)
+MUTED_DB = -200.0
+# A band's parameters as written one at a time, read through a table.
+BAND_PARAMS: tuple[str, ...] = ("type", "freq_hz", "q", "gain_db")
+_PARAM_OF: dict[str, Callable[[Band], object]] = {
+    "type": lambda band: band.type,
+    "freq_hz": lambda band: band.freq_hz,
+    "q": lambda band: band.q,
+    "gain_db": lambda band: band.gain_db,
+}
+# Take one parameter of ``target`` into ``band``.
+_TAKE: dict[str, Callable[[Band, Band], Band]] = {
+    "type": lambda band, target: replace(band, type=target.type),
+    "freq_hz": lambda band, target: replace(band, freq_hz=target.freq_hz),
+    "q": lambda band, target: replace(band, q=target.q),
+    "gain_db": lambda band, target: replace(band, gain_db=target.gain_db),
+}
+# What comes last, in this order: EQ switches, faders up, unmuting.
+LATE_ORDER: tuple[str, ...] = ("eq_on", "fader", "on")
+
+
+@dataclass(frozen=True, slots=True)
+class StripState:
+    """What the model knows of a strip on a speaker path.
+
+    Attributes:
+        eq: Its EQ block.
+        fader_db: Its fader in dB (``-inf`` when down).
+        on: False when muted.
+    """
+
+    eq: SystemEq
+    fader_db: float = 0.0
+    on: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    """One write in console-neutral terms: a whole band, the EQ switch, a fader or a mute.
+
+    Attributes:
+        strip: Which strip.
+        what: ``band``, ``eq_on``, ``fader`` or ``on``.
+        band: The band as it is after this step (one parameter changed), for ``band``.
+        value: The new switch or fader value, for the others.
+        param: The band parameter this step changes (``type``, ``freq_hz``, ``q``, ``gain_db``).
+    """
+
+    strip: SignalRef
+    what: Literal["band", "eq_on", "fader", "on"]
+    band: Band | None = None
+    value: float | bool | None = None
+    param: str = ""
+
+
+Chains = Mapping[str, tuple[SignalRef, ...]]
+
+
+def chain_response_db(
+    states: Mapping[SignalRef, StripState], chain: tuple[SignalRef, ...], fs_hz: float
+) -> FloatArray:
+    """Modelled response of one speaker path: every strip's EQ and fader, muted as silence."""
+    total = np.zeros_like(GRID_HZ)
+    for ref in chain:
+        state = states[ref]
+        if not state.on:
+            return np.full_like(GRID_HZ, MUTED_DB)
+        total = total + eq_response_db(state.eq, GRID_HZ, fs_hz) + max(state.fader_db, MUTED_DB)
+    return total
+
+
+class _Simulation:
+    """The plan so far, checked against the envelope of before and after."""
+
+    def __init__(
+        self,
+        before: Mapping[SignalRef, StripState],
+        after: Mapping[SignalRef, StripState],
+        chains: Chains,
+        fs_hz: float,
+    ) -> None:
+        self.states = dict(before)
+        self.chains = chains
+        self.fs_hz = fs_hz
+        self.envelope = {
+            name: np.maximum(
+                chain_response_db(before, chain, fs_hz), chain_response_db(after, chain, fs_hz)
+            )
+            + TOLERANCE_DB
+            for name, chain in chains.items()
+        }
+        self.steps: list[Step] = []
+
+    def _applied(self, step: Step) -> dict[SignalRef, StripState]:
+        states = dict(self.states)
+        state = states[step.strip]
+        if step.what == "band" and step.band is not None:
+            states[step.strip] = replace(state, eq=state.eq.with_band(step.band))
+        elif step.what == "eq_on":
+            states[step.strip] = replace(state, eq=state.eq.with_on(bool(step.value)))
+        elif step.what == "fader":
+            states[step.strip] = replace(state, fader_db=float(step.value or 0.0))
+        else:
+            states[step.strip] = replace(state, on=bool(step.value))
+        return states
+
+    def safe(self, steps: Sequence[Step]) -> bool:
+        """True when every prefix of ``steps`` keeps every path inside the envelope."""
+        states = self.states
+        try:
+            for step in steps:
+                self.states = self._applied(step)
+                for name, chain in self.chains.items():
+                    if step.strip in chain and np.any(
+                        chain_response_db(self.states, chain, self.fs_hz) > self.envelope[name]
+                    ):
+                        return False
+            return True
+        finally:
+            self.states = states
+
+    def take(self, steps: Sequence[Step]) -> None:
+        for step in steps:
+            self.states = self._applied(step)
+            self.steps.append(step)
+
+
+def _band_steps(strip: SignalRef, old: Band, new: Band, order: Sequence[str]) -> list[Step]:
+    steps = []
+    current = old
+    for param in order:
+        if _PARAM_OF[param](current) != _PARAM_OF[param](new):
+            current = _TAKE[param](current, new)
+            steps.append(Step(strip, "band", band=current, param=param))
+    return steps
+
+
+def _band_orders(strip: SignalRef, old: Band, new: Band) -> list[list[Step]]:
+    """Candidate write orders for one band.
+
+    Every order of its parameters, then the same with the gain at 0 dB first.
+    """
+    changed = [p for p in BAND_PARAMS if _PARAM_OF[p](old) != _PARAM_OF[p](new)]
+    orders = [_band_steps(strip, old, new, perm) for perm in itertools.permutations(changed)]
+    if old.adjustable and old.gain_db != 0:
+        neutral = replace(old, gain_db=0.0)
+        first = Step(strip, "band", band=neutral, param="gain_db")
+        orders.extend(
+            [first, *_band_steps(strip, neutral, new, perm)]
+            for perm in itertools.permutations(changed)
+        )
+    return orders
+
+
+def _switches_and_faders(
+    sim: _Simulation,
+    before: Mapping[SignalRef, StripState],
+    after: Mapping[SignalRef, StripState],
+) -> list[Step]:
+    """Take the mutes and faders down now; return what must come last.
+
+    Last: unmuting, faders up and EQ switches.
+    """
+    late: list[Step] = []
+    for ref in before:
+        old, new = before[ref], after[ref]
+        if old.on and not new.on:
+            sim.take([Step(ref, "on", value=False)])
+        if new.fader_db < old.fader_db:
+            sim.take([Step(ref, "fader", value=new.fader_db)])
+        if new.eq.on != old.eq.on:
+            late.append(Step(ref, "eq_on", value=new.eq.on))
+        if new.fader_db > old.fader_db:
+            late.append(Step(ref, "fader", value=new.fader_db))
+        if new.on and not old.on:
+            late.append(Step(ref, "on", value=True))
+    return sorted(late, key=lambda step: LATE_ORDER.index(step.what))
+
+
+def order_steps(
+    before: Mapping[SignalRef, StripState],
+    after: Mapping[SignalRef, StripState],
+    chains: Chains,
+    fs_hz: float,
+) -> tuple[Step, ...]:
+    """The writes from ``before`` to ``after`` in an order that is never louder.
+
+    Args:
+        before: State of every strip that changes (and of every strip on the same paths).
+        after: Wanted state of the same strips.
+        chains: Each speaker path as the strips it goes through, in order.
+        fs_hz: Sample rate of the EQ model.
+
+    Returns:
+        The ordered steps.
+
+    Raises:
+        UnsafeWrite: The strips differ, or no order keeps every path inside the envelope.
+    """
+    if set(before) != set(after):
+        raise UnsafeWrite("before and after must describe the same strips")
+    sim = _Simulation(before, after, chains, fs_hz)
+    late = _switches_and_faders(sim, before, after)
+    # 3. Bands: cuts first, then moves, then boosts.
+    pending = [
+        (ref, old_band, new_band)
+        for ref in before
+        for old_band, new_band in zip(before[ref].eq.bands, after[ref].eq.bands, strict=True)
+        if old_band != new_band
+    ]
+    pending.sort(key=lambda item: item[2].gain_db - item[1].gain_db)
+    for ref, old_band, new_band in pending:
+        for steps in _band_orders(ref, old_band, new_band):
+            if sim.safe(steps):
+                sim.take(steps)
+                break
+        else:
+            raise UnsafeWrite(
+                f"no safe order for band {new_band.band} of {ref.label()}",
+                strip=ref.label(),
+                band=new_band.band,
+            )
+    if not sim.safe(late):
+        raise UnsafeWrite("raising faders or unmuting last would still be too loud")
+    sim.take(late)
+    return tuple(sim.steps)
+
+
+def check_order(
+    before: Mapping[SignalRef, StripState],
+    steps: Sequence[Step],
+    after: Mapping[SignalRef, StripState],
+    chains: Chains,
+    fs_hz: float,
+) -> None:
+    """Refuse a sequence of steps that is louder than the envelope at any point.
+
+    Raises:
+        UnsafeWrite: Some intermediate state is too loud, or the steps do not end at ``after``.
+    """
+    sim = _Simulation(before, after, chains, fs_hz)
+    if not sim.safe(steps):
+        raise UnsafeWrite("this order of writes would be louder than before and after")
+    sim.take(steps)
+    if sim.states != dict(after):
+        raise UnsafeWrite("the writes do not lead to the planned state")
