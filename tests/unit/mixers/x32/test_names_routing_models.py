@@ -21,8 +21,11 @@ from churchtune.mixers.x32.names import (
     role_hint,
     side_hint,
 )
+from churchtune.mixers.x32.routing import headamp_of
 from churchtune.mixers.x32.usb import usb_audio_map
+from tests.fixtures.topologies import TOPOLOGIES as TOPOLOGY_DIR
 from tests.fixtures.topologies import all_fixtures
+from tests.fixtures.topologies import load as load_fixture
 
 
 @pytest.mark.parametrize(
@@ -292,3 +295,12 @@ def test_capabilities_by_model_and_firmware():
 def test_missing_feature_is_none():
     caps = capabilities(identity_from_xinfo(["ip", "n", "X32P", "4.09"], "h"))
     assert type(caps)({}, verified_firmware=True).of(Feature.MAIN_EQ) is Support.NONE
+
+
+def test_the_preamp_behind_a_physical_input():
+    snapshot = load_fixture(TOPOLOGY_DIR / "hall-2026-10-02.toml").snapshot()
+    measurement_mic = headamp_of(snapshot, InputRef(InputKind.AES50_A, 10))
+    assert measurement_mic is not None
+    assert measurement_mic.index == 41
+    assert measurement_mic.phantom
+    assert headamp_of(snapshot, InputRef(InputKind.CARD, 1)) is None

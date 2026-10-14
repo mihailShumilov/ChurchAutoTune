@@ -7,7 +7,14 @@ is marked ``UNVERIFIED`` and listed in ``docs/hardware-checklist.md`` (rows 10, 
 
 import re
 
-from churchtune.domain.snapshot import InputKind, InputRef, SignalRef, SourceKind
+from churchtune.domain.snapshot import (
+    ConsoleSnapshot,
+    Headamp,
+    InputKind,
+    InputRef,
+    SignalRef,
+    SourceKind,
+)
 
 BUSES, MATRICES, CHANNELS, AUX_INS, FX_RETURNS = 16, 6, 32, 8, 8
 BLOCK_SIZE = 8
@@ -157,6 +164,12 @@ def headamp_index(source: InputRef) -> int | None:
     if span is None or not 1 <= source.number <= span[1]:
         return None
     return span[0] + source.number - 1
+
+
+def headamp_of(snapshot: ConsoleSnapshot, source: InputRef) -> Headamp | None:
+    """The preamp behind a physical input in a snapshot, or None."""
+    index = headamp_index(source)
+    return None if index is None else snapshot.headamps.get(index)
 
 
 # ------------------------------------------------------------------ channel sources
