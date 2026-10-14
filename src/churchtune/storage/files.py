@@ -8,6 +8,7 @@ import json
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +24,10 @@ from churchtune.storage.models import (
     PointMeta,
     ProposalFile,
     SessionFile,
+    SnapshotFile,
     UndoFile,
 )
-from churchtune.storage.paths import Workspace
+from churchtune.storage.paths import SNAPSHOT_SUFFIX, Workspace
 
 SESSION_FILE = "session.json"
 META_FILE = "meta.json"
@@ -316,3 +318,26 @@ def session_levels(session_dir: Path) -> Mapping[str, PointMeta]:
         if meta is not None:
             metas[name] = meta
     return metas
+
+
+# ------------------------------------------------------------ console snapshots
+def write_snapshot(workspace: Workspace, snapshot: SnapshotFile, now: datetime) -> Path:
+    """Store a snapshot under a new time-stamped name and return its path."""
+    path = workspace.snapshot_path(now)
+    write_json(path, snapshot)
+    return path
+
+
+def read_snapshot(path: Path) -> SnapshotFile:
+    """Read a snapshot file.
+
+    Raises:
+        ValueError: The file is not a valid snapshot file.
+    """
+    return SnapshotFile.model_validate(_read_json(path, "snapshot"))
+
+
+def latest_snapshot(workspace: Workspace) -> Path | None:
+    """The newest snapshot file, or None."""
+    files = sorted(workspace.console_dir.glob(f"*{SNAPSHOT_SUFFIX}"))
+    return files[-1] if files else None
