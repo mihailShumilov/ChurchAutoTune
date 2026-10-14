@@ -46,7 +46,7 @@
 <h1>Using ChurchTune today</h1>
 <p class="lead">An honest guide to what you can do now, and what is coming. It grows with every milestone.</p>
 <p class="updated">Last updated: <time datetime="2026-10-14">14 October 2026</time></p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> The guided wizard exists, but so far it only reads the console and measures: it does not propose or apply any changes yet. It runs from the source code only. Do not use it on your church's live system yet. See the <a href="../../en/roadmap/">roadmap</a>.</p></div>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> The guided wizard reads the console, measures, proposes changes and can write them, with undo and a check measurement. Writing to a real console has not been verified on hardware yet: all of it is tested only against the emulator and a simulated hall. It runs from the source code only. Do not use it on your church's live system yet. See the <a href="../../en/roadmap/">roadmap</a>.</p></div>
 <nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ol><li><a href="#today">What you can do today</a></li><li><a href="#equipment">Equipment you will need</a></li><li><a href="#developers">For developers and testers</a></li><li><a href="#try-wizard">Try the wizard without hardware</a></li><li><a href="#hardware-check">For console owners: hardware checks</a></li><li><a href="#volunteer-workflow">Coming later: tuning your system</a></li><li><a href="#get-help">Questions and problems</a></li></ol></nav>
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>What you can do today <span class="tag tag-now">Now</span></h2>
@@ -57,7 +57,8 @@ simulated hall: no console, no speakers, no sound. See <a href="#try-wizard">Try
 against the emulator.</li>
 <li><strong>Console owners</strong> can run a hardware check at a real X32 or M32 and report the result. This is the
 most valuable help right now.</li>
-<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard proposes changes but does not apply them yet (milestone M5). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
+<li><strong>Developers</strong> can try applying a change plan and undoing it from the terminal against the emulator (see <a href="#try-wizard-cli">Apply and undo from the terminal</a>). In the automated tests the wizard goes all the way through applying and the check measurement, on the emulator and the simulated hall.</li>
+<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard can now write the changes, but this has been tested only against the emulator, never on a real console (milestone M5 is in progress). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>Equipment you will need</h2>
 <p>For the real tuning, later. Nothing here is needed to try the developer version.</p>
@@ -85,8 +86,8 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # all tests: console emulator + simulated audio
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # the real hall session of 2026-10-02</code></pre>
 <h3 id="emulator">3. Try the expert command line on the emulator</h3>
-<p>Until pull requests #8–#11 are merged, the commands below live only on the branches of those pull requests; the newest is <code>m4-proposals</code>. In your clone:</p>
-<pre><code>git checkout m4-proposals
+<p>Until pull requests #8–#11 and the M5 work are merged, the commands below live only on their branches; the newest is <code>m5-apply</code>. In your clone:</p>
+<pre><code>git checkout m5-apply
 uv sync</code></pre>
 <p>The quickest way is the global <code>--emulator</code> option: it starts a console emulator inside the program for
 that one command.</p>
@@ -105,8 +106,9 @@ stays as a tool for developers next to the wizard.</p>
 <section class="section" id="try-wizard"><div class="wrap prose"><h2>Try the wizard without hardware <span class="tag tag-now">Now</span></h2>
 <p>The guided wizard is what volunteers will use. You can explore it today on the built-in console emulator and a
 simulated hall. Nothing leaves your computer: no console is touched and no sound is played.</p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> The steps that write to the console have been tested only against the emulator and a simulated hall. Do not run them on your church's console until people have done the hardware checks in a real hall (rows 22–25 of the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a>).</p></div>
 <h3 id="try-wizard-start">Start it</h3>
-<p>From a clone with uv installed, on the <code>m4-proposals</code> branch (see <a href="#install">Install</a> and
+<p>From a clone with uv installed, on the <code>m5-apply</code> branch (see <a href="#install">Install</a> and
 <a href="#emulator">step 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # full-screen wizard
@@ -125,7 +127,7 @@ works with screen readers and in scripts.</p>
 quits, and <kbd>Ctrl</kbd>+<kbd>C</kbd> stops the sound, saves and quits.</li>
 </ul>
 <h3 id="try-wizard-steps">What the wizard does today</h3>
-<p>13 steps, or 12 with one microphone. The progress is saved after every step.</p>
+<p>15 steps, or 14 with one microphone. The steps “Apply the changes” and “Check measurement” come only when you choose to change the system (full setup, or only the subwoofer). The progress is saved after every step.</p>
 <ol>
 <li><strong>Start:</strong> the name of the hall and what you want to do today.</li>
 <li><strong>Mac check:</strong> the computer and the console's USB audio card.</li>
@@ -143,7 +145,9 @@ stream.</li>
 <li><strong>Microphone calibration:</strong> only with several microphones; compares them against each other.</li>
 <li><strong>Measurement:</strong> a plan of places in the hall, then test sweeps at each place (see <a href="#try-wizard-points">below</a>).</li>
 <li><strong>Results and proposals:</strong> what was measured, in plain words, then the change packages and advice on the input channels (see <a href="#try-wizard-packages">below</a>).</li>
-<li><strong>What next:</strong> what to do after this session.</li>
+<li><strong>Apply the changes:</strong> writes the packages you chose, after a fresh read of the console and a typed word (see <a href="#try-wizard-apply">below</a>).</li>
+<li><strong>Check measurement:</strong> measures some seats again and says whether it got better (see <a href="#try-wizard-verify">below</a>).</li>
+<li><strong>What next:</strong> what to do after this session, including saving the scene on the console under a new name.</li>
 </ol>
 <h3 id="try-wizard-points">The measurement point plan</h3>
 <p>Before the measurement rounds the wizard makes a plan of places where people sit:</p>
@@ -182,8 +186,30 @@ monitors on;</li>
 <li>big boosts, which can cause feedback;</li>
 <li>phantom power (+48V) on what looks like a dynamic microphone: switch it off only while the channel is muted.</li>
 </ul>
-<p>Nothing is written to the console at this step. The wizard says so at the end: writing your choices to the console,
-undo and the check measurement come with M5.</p>
+<p>Nothing is written to the console at this step. Writing comes in the next step, “Apply the changes”.</p>
+<h3 id="try-wizard-apply">Applying the changes</h3>
+<p>After the proposals, the step <strong>Apply the changes</strong> writes the packages you chose:</p>
+<ul>
+<li>First it reads the console again. If someone changed a setting since the measurement, it refuses the plan and asks you to measure again, so the plan always fits what the console has now.</li>
+<li>It shows every setting it will write, with the value now and the new value, in the order it will write them.</li>
+<li>To write, you type the word <code>apply</code> (in the Russian interface <code>применить</code>, in the Ukrainian one <code>застосувати</code>) and press Enter. Anything else cancels, and nothing is written.</li>
+<li>The old values are saved in an undo file before the first write.</li>
+<li>The order of the writes is chosen so the sound never gets louder in between.</li>
+<li>Every value is read back from the console. If one does not read back, the wizard stops there and offers to put back what was written.</li>
+<li>Output delay and polarity are not written by the program. It shows them as values for you to set by hand on the console.</li>
+</ul>
+<h3 id="try-wizard-verify">The check measurement</h3>
+<p>Then the step <strong>Check measurement</strong> measures at least four seats again, among them the seat that sounded worst and the one in the middle of the hall. Put the microphones exactly where they stood before. By fixed rules it says one of three things: <strong>better</strong>, <strong>no noticeable difference</strong> or <strong>worse</strong>, with a small before and after picture. When it got worse, it recommends putting the old values back and offers to do it right away.</p>
+<p>The last screen reminds you to save the scene on the console under a new name (for example with today's date), so the new settings survive a restart. It also shows the command that puts the old values back later.</p>
+<h3 id="try-wizard-cli">Apply and undo from the terminal</h3>
+<p>The expert command line does the same: <code>ctune apply-packages</code> writes the chosen packages of a saved <code>proposal.json</code>, and <code>ctune undo</code> puts the old values back. Use them only with the emulator and <code>CTUNE_DEV_SAFE=1</code>. They need a <code>proposal.json</code> from a wizard session (in the session folder, <code>&lt;home&gt;/venues/&lt;hall&gt;/sessions/&lt;time&gt;-&lt;goal&gt;/</code>). The emulator demo does not reach the proposals yet (see <a href="#try-wizard-demo">below</a>), so for now this is mostly for developers.</p>
+<p>First look without writing anything. <code>--dry-run</code> shows the settings it would write, in order, and stops:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --emulator apply-packages SESSION/proposal.json --dry-run</code></pre>
+<p><code>--emulator</code> starts a fresh emulator for that one command only. To write and then undo, keep one emulator running in its own terminal (it prints its port) and point both commands at it, replacing <code>PORT</code>, <code>SESSION</code> and <code>UNDO_FILE</code>:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P
+CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo apply-packages SESSION/proposal.json
+CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo undo UNDO_FILE</code></pre>
+<p><code>apply-packages</code> saves the undo file before the first write and prints its name (it is in the <code>undo</code> folder under <code>--home</code>). <code>undo</code> puts back only the values that were not changed by hand since, and lists the ones it leaves alone. Both commands also take <code>--dry-run</code>. Their texts are still in Russian, so they ask for the Russian words <code>применить</code> (apply) and <code>вернуть</code> (put back).</p>
 <h3 id="try-wizard-safety">Safety before any sound</h3>
 <ul>
 <li>The wizard never mutes or unmutes anything itself. On a real console <strong>you mute the measurement microphone
@@ -202,16 +228,14 @@ hand yet. So the demo stops at the <strong>Playback path</strong> step with the 
 measurement microphone to the speakers. Mute it on the console, then press Enter.” Pressing Enter again only repeats the
 check. This is the safety rule at work, not a fault. Explore the first steps, then save and quit
 (<kbd>Ctrl</kbd>+<kbd>Q</kbd>, or <kbd>Q</kbd> in the line interface).</p>
-<p>Because of this, the point plan and the change packages described above cannot be reached in the emulator demo
-yet. They are tested automatically on simulated halls.</p>
+<p>Because of this, the point plan, the change packages, applying and the check measurement described above cannot be reached in the emulator demo yet. They are tested automatically: in the tests the wizard goes through every step, applying and the check measurement included, on the emulator and a simulated hall.</p>
 <h3 id="try-wizard-not-yet">What it does not do yet</h3>
 <ul>
-<li>It proposes only the system EQ. The crossover, the subwoofer level and the subwoofer timing need the separate subwoofer and main-speaker measurement (M5).</li>
-<li>It does not write anything to the console, and there is no apply, undo or verify yet (M5).</li>
-<li>The speaker-by-speaker check and the separate subwoofer and main-speaker measurement need temporary mutes, so they
-come into the wizard with M5. They exist today only as expert commands.</li>
+<li>It proposes only the system EQ. The crossover, the subwoofer level and the subwoofer timing need the separate subwoofer and main-speaker measurement, which needs temporary mutes. Both are still to come in M5; until then the wizard never proposes a crossover.</li>
+<li>No warning yet for big changes of the subwoofer level, and no mode that runs without questions (M5).</li>
+<li>The speaker-by-speaker check also needs temporary mutes, so it comes into the wizard with M5. Today it exists only as an expert command.</li>
 <li>No report file yet (M6).</li>
-<li>It has not been run at a real console yet. That is part of the pilot (M7).</li>
+<li>It has not been run at a real console yet, and writing to a real console is not verified on hardware. That needs the hardware checks and the pilot (M7).</li>
 </ul>
 </div></section>
 <section class="section section-alt" id="hardware-check"><div class="wrap prose"><h2>For console owners: hardware checks</h2>
@@ -230,7 +254,7 @@ console's network.</li>
 <ol>
 <li>Open the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a> and pick a row for your console. Rows 1 and 2
 (<code>ctune hwcheck delay</code> and <code>ctune hwcheck polarity</code>) can be run today; others depend on
-features that are still being built.</li>
+features that are still being built. Rows 22–25 check the new writing of M5 (applying, undo and the check measurement); they need the <code>m5-apply</code> branch, and a person must run them in an empty hall before anyone relies on these writes.</li>
 <li>Read the row: what to verify, the command, and the expected result.</li>
 <li>Run the command and watch the console screen. Compare what happens with the expected result.</li>
 <li>Restore the old value as the row describes (with the undo file, or by recalling your scene).</li>
@@ -242,7 +266,8 @@ firmware, the ChurchTune commit (<code>git rev-parse --short HEAD</code>) and wh
 systems. Remove names and anything personal first; the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">contributing guide</a> explains
 how.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Coming later: tuning your system <span class="tag">Coming later</span></h2>
-<p>This is how the complete wizard is planned to work once milestones M5 and M6 are done. The first four steps, reading the console, measuring, analysing and proposing, are already in the wizard (see <a href="#try-wizard">above</a>), the proposals for now only for the system EQ; applying and verifying are still being built.</p>
+<p>This is how the complete wizard is planned to work in a real hall once milestones M5 and M6 are done. Reading the console, measuring, analysing, proposing, applying and the check measurement are already in the wizard (see <a href="#try-wizard">above</a>), the proposals for now only for the system EQ; the report comes with M6.</p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> Applying, undo and the check measurement have been tested only against the emulator and a simulated hall. Wait until the hardware checks are done before you use them on your church's system.</p></div>
 <ol>
 <li id="workflow-read"><strong>Read the console.</strong> ChurchTune finds the console and shows what it found, for
 example “X32 Producer, main speakers on Matrix 1/2, subwoofer on Matrix 3. Correct?”. It asks only what it cannot
