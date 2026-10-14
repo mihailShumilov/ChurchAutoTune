@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from churchtune import __version__
-from churchtune.cli import analyze, apply, check, console, hwcheck, measure, sub
+from churchtune.cli import analyze, apply, check, console, hwcheck, measure, mics, sub
 from churchtune.cli.context import EXIT_REFUSED, Settings, load_venue, parse_console, say
 from churchtune.errors import ChurchTuneError, DevSafeViolation
 from churchtune.storage.paths import workspace_from_env
@@ -90,6 +90,10 @@ app.command("hwcheck")(hwcheck.hwcheck_command)
 app.command("doctor")(console.doctor_command)
 app.command("snapshot")(console.snapshot_command)
 app.command("emulator")(console.emulator_command)
+app.command("devices")(mics.devices_command)
+app.command("noise")(mics.noise_command)
+app.command("pathcheck")(mics.pathcheck_command)
+app.add_typer(mics.mics_app, name="mics")
 
 
 def run() -> None:

@@ -20,6 +20,7 @@ from churchtune.storage.migrations import migrate
 from churchtune.storage.models import (
     FileModel,
     JunctionMeta,
+    MicCalibrationFile,
     PendingMutes,
     PointMeta,
     ProposalFile,
@@ -341,3 +342,26 @@ def latest_snapshot(workspace: Workspace) -> Path | None:
     """The newest snapshot file, or None."""
     files = sorted(workspace.console_dir.glob(f"*{SNAPSHOT_SUFFIX}"))
     return files[-1] if files else None
+
+
+# ------------------------------------------------------------ microphone set calibration
+MIC_CALIBRATION_MAX_AGE_DAYS = 30
+
+
+def write_mic_calibration(workspace: Workspace, calibration: MicCalibrationFile) -> Path:
+    """Store the calibration of a microphone set (replacing an older one of the same set)."""
+    path = workspace.mic_calibration_file(calibration.set_id)
+    write_json(path, calibration)
+    return path
+
+
+def reusable_mic_calibration(
+    workspace: Workspace, set_id: str, now: datetime
+) -> MicCalibrationFile | None:
+    """The stored calibration of this set if it is recent enough to use without asking."""
+    path = workspace.mic_calibration_file(set_id)
+    if not path.exists():
+        return None
+    stored = MicCalibrationFile.model_validate(_read_json(path, "mic_calibration"))
+    age = now - datetime.fromisoformat(stored.created)
+    return stored if age.days < MIC_CALIBRATION_MAX_AGE_DAYS else None
