@@ -261,3 +261,20 @@ class ProposalFile(FileModel):
     prediction: PredictionModel
     eq_at_measurement: EqModel
     eq_current: EqModel | None = None
+
+
+class SnapshotFile(FileModel):
+    """``console/<ts>-snapshot.json``: a full read-only snapshot of the console (SPEC §6.4).
+
+    Only the identity and the raw reply lines are stored; the parsed snapshot is rebuilt by the
+    console driver, so a newer version can parse an old file better than the old one did.
+    """
+
+    schema_version: Literal[1] = SCHEMA_VERSION
+    taken_at: str
+    family: str
+    model: str
+    name: str
+    firmware: str
+    host: str
+    raw: dict[str, str]

@@ -15,6 +15,7 @@ from churchtune.domain.changes import WriteScope
 HOME_VAR = "CTUNE_HOME"
 DEFAULT_HOME = Path("~/ChurchTune")
 TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
+SNAPSHOT_SUFFIX = "-snapshot.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +62,15 @@ class Workspace:
     def mic_cal_file(self) -> Path:
         """Optional microphone calibration: ``freq dB`` per line."""
         return self.root / "mic_cal.txt"
+
+    @property
+    def console_dir(self) -> Path:
+        """Console snapshots. M3 moves them under ``venues/<slug>/console`` (SPEC §6.4)."""
+        return self.root / "console"
+
+    def snapshot_path(self, now: datetime) -> Path:
+        """Name of a new snapshot file taken at ``now``."""
+        return self.console_dir / f"{now.strftime(TIMESTAMP_FORMAT)}{SNAPSHOT_SUFFIX}"
 
     def undo_path(self, scope: WriteScope, now: datetime, *, revert: bool = False) -> Path:
         """Name of a new undo file for a plan applied at ``now``."""
