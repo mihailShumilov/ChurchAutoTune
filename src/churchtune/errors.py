@@ -16,6 +16,8 @@ class ChurchTuneError(Exception):
     """
 
     i18n_key: ClassVar[str] = "err-unexpected"
+    # False for errors that trying again cannot fix (a guard refused, not a passing fault).
+    retryable: ClassVar[bool] = True
 
     def __init__(self, message: str, **context: object) -> None:
         super().__init__(message)
@@ -26,6 +28,7 @@ class DevSafeViolation(ChurchTuneError):
     """A real console or a real audio device was requested while dev-safe mode is on."""
 
     i18n_key: ClassVar[str] = "err-dev-safe-violation"
+    retryable: ClassVar[bool] = False
 
 
 class ConsoleUnreachable(ChurchTuneError):
@@ -38,6 +41,7 @@ class ReadOnlyViolation(ChurchTuneError):
     """The read-only client was asked to send a message that could change the console."""
 
     i18n_key: ClassVar[str] = "err-read-only-violation"
+    retryable: ClassVar[bool] = False
 
 
 class UnsupportedSchema(ChurchTuneError, ValueError):
@@ -74,3 +78,9 @@ class UnsupportedConsole(ChurchTuneError):
     """The console that answered is not a model this version can work with."""
 
     i18n_key: ClassVar[str] = "err-unsupported-console"
+
+
+class BadFile(ChurchTuneError, ValueError):
+    """A stored file (snapshot, points, calibration) cannot be read or is damaged."""
+
+    i18n_key: ClassVar[str] = "err-bad-file"
