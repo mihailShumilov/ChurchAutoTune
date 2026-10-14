@@ -297,3 +297,28 @@ class SnapshotFile(FileModel):
     def identity(self) -> ConsoleIdentity:
         """The console identity stored in the file."""
         return ConsoleIdentity(self.family, self.model, self.name, self.firmware, self.host)
+
+
+class MicCalibrationModel(FileModel):
+    """One microphone of a calibrated set."""
+
+    usb_input: int
+    model: str
+    sensitivity_db: float
+    delay_ms: float
+    inverted: bool
+    shape_db: tuple[float, ...]
+    problems: tuple[str, ...] = ()
+
+
+class MicCalibrationFile(FileModel):
+    """``mics/<set-id>/calibration.json``: relative calibration of a microphone set (SPEC S9).
+
+    Reused without asking for ``MIC_CALIBRATION_MAX_AGE_DAYS`` while the mapping is the same.
+    """
+
+    schema_version: Literal[1] = SCHEMA_VERSION
+    set_id: str
+    created: str
+    centres_hz: tuple[float, ...]
+    mics: tuple[MicCalibrationModel, ...]

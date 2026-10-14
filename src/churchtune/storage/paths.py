@@ -63,6 +63,12 @@ class Workspace:
         """Optional microphone calibration: ``freq dB`` per line."""
         return self.root / "mic_cal.txt"
 
+    def mic_calibration_file(self, set_id: str) -> Path:
+        """Calibration of one microphone set (SPEC §6.4)."""
+        if not set_id.isalnum():
+            raise ValueError(f"a microphone set id is alphanumeric, got {set_id!r}")
+        return self.root / "mics" / set_id / "calibration.json"
+
     @property
     def console_dir(self) -> Path:
         """Console snapshots. M3 moves them under ``venues/<slug>/console`` (SPEC §6.4)."""
