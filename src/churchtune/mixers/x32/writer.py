@@ -12,10 +12,12 @@
 Import this module lazily, inside the apply / undo / restore code paths only.
 """
 
+import hashlib
 import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from churchtune.domain.changes import Change, WireValue
@@ -72,6 +74,13 @@ class WriteResult:
     ok: bool
     sent: bool = True
     error: str | None = None
+
+
+STOPPED = "stopped by the operator"
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class ScopedWriter:
@@ -143,8 +152,12 @@ class ScopedWriter:
         ok = self._matches(kind, got, change.new_value)
         return WriteResult(change.path, change.new_value, got, node_line, ok)
 
-    def apply(self) -> list[WriteResult]:
+    def apply(self, should_stop: Callable[[], bool] | None = None) -> list[WriteResult]:
         """Send the authorized plan in order, reading each parameter back.
+
+        Args:
+            should_stop: Asked before every write; True stops the plan there (the person pressed
+                stop in a screen where Ctrl+C is a key, not a signal).
 
         Returns:
             One result per change that was attempted. The plan stops at the first result that
@@ -153,7 +166,8 @@ class ScopedWriter:
 
         Raises:
             UnsafeWrite: The authorization is not valid any more, the writer was already used,
-                or the undo file is missing. Nothing is sent in any of these cases.
+                or the undo file is missing or not the one the plan was authorized with. Nothing
+                is sent in any of these cases.
         """
         auth = verify(self._auth)
         if self._used:
@@ -165,9 +179,28 @@ class ScopedWriter:
                 f"undo file {auth.undo_path} does not exist; refusing to write",
                 undo_path=str(auth.undo_path),
             )
+        if auth.undo_sha256 and _sha256(auth.undo_path) != auth.undo_sha256:
+            raise UnsafeWrite(
+                f"undo file {auth.undo_path} changed since the plan was authorized; refusing",
+                undo_path=str(auth.undo_path),
+            )
         self._used = True
         results: list[WriteResult] = []
         for change in auth.changes:
+            if should_stop is not None and should_stop():
+                results.append(
+                    WriteResult(
+                        change.path,
+                        change.new_value,
+                        None,
+                        None,
+                        ok=False,
+                        sent=False,
+                        error=STOPPED,
+                    )
+                )
+                logger.warning("plan stopped by the operator before %s", change.path)
+                break
             result = self._write_one(change)
             results.append(result)
             logger.info(
