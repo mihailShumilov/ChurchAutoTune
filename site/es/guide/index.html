@@ -57,8 +57,7 @@ consola incluido y un salón simulado: sin consola, sin altavoces, sin sonido. M
 comandos experta con el emulador.</li>
 <li><strong>Dueños de consolas</strong> pueden hacer una verificación en una X32 o M32 real y reportar el resultado.
 Es la ayuda más valiosa ahora mismo.</li>
-<li><strong>Si eres voluntario</strong> y quieres ajustar el sistema de tu iglesia, te pedimos que esperes. El asistente
-todavía no propone ni aplica cambios (etapas M4 y M5). Sigue los lanzamientos en <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> para enterarte cuando esté listo.</li>
+<li><strong>Si eres voluntario</strong> y quieres ajustar el sistema de tu iglesia, te pedimos que esperes. El asistente propone cambios, pero todavía no los aplica (etapa M5). Sigue los lanzamientos en <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> para enterarte cuando esté listo.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>El equipo que necesitarás</h2>
 <p>Para el ajuste real, más adelante. Nada de esto hace falta para probar la versión para desarrolladores.</p>
@@ -86,9 +85,8 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # todas: emulador de consola + audio simulado
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # la sesión real del salón, 2026-10-02</code></pre>
 <h3 id="emulator">3. Probar la línea de comandos con el emulador</h3>
-<p>Mientras los pull requests #8–#10 no estén fusionados, los comandos de abajo están en la rama <code>m3-wizard</code>.
-En tu copia:</p>
-<pre><code>git checkout m3-wizard
+<p>Mientras los pull requests #8–#11 no estén fusionados, los comandos de abajo están solo en las ramas de esos pull requests; la más nueva es <code>m4-proposals</code>. En tu copia:</p>
+<pre><code>git checkout m4-proposals
 uv sync</code></pre>
 <p>Lo más rápido es la opción global <code>--emulator</code>: arranca un emulador de consola dentro del programa durante
 ese comando.</p>
@@ -108,7 +106,7 @@ comandos experta se queda como herramienta para desarrolladores junto al asisten
 <p>El asistente guiado es lo que usarán los voluntarios. Ya hoy puedes recorrerlo con el emulador de consola incluido y
 un salón simulado. Nada sale de tu computadora: no se toca ninguna consola y no suena nada.</p>
 <h3 id="try-wizard-start">Iniciarlo</h3>
-<p>Desde una copia del repositorio con uv instalado, en la rama <code>m3-wizard</code> (mira <a href="#install">Instalar</a>
+<p>Desde una copia del repositorio con uv instalado, en la rama <code>m4-proposals</code> (mira <a href="#install">Instalar</a>
 y el <a href="#emulator">paso 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # asistente a pantalla completa
@@ -137,18 +135,57 @@ guarda y sale, y <kbd>Ctrl</kbd>+<kbd>C</kbd> detiene el sonido, guarda y sale.<
 consola.</li>
 <li><strong>Altavoces:</strong> muestra qué salida alimenta los altavoces principales, el subwoofer, los monitores,
 etc., y te pide confirmar las salidas de las que no está seguro.</li>
-<li><strong>Equipo:</strong> unas preguntas que la consola no puede responder: altavoces activos o pasivos, tamaño de la
-zona de público, cuántos micrófonos de medición y de qué modelo.</li>
+<li><strong>Equipo:</strong> unas preguntas que la consola no puede responder: altavoces activos o pasivos, tamaño de la zona de público (ancho × fondo en metros, para el plan de puntos; si lo dejas vacío se usa un plan estándar), cuántos micrófonos de medición y de qué modelo.</li>
 <li><strong>Micrófonos:</strong> rascas cada micrófono y el asistente encuentra su entrada. Te dice qué hacer en la
 consola, por ejemplo encender +48V o poner mute a ese canal.</li>
 <li><strong>Camino de reproducción:</strong> comprueba que el sonido de la computadora va a los altavoces del salón y no a
 los monitores ni a la transmisión.</li>
 <li><strong>Nivel:</strong> ajusta un nivel de medición seguro.</li>
 <li><strong>Calibración de micrófonos:</strong> solo con varios micrófonos; los compara entre sí.</li>
-<li><strong>Rondas de medición:</strong> barridos de prueba en los puntos del salón.</li>
-<li><strong>Resultados:</strong> lo que se midió, con palabras sencillas.</li>
+<li><strong>Medición:</strong> un plan de lugares en el salón y luego barridos de prueba en cada lugar (mira <a href="#try-wizard-points">más abajo</a>).</li>
+<li><strong>Resultados y propuestas:</strong> lo que se midió, con palabras sencillas, y luego los paquetes de cambios y los consejos sobre los canales de entrada (mira <a href="#try-wizard-packages">más abajo</a>).</li>
 <li><strong>Qué sigue:</strong> qué hacer después de esta sesión.</li>
 </ol>
+<h3 id="try-wizard-points">El plan de puntos de medición</h3>
+<p>Antes de las rondas de medición, el asistente prepara un plan de lugares donde se sienta la gente:</p>
+<ul>
+<li>Al menos 8 asientos en la parte central del salón, fuera del pasillo central y a distancias irregulares entre sí.</li>
+<li>Cada lugar se describe con palabras y distancias, por ejemplo «filas delanteras, izquierda, a unos 6 m del
+escenario, 3,5 m a la izquierda del pasillo central». Izquierda y derecha, mirando hacia el escenario.</li>
+<li>Un mapa sencillo del salón muestra el escenario arriba y numera solo los lugares de la ronda actual.</li>
+<li>El micrófono va a la altura de los oídos de una persona sentada (1,2 m), apuntando al escenario. Después de Enter
+tienes 3 segundos para alejarte al menos 2 m.</li>
+<li>Si no diste el tamaño del salón, el plan es para un salón típico de 12 × 18 m y colocas los micrófonos de forma
+aproximada.</li>
+<li>El plan se guarda para ese lugar, para que una medición de comprobación posterior use los mismos puntos.</li>
+</ul>
+<h3 id="try-wizard-packages">Paquetes de cambios y consejos sobre los canales</h3>
+<p>Después de los resultados, el asistente propone cambios en paquetes. Cada paquete tiene su propia pantalla:</p>
+<ul>
+<li>una tabla con lo que cambia: dónde, el valor actual y el valor propuesto;</li>
+<li>por qué ayuda el cambio, el efecto esperado y el riesgo;</li>
+<li>la pregunta «¿Añadir … al plan de cambios?», con «Añadir al plan» o «Dejarlo fuera».</li>
+</ul>
+<p>Si dejas fuera un paquete, los siguientes se calculan de nuevo sin él, así que nada en el plan depende de un cambio que
+no elegiste. Tus elecciones se guardan en la carpeta de la sesión, en el archivo <code>proposal.json</code>.</p>
+<p>Hoy el asistente propone solo la <strong>ecualización del sistema</strong>: correcciones suaves de lo que el salón le
+hace al sonido en la mayoría de los asientos. Las muescas estrechas en asientos sueltos no se tocan, porque la
+ecualización no puede corregirlas. El crossover, la alineación y el nivel del subwoofer necesitan medir por separado el
+subwoofer y los altavoces principales. El asistente todavía no lo hace (necesita mute temporales, que llegan con M5), así
+que no los propone y explica por qué: un crossover puesto a ciegas puede dejar un hueco en los graves.</p>
+<p>Después vienen los consejos sobre los canales de entrada. El programa nunca los cambia por sí mismo; tú decides de
+oído, un ajuste a la vez, en un ensayo:</p>
+<ul>
+<li>voces sin corte de graves (filtro pasa altos, HPF) o con uno muy alto;</li>
+<li>cortes estrechos que probablemente protegen contra el acople: hacerlos como mucho la mitad de profundos, en un
+ensayo, con los monitores encendidos;</li>
+<li>cortes compartidos por muchos canales;</li>
+<li>cortes muy profundos: revisar si todavía hacen falta, de 3 dB en 3 dB;</li>
+<li>realces grandes, que pueden causar acople;</li>
+<li>alimentación fantasma (+48V) en lo que parece un micrófono dinámico: apágala solo con el canal en mute.</li>
+</ul>
+<p>En este paso no se escribe nada en la consola. El asistente lo dice al final: escribir lo elegido en la consola,
+deshacer y la medición de comprobación llegan con M5.</p>
 <h3 id="try-wizard-safety">Seguridad antes de cualquier sonido</h3>
 <ul>
 <li>El asistente nunca pone ni quita un mute por su cuenta. En una consola real <strong>tú pones mute a mano a los
@@ -167,9 +204,11 @@ mute a mano en el emulador. Por eso la demostración se detiene en el paso <stro
 mensaje que dice que el canal 12 todavía envía un micrófono de medición a los altavoces y hay que ponerle mute en la
 consola. Pulsar Enter otra vez solo repite la comprobación. Es la regla de seguridad funcionando, no una falla. Recorre
 los primeros pasos y luego guarda y sal (<kbd>Ctrl</kbd>+<kbd>Q</kbd>, o <kbd>Q</kbd> en la interfaz de líneas).</p>
+<p>Por eso, en la demostración con el emulador todavía no se llega al plan de puntos ni a los paquetes de cambios
+descritos arriba. Las pruebas automáticas los comprueban en salones simulados.</p>
 <h3 id="try-wizard-not-yet">Lo que todavía no hace</h3>
 <ul>
-<li>No propone cambios: crossover, nivel y retardo del subwoofer, ecualización del sistema (etapa M4).</li>
+<li>Solo propone la ecualización del sistema. El crossover, el nivel y el retardo del subwoofer necesitan la medición separada del subwoofer y los altavoces principales (M5).</li>
 <li>No escribe nada en la consola; todavía no hay aplicar, deshacer ni verificar (M5).</li>
 <li>La revisión de los altavoces uno por uno y la medición separada del subwoofer y los principales necesitan mute
 temporales, así que llegarán al asistente con M5. Hoy existen solo como comandos expertos.</li>
@@ -206,7 +245,7 @@ formulario está en inglés; basta con frases sencillas.</li>
 (M1) a reconocer más sistemas. Quita antes los nombres y cualquier dato personal; la
 <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">guía para colaborar</a> explica cómo.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Más adelante: ajustar tu sistema <span class="tag">Más adelante</span></h2>
-<p>Así está previsto que funcione el asistente completo cuando terminen las etapas M4–M6. Los dos primeros pasos, leer la consola y medir, ya están en el asistente (mira <a href="#try-wizard">más arriba</a>); el resto todavía se está construyendo.</p>
+<p>Así está previsto que funcione el asistente completo cuando terminen las etapas M5 y M6. Los cuatro primeros pasos (leer la consola, medir, analizar y proponer) ya están en el asistente (mira <a href="#try-wizard">más arriba</a>), las propuestas por ahora solo para la ecualización del sistema; aplicar y verificar todavía se están construyendo.</p>
 <ol>
 <li id="workflow-read"><strong>Leer la consola.</strong> ChurchTune encuentra la consola y muestra lo que encontró, por
 ejemplo: «X32 Producer, altavoces principales en Matrix 1/2, subwoofer en Matrix 3. ¿Es correcto?». Solo pregunta lo
