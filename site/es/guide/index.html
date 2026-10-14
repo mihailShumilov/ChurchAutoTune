@@ -57,7 +57,7 @@ consola incluido y un salón simulado: sin consola, sin altavoces, sin sonido. M
 comandos experta con el emulador.</li>
 <li><strong>Dueños de consolas</strong> pueden hacer una verificación en una X32 o M32 real y reportar el resultado.
 Es la ayuda más valiosa ahora mismo.</li>
-<li><strong>Los desarrolladores</strong> pueden probar a aplicar un plan de cambios y deshacerlo desde la terminal con el emulador (mira <a href="#try-wizard-cli">Aplicar y deshacer desde la terminal</a>). En las pruebas automáticas el asistente llega hasta el final, aplicación y medición de comprobación incluidas, con el emulador y el salón simulado.</li>
+<li><strong>Los desarrolladores</strong> pueden recorrer el asistente hasta el final con el emulador: la medición separada del subwoofer y los altavoces principales, la aplicación de los cambios y la medición de comprobación (mira <a href="#try-wizard-demo">Qué verás en la demostración</a>). También pueden aplicar un plan de cambios y deshacerlo desde la terminal (mira <a href="#try-wizard-cli">Aplicar y deshacer desde la terminal</a>).</li>
 <li><strong>Si eres voluntario</strong> y quieres ajustar el sistema de tu iglesia, te pedimos que esperes. El asistente ya puede escribir los cambios, pero eso solo se ha probado con el emulador, nunca en una consola real (la etapa M5 está en curso). Sigue los lanzamientos en <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> para enterarte cuando esté listo.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>El equipo que necesitarás</h2>
@@ -86,8 +86,8 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # todas: emulador de consola + audio simulado
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # la sesión real del salón, 2026-10-02</code></pre>
 <h3 id="emulator">3. Probar la línea de comandos con el emulador</h3>
-<p>Mientras los pull requests #8–#11 y el trabajo de M5 no estén fusionados, los comandos de abajo están solo en sus ramas; la más nueva es <code>m5-apply</code>. En tu copia:</p>
-<pre><code>git checkout m5-apply
+<p>Mientras los pull requests #8–#11 y el trabajo de M5 no estén fusionados, los comandos de abajo están solo en sus ramas; la más nueva es <code>m5b-mutes</code>. En tu copia:</p>
+<pre><code>git checkout m5b-mutes
 uv sync</code></pre>
 <p>Lo más rápido es la opción global <code>--emulator</code>: arranca un emulador de consola dentro del programa durante
 ese comando.</p>
@@ -106,9 +106,9 @@ comandos experta se queda como herramienta para desarrolladores junto al asisten
 <section class="section" id="try-wizard"><div class="wrap prose"><h2>Probar el asistente sin equipo <span class="tag tag-now">Ahora</span></h2>
 <p>El asistente guiado es lo que usarán los voluntarios. Ya hoy puedes recorrerlo con el emulador de consola incluido y
 un salón simulado. Nada sale de tu computadora: no se toca ninguna consola y no suena nada.</p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Los pasos que escriben en la consola solo se han probado con el emulador y un salón simulado. No los uses en la consola de tu iglesia hasta que alguien haya hecho las verificaciones de equipo en un salón real (filas 22–25 de la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a>).</p></div>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Los pasos que escriben en la consola solo se han probado con el emulador y un salón simulado. No los uses en la consola de tu iglesia hasta que alguien haya hecho las verificaciones de equipo en un salón real (filas 22–28 de la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a>).</p></div>
 <h3 id="try-wizard-start">Iniciarlo</h3>
-<p>Desde una copia del repositorio con uv instalado, en la rama <code>m5-apply</code> (mira <a href="#install">Instalar</a>
+<p>Desde una copia del repositorio con uv instalado, en la rama <code>m5b-mutes</code> (mira <a href="#install">Instalar</a>
 y el <a href="#emulator">paso 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # asistente a pantalla completa
@@ -128,7 +128,7 @@ scripts.</p>
 guarda y sale, y <kbd>Ctrl</kbd>+<kbd>C</kbd> detiene el sonido, guarda y sale.</li>
 </ul>
 <h3 id="try-wizard-steps">Qué hace el asistente hoy</h3>
-<p>15 pasos, o 14 con un solo micrófono. Los pasos «Aplicar los cambios» y «Medición de comprobación» aparecen solo cuando eliges cambiar el sistema (ajuste completo o solo el subwoofer). El progreso se guarda después de cada paso.</p>
+<p>16 pasos, o 15 con un solo micrófono. Los pasos «Subwoofer y altavoces principales por separado», «Aplicar los cambios» y «Medición de comprobación» aparecen solo cuando eliges cambiar el sistema (ajuste completo o solo el subwoofer); el primero de ellos, solo cuando el sistema tiene subwoofer. El progreso se guarda después de cada paso.</p>
 <ol>
 <li><strong>Inicio:</strong> el nombre del salón y qué quieres hacer hoy.</li>
 <li><strong>Revisión de la Mac:</strong> la computadora y la tarjeta de audio USB de la consola.</li>
@@ -145,6 +145,7 @@ los monitores ni a la transmisión.</li>
 <li><strong>Nivel:</strong> ajusta un nivel de medición seguro.</li>
 <li><strong>Calibración de micrófonos:</strong> solo con varios micrófonos; los compara entre sí.</li>
 <li><strong>Medición:</strong> un plan de lugares en el salón y luego barridos de prueba en cada lugar (mira <a href="#try-wizard-points">más abajo</a>).</li>
+<li><strong>Subwoofer y altavoces principales por separado:</strong> en algunos lugares mide solo el subwoofer, solo los altavoces principales y todo junto, con mute breves después de teclear una palabra (mira <a href="#try-wizard-junction">más abajo</a>).</li>
 <li><strong>Resultados y propuestas:</strong> lo que se midió, con palabras sencillas, y luego los paquetes de cambios y los consejos sobre los canales de entrada (mira <a href="#try-wizard-packages">más abajo</a>).</li>
 <li><strong>Aplicar los cambios:</strong> escribe los paquetes que elegiste, después de leer la consola de nuevo y de que escribas una palabra (mira <a href="#try-wizard-apply">más abajo</a>).</li>
 <li><strong>Medición de comprobación:</strong> vuelve a medir algunos asientos y dice si mejoró (mira <a href="#try-wizard-verify">más abajo</a>).</li>
@@ -163,6 +164,26 @@ tienes 3 segundos para alejarte al menos 2 m.</li>
 aproximada.</li>
 <li>El plan se guarda para ese lugar, para que una medición de comprobación posterior use los mismos puntos.</li>
 </ul>
+<h3 id="try-wizard-junction">El subwoofer y los altavoces principales por separado</h3>
+<p>Para saber dónde se encuentra el subwoofer con los altavoces principales, y si ahí se cancelan entre sí, el asistente
+los mide por separado en los puntos de unión del plan. En cada lugar reproduce tres barridos seguidos: solo el
+subwoofer, solo los altavoces principales y luego todo junto.</p>
+<ul>
+<li>Para eso el programa pone mute en la consola al subwoofer o a los altavoces principales durante unos segundos. Solo
+pone mute a sus <strong>matrices</strong> (las salidas que alimentan los altavoces), nunca a Main LR ni a un canal de
+entrada.</li>
+<li>Antes pregunta. Para permitir los mute breves tecleas la palabra que pide el asistente en tu idioma: en la interfaz
+inglesa <code>mute</code> (en la rusa <code>заглушить</code>, en la ucraniana <code>заглушити</code>) y pulsas Enter.
+Una línea vacía salta esta medición; entonces no se propone ningún crossover.</li>
+<li>Antes del primer mute lee la consola y guarda cómo estaba cada interruptor. Justo después de los tres barridos
+devuelve todos los interruptores, también si detienes el sonido con <kbd>Ctrl</kbd>+<kbd>C</kbd> o la
+<kbd>barra espaciadora</kbd>.</li>
+<li>Si una medición se interrumpió antes de que volvieran los interruptores (por ejemplo, la computadora perdió la
+conexión), la próxima vez el asistente los devuelve primero: vuelve a leer la consola, muestra lo que va a encender de
+nuevo y pide la misma palabra. Si la consola no lo confirma, te dice qué matrices encender a mano.</li>
+<li>Esto solo funciona cuando el subwoofer y los altavoces principales salen cada uno de su propia matriz. Si no, el
+asistente lo dice, salta esta medición y no propone un crossover.</li>
+</ul>
 <h3 id="try-wizard-packages">Paquetes de cambios y consejos sobre los canales</h3>
 <p>Después de los resultados, el asistente propone cambios en paquetes. Cada paquete tiene su propia pantalla:</p>
 <ul>
@@ -172,11 +193,18 @@ aproximada.</li>
 </ul>
 <p>Si dejas fuera un paquete, los siguientes se calculan de nuevo sin él, así que nada en el plan depende de un cambio que
 no elegiste. Tus elecciones se guardan en la carpeta de la sesión, en el archivo <code>proposal.json</code>.</p>
-<p>Hoy el asistente propone solo la <strong>ecualización del sistema</strong>: correcciones suaves de lo que el salón le
-hace al sonido en la mayoría de los asientos. Las muescas estrechas en asientos sueltos no se tocan, porque la
-ecualización no puede corregirlas. El crossover, la alineación y el nivel del subwoofer necesitan medir por separado el
-subwoofer y los altavoces principales. El asistente todavía no lo hace (necesita mute temporales, que llegan con M5), así
-que no los propone y explica por qué: un crossover puesto a ciegas puede dejar un hueco en los graves.</p>
+<p>Con el subwoofer y los altavoces principales medidos por separado, el asistente puede proponer hasta cuatro paquetes,
+en este orden:</p>
+<ul>
+<li>el <strong>crossover</strong>: los graves van solo al subwoofer y el resto solo a los altavoces principales;</li>
+<li>la <strong>alineación del subwoofer</strong>: un pequeño retardo y quizá un cambio de polaridad, para que lleguen
+juntos. Este es solo un consejo: lo pones a mano en la consola;</li>
+<li>el <strong>nivel del subwoofer</strong>, para que los dos suenen más o menos igual de fuerte donde se encuentran;</li>
+<li>la <strong>ecualización del sistema</strong>: correcciones suaves de lo que el salón le hace al sonido en la mayoría
+de los asientos. Las muescas estrechas en asientos sueltos no se tocan, porque la ecualización no puede corregirlas.</li>
+</ul>
+<p>Sin esa medición (la saltaste, o los altavoces no salen de su propia matriz) el asistente propone solo la ecualización
+del sistema y explica por qué: un crossover puesto a ciegas puede dejar un hueco en los graves.</p>
 <p>Después vienen los consejos sobre los canales de entrada. El programa nunca los cambia por sí mismo; tú decides de
 oído, un ajuste a la vez, en un ensayo:</p>
 <ul>
@@ -196,26 +224,33 @@ ensayo, con los monitores encendidos;</li>
 <li>Muestra cada ajuste que va a escribir, con el valor actual y el nuevo, en el orden en que los escribirá.</li>
 <li>Para escribir, teclea la palabra <code>apply</code> (en la interfaz rusa <code>применить</code>, en la ucraniana <code>застосувати</code>) y pulsa Enter. Cualquier otra cosa cancela y no se escribe nada.</li>
 <li>Los valores anteriores se guardan en un archivo para deshacer antes de la primera escritura.</li>
-<li>El orden de las escrituras está elegido para que el sonido nunca suba de volumen a mitad de camino.</li>
+<li>El orden de las escrituras está elegido para que el sonido nunca suba de volumen a mitad de camino. Cuando un
+crossover no se puede alcanzar así, el programa pone mute un momento a la matriz del subwoofer o de los altavoces
+principales mientras la cambia: oyes un corte breve del subwoofer o de los altavoces principales, nunca un salto de
+volumen.</li>
+<li>Si el nuevo nivel del subwoofer queda a más de 12 dB del que tenía cuando el programa leyó este salón por primera
+vez, antes hace una pregunta aparte (la respuesta segura es «no»).</li>
 <li>Cada valor se vuelve a leer de la consola. Si alguno no se confirma, el asistente se detiene ahí y ofrece devolver lo que ya se escribió.</li>
-<li>El programa no escribe el retardo de salida ni la polaridad. Los muestra como valores para que los pongas a mano en la consola.</li>
+<li>El programa no escribe el retardo de salida ni la polaridad. Justo después de las escrituras los muestra como valores para que los pongas a mano en la consola, antes de la medición de comprobación.</li>
 </ul>
 <h3 id="try-wizard-verify">La medición de comprobación</h3>
 <p>Luego el paso <strong>Medición de comprobación</strong> vuelve a medir al menos cuatro asientos, entre ellos el que peor sonaba y el del centro del salón. Pon los micrófonos exactamente donde estaban antes. Con reglas fijas dice una de tres cosas: <strong>mejor</strong>, <strong>sin diferencia notable</strong> o <strong>peor</strong>, con un pequeño dibujo de antes y después. Si empeoró, recomienda devolver los valores anteriores y ofrece hacerlo en ese mismo momento.</p>
 <p>La última pantalla te recuerda guardar la escena en la consola con un nombre nuevo (por ejemplo con la fecha de hoy), para que los ajustes nuevos sigan ahí después de reiniciar. También muestra el comando para devolver los valores anteriores más tarde.</p>
 <h3 id="try-wizard-cli">Aplicar y deshacer desde la terminal</h3>
-<p>La línea de comandos experta hace lo mismo: <code>ctune apply-packages</code> escribe los paquetes elegidos de un <code>proposal.json</code> guardado, y <code>ctune undo</code> devuelve los valores anteriores. Úsalos solo con el emulador y <code>CTUNE_DEV_SAFE=1</code>. Necesitan un <code>proposal.json</code> de una sesión del asistente (en la carpeta de la sesión, <code>&lt;home&gt;/venues/&lt;salón&gt;/sessions/&lt;hora&gt;-&lt;objetivo&gt;/</code>). La demostración con el emulador todavía no llega a las propuestas (mira <a href="#try-wizard-demo">más abajo</a>), así que por ahora esto es sobre todo para desarrolladores.</p>
+<p>La línea de comandos experta hace lo mismo: <code>ctune apply-packages</code> escribe los paquetes elegidos de un <code>proposal.json</code> guardado, y <code>ctune undo</code> devuelve los valores anteriores. Úsalos solo con el emulador y <code>CTUNE_DEV_SAFE=1</code>. Necesitan un <code>proposal.json</code> de una sesión del asistente (en la carpeta de la sesión, <code>&lt;home&gt;/venues/&lt;salón&gt;/sessions/&lt;hora&gt;-&lt;objetivo&gt;/</code>). La forma más fácil de obtener uno es recorrer la demostración con el emulador hasta las propuestas (mira <a href="#try-wizard-demo">más abajo</a>).</p>
 <p>Primero mira sin escribir nada. <code>--dry-run</code> muestra los ajustes que escribiría, en orden, y se detiene:</p>
 <pre><code>CTUNE_DEV_SAFE=1 uv run ctune --emulator apply-packages SESSION/proposal.json --dry-run</code></pre>
 <p><code>--emulator</code> arranca un emulador nuevo solo para ese comando. Para escribir y luego deshacer, deja un emulador funcionando en su propia terminal (muestra su puerto) y apunta los dos comandos a él, cambiando <code>PORT</code>, <code>SESSION</code> y <code>UNDO_FILE</code>:</p>
 <pre><code>CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P
 CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo apply-packages SESSION/proposal.json
 CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo undo UNDO_FILE</code></pre>
-<p><code>apply-packages</code> guarda el archivo para deshacer antes de la primera escritura y muestra su nombre (está en la carpeta <code>undo</code> dentro de <code>--home</code>). <code>undo</code> devuelve solo los valores que nadie cambió a mano desde entonces, y lista los que deja como están. Los dos comandos aceptan también <code>--dry-run</code>. Sus textos todavía están en ruso, así que piden las palabras rusas <code>применить</code> (aplicar) y <code>вернуть</code> (devolver).</p>
+<p><code>apply-packages</code> guarda el archivo para deshacer antes de la primera escritura y muestra su nombre (está en la carpeta <code>undo</code> dentro de <code>--home</code>). <code>undo</code> devuelve solo los valores que nadie cambió a mano desde entonces, y lista los que deja como están. Los dos comandos aceptan también <code>--dry-run</code>. Sus textos todavía están en ruso, así que piden las palabras rusas <code>применить</code> (aplicar) y <code>вернуть</code> (devolver). Para scripts, <code>apply-packages --yes-i-am-at-the-console</code> confirma sin la palabra tecleada; todo lo demás sigue igual (la lectura nueva, el archivo para deshacer, la relectura).</p>
 <h3 id="try-wizard-safety">Seguridad antes de cualquier sonido</h3>
 <ul>
-<li>El asistente nunca pone ni quita un mute por su cuenta. En una consola real <strong>tú pones mute a mano a los
-canales de los micrófonos de medición</strong>, y el asistente te dice cuáles.</li>
+<li>El asistente nunca pone ni quita un mute a un canal de entrada. En una consola real <strong>tú pones mute a mano a
+los canales de los micrófonos de medición</strong>, y el asistente te dice cuáles. Lo único a lo que pone mute por su
+cuenta son las matrices de los altavoces, unos segundos, después de una palabra tecleada (mira
+<a href="#try-wizard-junction">más arriba</a>), y durante una escritura cuando no hay otro orden seguro.</li>
 <li>Antes del primer sonido vuelve a leer la consola. Mientras un canal que escucha un micrófono de medición no tenga
 mute y pueda llegar a los altavoces, <strong>se niega a reproducir cualquier sonido</strong>, porque podría causar
 acople.</li>
@@ -225,17 +260,19 @@ se comprueba, así que revisa tú el ruteo.</li>
 medición cuentan 3 segundos hacia atrás.</li>
 </ul>
 <h3 id="try-wizard-demo">Qué verás en la demostración</h3>
-<p>En el emulador, el canal del micrófono de medición (el canal 12) empieza sin mute, y todavía no se le puede poner
-mute a mano en el emulador. Por eso la demostración se detiene en el paso <strong>Camino de reproducción</strong> con un
-mensaje que dice que el canal 12 todavía envía un micrófono de medición a los altavoces y hay que ponerle mute en la
-consola. Pulsar Enter otra vez solo repite la comprobación. Es la regla de seguridad funcionando, no una falla. Recorre
-los primeros pasos y luego guarda y sal (<kbd>Ctrl</kbd>+<kbd>Q</kbd>, o <kbd>Q</kbd> en la interfaz de líneas).</p>
-<p>Por eso, en la demostración con el emulador todavía no se llega al plan de puntos, a los paquetes de cambios, a la aplicación ni a la medición de comprobación descritos arriba. Las pruebas automáticas los comprueban: en ellas el asistente recorre todos los pasos, aplicación y medición de comprobación incluidas, con el emulador y un salón simulado.</p>
+<p>La demostración recorre todo el asistente. Nadie puede pulsar los botones del emulador, así que al empezar la
+demostración pone mute ella misma a los canales de sus micrófonos de medición, como lo haría una persona en una consola
+real. El salón simulado escucha al emulador: el sonido de prueba pasa por la ecualización de Main LR, y cada altavoz
+suena solo mientras su matriz está encendida.</p>
+<p>Así puedes seguir cada paso: el plan de puntos, la medición separada del subwoofer y los altavoces principales con sus
+mute breves, los paquetes de cambios (con el crossover), la aplicación, la medición de comprobación y la última
+pantalla. Elige al principio el ajuste completo (o solo el subwoofer) para llegar a los pasos que escriben. Guarda y sal
+cuando quieras con <kbd>Ctrl</kbd>+<kbd>Q</kbd> (<kbd>Q</kbd> en la interfaz de líneas). En una consola real el
+asistente no pone mute por ti a los canales de los micrófonos: ahí espera a que lo hagas tú.</p>
 <h3 id="try-wizard-not-yet">Lo que todavía no hace</h3>
 <ul>
-<li>Solo propone la ecualización del sistema. El crossover, el nivel y el retardo del subwoofer necesitan la medición separada del subwoofer y los altavoces principales, y esta necesita mute temporales. Las dos cosas llegan todavía en M5; hasta entonces el asistente nunca propone un crossover.</li>
-<li>Todavía no hay aviso para cambios grandes del nivel del subwoofer ni un modo sin preguntas (M5).</li>
-<li>La revisión de los altavoces uno por uno también necesita mute temporales, así que llegará al asistente con M5. Hoy existe solo como comando experto.</li>
+<li>Nunca escribe el retardo de salida ni la polaridad: siguen siendo valores para poner a mano hasta que se verifiquen en una consola real.</li>
+<li>La revisión de los altavoces uno por uno todavía no está en el asistente. Hoy existe solo como comando experto.</li>
 <li>Todavía no hay archivo de informe (M6).</li>
 <li>Todavía no se ha usado en una consola real, y la escritura en una consola real no está verificada en equipo real. Para eso hacen falta las verificaciones de equipo y la prueba piloto (M7).</li>
 </ul>
@@ -256,7 +293,7 @@ red de la consola.</li>
 <ol>
 <li>Abre la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a> y elige una fila para tu consola. Las filas 1 y 2
 (<code>ctune hwcheck delay</code> y <code>ctune hwcheck polarity</code>) ya se pueden hacer hoy; las demás dependen de
-funciones que aún se están construyendo. Las filas 22–25 verifican la nueva escritura de M5 (aplicar, deshacer y la medición de comprobación); necesitan la rama <code>m5-apply</code>, y una persona tiene que hacerlas en un salón vacío antes de que alguien confíe en estas escrituras.</li>
+funciones que aún se están construyendo. Las filas 22–28 verifican la nueva escritura de M5 (aplicar, deshacer, la medición de comprobación, los mute breves de las matrices, la medición separada del subwoofer y los altavoces principales y el crossover); necesitan la rama <code>m5b-mutes</code>, y una persona tiene que hacerlas en un salón vacío antes de que alguien confíe en estas escrituras.</li>
 <li>Lee la fila: qué verificar, el comando y el resultado esperado.</li>
 <li>Ejecuta el comando mirando la pantalla de la consola. Compara lo que pasa con el resultado esperado.</li>
 <li>Restaura el valor anterior como indica la fila (con el archivo para deshacer o recuperando tu escena).</li>
@@ -269,8 +306,8 @@ formulario está en inglés; basta con frases sencillas.</li>
 (M1) a reconocer más sistemas. Quita antes los nombres y cualquier dato personal; la
 <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">guía para colaborar</a> explica cómo.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Más adelante: ajustar tu sistema <span class="tag">Más adelante</span></h2>
-<p>Así está previsto que funcione el asistente completo en un salón real cuando terminen las etapas M5 y M6. Leer la consola, medir, analizar, proponer, aplicar y la medición de comprobación ya están en el asistente (mira <a href="#try-wizard">más arriba</a>), las propuestas por ahora solo para la ecualización del sistema; el informe llega con M6.</p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Aplicar, deshacer y la medición de comprobación solo se han probado con el emulador y un salón simulado. Espera a que terminen las verificaciones de equipo antes de usarlos en el sistema de tu iglesia.</p></div>
+<p>Así está previsto que funcione el asistente completo en un salón real cuando terminen las etapas M5 y M6. Leer la consola, medir, analizar, proponer, aplicar y la medición de comprobación ya están en el asistente (mira <a href="#try-wizard">más arriba</a>); el informe llega con M6.</p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Aplicar, deshacer, los mute breves y la medición de comprobación solo se han probado con el emulador y un salón simulado. Espera a que terminen las verificaciones de equipo antes de usarlos en el sistema de tu iglesia.</p></div>
 <ol>
 <li id="workflow-read"><strong>Leer la consola.</strong> ChurchTune encuentra la consola y muestra lo que encontró, por
 ejemplo: «X32 Producer, altavoces principales en Matrix 1/2, subwoofer en Matrix 3. ¿Es correcto?». Solo pregunta lo
