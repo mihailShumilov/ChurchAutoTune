@@ -77,13 +77,18 @@ def main(
         host, port = parse_console(console)
         venue = replace(venue, console_host=host, console_port=port)
     if emulator:
+        from churchtune.cli.demo import prepare_demo  # noqa: PLC0415 - dev only
         from churchtune_emulator.x32 import LOOPBACK, X32Emulator  # noqa: PLC0415 - dev only
 
         emu = X32Emulator().start()
         ctx.call_on_close(emu.stop)
         venue = replace(venue, console_host=LOOPBACK, console_port=emu.port)
         audio = "fake"
-    ctx.obj = Settings(workspace, venue, audio or venue.audio_device or "fake")
+        hall_link = prepare_demo(emu)
+    else:
+        hall_link = None
+    ctx.obj = Settings(workspace, venue, audio or venue.audio_device or "fake",
+                       hall_link=hall_link)  # fmt: skip
     if ctx.invoked_subcommand is None:
         wizard.wizard_command(ctx)  # SPEC §12: plain ``ctune`` is the wizard
 
