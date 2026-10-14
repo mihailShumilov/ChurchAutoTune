@@ -411,7 +411,7 @@ def test_factory_refuses_real_devices_in_dev_safe_without_touching_them(monkeypa
     monkeypatch.setattr(
         "churchtune.audio.sounddevice_backend.SoundDeviceBackend.__init__", forbidden
     )
-    monkeypatch.setattr("churchtune.audio.sounddevice_backend._load_sounddevice", forbidden)
+    monkeypatch.setattr("churchtune.audio.sounddevice_backend.load_sounddevice", forbidden)
 
     with pytest.raises(DevSafeViolation) as excinfo:
         open_backend(name, fs_hz=FS_HZ, mic_input=10)

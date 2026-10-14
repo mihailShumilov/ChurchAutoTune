@@ -16,7 +16,14 @@ from typing import Any
 
 import numpy as np
 
-from churchtune.audio.base import Float32Array, PlaybackEvent, limit
+from churchtune.audio.base import (
+    Float32Array,
+    MultiRecording,
+    PlaybackEvent,
+    StopFlag,
+    check_inputs,
+    limit,
+)
 from churchtune.errors import AudioDeviceError, DevSafeViolation, MeasurementAborted
 from churchtune.platform.devsafe import is_dev_safe
 
@@ -26,7 +33,7 @@ PLAYREC_POLL_S = 0.02
 STREAM_POLL_S = 0.05
 
 
-def _load_sounddevice() -> Any:  # noqa: ANN401 - the sounddevice module has no type stubs
+def load_sounddevice() -> Any:  # noqa: ANN401 - the sounddevice module has no type stubs
     """Import the real ``sounddevice`` module; refused in dev-safe mode before the import."""
     if is_dev_safe():
         raise DevSafeViolation("dev-safe mode refuses real audio devices; use the fake backend")
@@ -35,6 +42,12 @@ def _load_sounddevice() -> Any:  # noqa: ANN401 - the sounddevice module has no 
     except (OSError, ImportError) as error:
         raise AudioDeviceError(f"sounddevice / PortAudio is not available: {error}") from error
     return sounddevice
+
+
+def _check_stop(stop: StopFlag | None) -> None:
+    """Treat a set stop flag like Ctrl+C: the caller aborts the stream and reports."""
+    if stop is not None and stop.is_set():
+        raise KeyboardInterrupt
 
 
 class SoundDeviceBackend:
@@ -69,7 +82,7 @@ class SoundDeviceBackend:
         if not device_name.strip():
             # An empty name would match every device and pick whichever comes first.
             raise AudioDeviceError("the audio device name is empty")
-        self._sd = sd if sd is not None else _load_sounddevice()
+        self._sd = sd if sd is not None else load_sounddevice()
         self._sleep = sleep
         self.fs_hz = fs_hz
         self.mic_input = mic_input
@@ -112,6 +125,11 @@ class SoundDeviceBackend:
             )
         return index, dict(device)
 
+    @property
+    def input_count(self) -> int:
+        """Inputs the device offers."""
+        return int(self.info["max_input_channels"])
+
     def describe(self) -> str:
         """One line about the device."""
         d = self.info
@@ -143,11 +161,11 @@ class SoundDeviceBackend:
             ) from error
         return float(self.info["default_samplerate"])
 
-    def _stream(self, callback: Callable[..., None]) -> Any:  # noqa: ANN401 - sounddevice.Stream
+    def _stream(self, callback: Callable[..., None], in_channels: int) -> Any:  # noqa: ANN401 - sounddevice.Stream
         return self._sd.Stream(
             device=(self.index, self.index),
             samplerate=self.fs_hz,
-            channels=(self.mic_input, OUTPUT_CHANNELS),
+            channels=(in_channels, OUTPUT_CHANNELS),
             dtype="float32",
             latency="high",
             blocksize=BLOCK_FRAMES,
@@ -162,26 +180,29 @@ class SoundDeviceBackend:
         finally:
             stream.close()
 
-    def _drive(
+    def _drive(  # noqa: PLR0913 - the stream, its failure box and the three loop hooks
         self,
         stream: Any,  # noqa: ANN401 - sounddevice.Stream
         failure: list[BaseException],
         keep_going: Callable[[], bool],
         each_poll: Callable[[], None],
         poll_s: float,
+        *,
+        stop: StopFlag | None = None,
     ) -> None:
         """Start the stream and poll until it ends; any way out but a clean end silences it.
 
         ``stream.start()`` is inside the guarded block: an interrupt that arrives while the
-        stream is starting must abort it too.
+        stream is starting must abort it too. The stop flag is looked at on every poll.
 
         Raises:
-            MeasurementAborted: Interrupted with Ctrl+C.
+            MeasurementAborted: Interrupted with Ctrl+C or by the stop flag.
             AudioDeviceError: The audio callback failed.
         """
         try:
             stream.start()
             while keep_going() and stream.active:
+                _check_stop(stop)
                 self._sleep(poll_s)
                 each_poll()
         except BaseException as error:
@@ -197,7 +218,18 @@ class SoundDeviceBackend:
     def playrec(
         self, out: Float32Array, events: Sequence[PlaybackEvent] | None = None
     ) -> tuple[Float32Array, list[str]]:
-        """Play ``out`` on outputs 1+2 and record the mic input.
+        """Play ``out`` on outputs 1+2 and record the mic input (one-microphone form)."""
+        recording = self.playrec_multi(out, (self.mic_input,), events)
+        return recording.channel(0), list(recording.flags)
+
+    def playrec_multi(
+        self,
+        out: Float32Array,
+        inputs: Sequence[int],
+        events: Sequence[PlaybackEvent] | None = None,
+        stop: StopFlag | None = None,
+    ) -> MultiRecording:
+        """Play ``out`` on outputs 1+2 and record the 1-based ``inputs`` in the same stream.
 
         Events run in the calling thread (never in the audio callback) as soon as playback has
         passed their sample index; events that did not fire before the stream ended still run.
@@ -205,19 +237,21 @@ class SoundDeviceBackend:
         caller's job.
 
         Raises:
-            MeasurementAborted: Interrupted with Ctrl+C; the stream was aborted first.
-            AudioDeviceError: ``out`` is not ``[n, 2]``, or the audio callback failed.
+            MeasurementAborted: Interrupted (Ctrl+C or ``stop``); the stream was aborted first.
+            AudioDeviceError: ``out`` is not ``[n, 2]``, an input is outside the device, or the
+                audio callback failed.
         """
+        chosen = check_inputs(inputs, self.input_count)
         pending = sorted(events or [], key=lambda event: event[0])
         buffer = np.ascontiguousarray(out, dtype=np.float32)
         if buffer.ndim != 2 or buffer.shape[1] != OUTPUT_CHANNELS:  # noqa: PLR2004
             raise AudioDeviceError(f"output buffer must be [n, 2], got shape {buffer.shape}")
         n = len(buffer)
-        rec = np.zeros(n, dtype=np.float32)
+        rec = np.zeros((n, len(chosen)), dtype=np.float32)
+        columns = [i - 1 for i in chosen]
         position = [0]
         flags: list[str] = []
         failure: list[BaseException] = []
-        channel = self.mic_input - 1
         sd = self._sd
 
         def callback(indata: Any, outdata: Any, frames: int, _time: Any, status: Any) -> None:  # noqa: ANN401
@@ -228,7 +262,7 @@ class SoundDeviceBackend:
                 start = position[0]
                 count = max(0, min(frames, n - start))
                 outdata[:count] = limit(buffer[start : start + count])  # final safety limiter
-                rec[start : start + count] = indata[:count, channel]
+                rec[start : start + count] = indata[:count, columns]
                 position[0] = start + count
             except Exception as error:
                 failure.append(error)
@@ -241,10 +275,11 @@ class SoundDeviceBackend:
             while pending and position[0] >= pending[0][0]:
                 pending.pop(0)[1]()
 
-        self._drive(self._stream(callback), failure, lambda: True, run_due_events, PLAYREC_POLL_S)
+        stream = self._stream(callback, max(chosen))
+        self._drive(stream, failure, lambda: True, run_due_events, PLAYREC_POLL_S, stop=stop)
         for _, action in pending:  # the stream ended before an event fired: still run it
             action()
-        return rec, flags
+        return MultiRecording(rec, tuple(flags))
 
     def record(self, duration_s: float) -> Float32Array:
         """Record the mic while playing silence."""
@@ -252,20 +287,41 @@ class SoundDeviceBackend:
         rec, _ = self.playrec(silent)
         return rec
 
+    def record_multi(
+        self, duration_s: float, inputs: Sequence[int], stop: StopFlag | None = None
+    ) -> MultiRecording:
+        """Record ``inputs`` while playing silence."""
+        silent = np.zeros((int(duration_s * self.fs_hz), OUTPUT_CHANNELS), dtype=np.float32)
+        return self.playrec_multi(silent, inputs, stop=stop)
+
     def run_stream(
         self,
         next_block: Callable[[int], Float32Array | None],
         on_input: Callable[[Float32Array], None],
         on_tick: Callable[[], None] | None = None,
     ) -> None:
+        """Duplex loop on the mic input (one-microphone form)."""
+        self.run_stream_multi(
+            next_block, (self.mic_input,), lambda block: on_input(block[:, 0].copy()), None, on_tick
+        )
+
+    def run_stream_multi(
+        self,
+        next_block: Callable[[int], Float32Array | None],
+        inputs: Sequence[int],
+        on_input: Callable[[Float32Array], None],
+        stop: StopFlag | None = None,
+        on_tick: Callable[[], None] | None = None,
+    ) -> None:
         """Duplex loop: play what ``next_block`` returns until it returns None.
 
         Raises:
-            MeasurementAborted: Interrupted with Ctrl+C; the stream was aborted first.
-            AudioDeviceError: A block has the wrong shape, or a callback function failed; the
-                stream was aborted first.
+            MeasurementAborted: Interrupted (Ctrl+C or ``stop``); the stream was aborted first.
+            AudioDeviceError: A block has the wrong shape, an input is outside the device, or a
+                callback function failed; the stream was aborted first.
         """
-        channel = self.mic_input - 1
+        chosen = check_inputs(inputs, self.input_count)
+        columns = [i - 1 for i in chosen]
         sd = self._sd
         done = threading.Event()
         failure: list[BaseException] = []
@@ -280,7 +336,7 @@ class SoundDeviceBackend:
                             f"output block must be [{frames}, 2], got shape {np.shape(block)}"
                         )
                     outdata[:] = limit(block)  # final safety limiter
-                    on_input(indata[:, channel].copy())
+                    on_input(indata[:, columns].copy())
             except Exception as error:
                 failure.append(error)
                 outdata.fill(0)
@@ -290,9 +346,10 @@ class SoundDeviceBackend:
                 raise sd.CallbackStop
 
         self._drive(
-            self._stream(callback),
+            self._stream(callback, max(chosen)),
             failure,
             lambda: not done.is_set(),
             on_tick or (lambda: None),
             STREAM_POLL_S,
+            stop=stop,
         )

@@ -11,12 +11,18 @@ import numpy as np
 import numpy.typing as npt
 
 from churchtune.domain.levels import HARD_LIMIT_DBFS, db_to_lin
+from churchtune.domain.recording import MultiRecording, StopFlag
+from churchtune.errors import AudioDeviceError
+
+__all__ = ["MultiRecording", "StopFlag"]
 
 Float32Array = npt.NDArray[np.float32]
 # (sample index, action): the action runs in the calling thread once playback passed the index.
 PlaybackEvent = tuple[int, Callable[[], None]]
 
 LIMIT = db_to_lin(HARD_LIMIT_DBFS)
+# How often a backend looks at the stop flag; silence follows within this time plus one block.
+STOP_CHECK_S = 0.02
 
 
 def limit(block: npt.ArrayLike) -> Float32Array:
@@ -95,3 +101,74 @@ class AudioBackend(Protocol):
             MeasurementAborted: The loop was interrupted; the output is already silent.
         """
         ...
+
+
+class MultiChannelBackend(Protocol):
+    """A duplex device that records several inputs at once (multi-mic measurement, SPEC §8.1).
+
+    Every method checks ``stop`` at least every ``STOP_CHECK_S`` seconds; once it is set the output
+    is silenced and ``MeasurementAborted`` is raised.
+    """
+
+    name: str
+    fs_hz: float
+
+    @property
+    def input_count(self) -> int:
+        """Number of inputs the device offers."""
+        ...
+
+    def describe(self) -> str:
+        """One line about the device, for the operator."""
+        ...
+
+    def playrec_multi(
+        self,
+        out: Float32Array,
+        inputs: Sequence[int],
+        events: Sequence[PlaybackEvent] | None = None,
+        stop: StopFlag | None = None,
+    ) -> MultiRecording:
+        """Play ``out`` (``float32[n, 2]``) and record the 1-based ``inputs`` in the same stream.
+
+        Raises:
+            MeasurementAborted: Interrupted (``stop`` or Ctrl+C); the output is already silent.
+        """
+        ...
+
+    def record_multi(
+        self, duration_s: float, inputs: Sequence[int], stop: StopFlag | None = None
+    ) -> MultiRecording:
+        """Record ``inputs`` for ``duration_s`` seconds while playing silence."""
+        ...
+
+    def run_stream_multi(
+        self,
+        next_block: Callable[[int], Float32Array | None],
+        inputs: Sequence[int],
+        on_input: Callable[[Float32Array], None],
+        stop: StopFlag | None = None,
+    ) -> None:
+        """Duplex loop until ``next_block`` returns None; ``on_input`` gets ``float32[frames, k]``.
+
+        Raises:
+            MeasurementAborted: Interrupted; the output is already silent.
+        """
+        ...
+
+
+def check_inputs(inputs: Sequence[int], available: int) -> tuple[int, ...]:
+    """Validate 1-based input numbers: unique, at least one, within the device.
+
+    Raises:
+        AudioDeviceError: The list is empty, repeats an input or names one the device lacks.
+    """
+    chosen = tuple(inputs)
+    if not chosen:
+        raise AudioDeviceError("no input channel requested")
+    if len(set(chosen)) != len(chosen):
+        raise AudioDeviceError(f"input channels repeat: {list(chosen)}")
+    bad = [i for i in chosen if not 1 <= i <= available]
+    if bad:
+        raise AudioDeviceError(f"input channels {bad} are outside 1..{available}", inputs=bad)
+    return chosen
