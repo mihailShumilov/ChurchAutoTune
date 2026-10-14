@@ -3,6 +3,7 @@
 from churchtune.wizard.engine import Step
 from churchtune.wizard.steps.apply import Apply
 from churchtune.wizard.steps.finish import Finish, Results
+from churchtune.wizard.steps.junction import Junction
 from churchtune.wizard.steps.measure import (
     Calibration,
     Level,
@@ -35,6 +36,7 @@ def all_steps() -> list[Step]:
         Level(),
         Calibration(),
         MeasurePoints(),
+        Junction(),
         Results(),
         Apply(),
         Verify(),

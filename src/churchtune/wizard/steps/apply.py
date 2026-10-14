@@ -33,7 +33,7 @@ from churchtune.wizard.ui import confirm, info, kebab, t, task, typed_word
 
 APPLY_WORD, UNDO_WORD = "apply-word", "undo-word"
 # The English words count in every language: typing them is just as deliberate.
-ENGLISH_WORDS = {APPLY_WORD: "apply", UNDO_WORD: "undo"}
+ENGLISH_WORDS = {APPLY_WORD: "apply", UNDO_WORD: "undo", "mute-word": "mute"}
 WRITING_GOALS = frozenset({"full", "sub"})
 REPLANS = 3  # the console changed while the list was shown: read it again at most this often
 KHZ = 1000.0
@@ -92,10 +92,15 @@ def _advice(packages: Sequence[PackageModel]) -> list[Text]:
             for p in package.polarities
             if p.after != p.before
         )
+        if package.delay_ms and package.delay_side and not package.delays:
+            side = t(f"apply-advice-side-{package.delay_side}")
+            lines.append(t("apply-advice-side-delay", side=side, ms=package.delay_ms))
     return lines
 
 
-def ask_word(ctx: WizardContext, key: str, *body: Text, table: Table) -> tuple[str, str] | None:
+def ask_word(
+    ctx: WizardContext, key: str, *body: Text, table: Table | None
+) -> tuple[str, str] | None:
     """The typed word and the word it matched; None when the person cancelled (empty line).
 
     A word that matches neither the word of the session's language nor the English one is

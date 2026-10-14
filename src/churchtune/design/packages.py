@@ -52,7 +52,8 @@ WORKING_ZONE_DB = -6.0
 # An alignment that improves the junction by less than this is not proposed.
 MIN_ALIGNMENT_GAIN_DB = 1.0
 # The sub fader moves at most this much in one package, and never above 0 dB.
-MAX_LEVEL_STEP_DB = 10.0
+# Below the ±10 dB of the levels scope by more than a fader step, so a proposal always passes it.
+MAX_LEVEL_STEP_DB = 9.5
 MAX_FADER_DB = 0.0
 # A predicted EQ change is limited to this much per frequency (near the zeros of cut filters).
 EQ_CHANGE_LIMIT_DB = 24.0

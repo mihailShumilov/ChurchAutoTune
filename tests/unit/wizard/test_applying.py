@@ -124,11 +124,12 @@ def test_a_strip_the_console_does_not_have_is_refused():
         package_target(package, strip_states(console()), LAWS, ROLES)
 
 
-def test_only_chosen_packages_that_are_not_suggestions():
+def test_only_chosen_packages_and_suggestions_are_never_written():
     chosen = eq_package(flat(), CUT)
     skipped = eq_package(flat(), CUT, selected=False)
     suggestion = eq_package(flat(), CUT, suggest_only=True)
-    assert chosen_packages(packages_file(skipped, suggestion, chosen)) == [chosen]
+    assert chosen_packages(packages_file(skipped, suggestion, chosen)) == [suggestion, chosen]
+    assert writable_packages([suggestion, chosen]) == ([chosen], [suggestion])
 
 
 def test_a_package_needs_what_it_requires_first():
@@ -179,11 +180,11 @@ def test_the_crossover_package_may_set_a_cut_filter():
         check_eq_change("system_eq", "matrix 1", PathRole.TOPS, flat(), crossover, LAWS)
 
 
-def test_advice_packages_and_what_needs_them_are_not_written():
+def test_advice_is_shown_and_what_builds_on_it_is_still_written():
     align = PackageModel(kind="alignment", suggest_only=False, risk="unverified", selected=True,
                          delay_ms=1.0)  # fmt: skip
     level = level_package(-20.0, -23.0)
     needs = eq_package(flat(), CUT, requires=("alignment",))
     kept, advice = writable_packages([align, level, needs])
-    assert kept == [level]
+    assert kept == [level, needs]
     assert advice == [align]

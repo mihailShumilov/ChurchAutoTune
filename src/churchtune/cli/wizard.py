@@ -226,7 +226,7 @@ def build_services(ctx: typer.Context) -> tuple[Services, X32ConsolePort]:
         audio_name=settings.audio,
         known_consoles=known,
         default_port=X32_PORT,
-        writes=X32WritePort(console.last, settings.now),
+        writes=X32WritePort(console.last, settings.now, settings.workspace),
     )
     return services, console
 

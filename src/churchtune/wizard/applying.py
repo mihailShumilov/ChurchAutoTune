@@ -8,7 +8,7 @@ intermediate state is louder than before or after; turning them into console wri
 driver's job.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from churchtune.domain.changes import WireValue
@@ -62,51 +62,47 @@ def ref_of(path: PathRefModel) -> SignalRef:
 
 
 def chosen_packages(stored: PackagesFile) -> list[PackageModel]:
-    """The packages to write, in order: chosen, not suggestions, with what they require before.
+    """The chosen packages in order, each after what it requires.
+
+    A chosen suggestion (advice set by hand: output delay, polarity) counts for what requires
+    it; the program never writes it (``writable_packages``) and shows it as a task right after
+    the writes, before the check measurement.
 
     Raises:
-        UnsafeWrite: A chosen package requires one that is not written before it.
+        UnsafeWrite: A chosen package requires one that is not chosen before it.
     """
     chosen: list[PackageModel] = []
-    written: set[str] = set()
+    done: set[str] = set()
     for package in stored.packages:
-        if not package.selected or package.suggest_only:
+        if not package.selected:
             continue
-        missing = [kind for kind in package.requires if kind not in written]
+        missing = [kind for kind in package.requires if kind not in done]
         if missing:
             raise UnsafeWrite(
                 f"package {package.kind} needs {', '.join(missing)} applied first",
                 package=package.kind,
             )
         chosen.append(package)
-        written.add(package.kind)
+        done.add(package.kind)
     return chosen
 
 
 def is_advice(package: PackageModel) -> bool:
-    """A package with output delays or polarity: shown as values to set by hand (ADR 0010)."""
-    return bool(package.delays or package.polarities or package.delay_ms)
+    """A suggestion, or a package with output delays or polarity: set by hand (ADR 0010)."""
+    return bool(package.suggest_only or package.delays or package.polarities or package.delay_ms)
 
 
 def writable_packages(
     packages: Sequence[PackageModel],
 ) -> tuple[list[PackageModel], list[PackageModel]]:
-    """The packages the program writes, and the advice packages it shows instead.
+    """The packages the program writes, and the advice it shows as a task after the writes.
 
-    A package that requires an advice package is left out too: its "before" assumes a change
-    that the program does not make.
+    A package designed on top of an advice package is still written: its "before" is checked
+    against the console like any other, and the check measurement judges the result with the
+    advice set by hand.
     """
-    kept: list[PackageModel] = []
-    advice: list[PackageModel] = []
-    dropped: set[str] = set()
-    for package in packages:
-        if is_advice(package):
-            advice.append(package)
-            dropped.add(package.kind)
-        elif dropped.intersection(package.requires):
-            dropped.add(package.kind)
-        else:
-            kept.append(package)
+    kept = [p for p in packages if not is_advice(p)]
+    advice = [p for p in packages if is_advice(p)]
     return kept, advice
 
 
@@ -227,9 +223,15 @@ def _eq(model: EqModel) -> SystemEq:
 
 
 def ordered_steps(
-    target: PackageTarget, fresh: Mapping[SignalRef, StripState], fs_hz: float
+    target: PackageTarget,
+    fresh: Mapping[SignalRef, StripState],
+    fs_hz: float,
+    mutable: Collection[SignalRef] = (),
 ) -> tuple[Step, ...]:
     """The package's steps in a never-louder order, checked on every speaker path.
+
+    ``mutable`` are the speaker matrices that may be muted briefly for a change that has no
+    never-louder order otherwise (``safety.order``).
 
     Raises:
         UnsafeWrite: The fresh state no longer matches the package, or no safe order exists.
@@ -241,7 +243,8 @@ def ordered_steps(
         )
     whole_before = dict(fresh)
     whole_after = {**whole_before, **target.after}
-    return order_steps(whole_before, whole_after, speaker_chains(whole_before), fs_hz)
+    chains = speaker_chains(whole_before)
+    return order_steps(whole_before, whole_after, chains, fs_hz, mutable=mutable)
 
 
 def combined_target(

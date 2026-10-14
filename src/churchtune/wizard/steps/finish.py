@@ -18,6 +18,7 @@ from churchtune.storage.models import MicCalibrationFile, WizardStateFile
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
+from churchtune.wizard.steps.junction import restore_pending_mutes
 from churchtune.wizard.steps.proposal import propose
 from churchtune.wizard.steps.setup import measuring
 from churchtune.wizard.ui import info, t, task
@@ -149,7 +150,10 @@ class Finish:
         return True
 
     def run(self, ctx: WizardContext) -> Outcome:
-        """The checklist for the person."""
+        """The checklist for the person; never while temporary mutes are still pending."""
+        if not restore_pending_mutes(ctx):
+            info(ctx.prompter, t("mutes-pending-cannot-finish"))
+            return Outcome.QUIT
         state = ctx.box.state
         # Mutes and sends back first, then the scene: otherwise it is saved with them muted.
         lines = [t("step-finish-what"), t("step-finish-undo-by-hand"),
