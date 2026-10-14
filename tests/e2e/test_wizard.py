@@ -6,13 +6,16 @@ from datetime import datetime
 import pytest
 
 from churchtune.audio.fake.hall import FakeHall, FakeMic
+from churchtune.cli.apply_packages import X32WritePort
 from churchtune.cli.wizard import X32ConsolePort
+from churchtune.i18n import Translator
 from churchtune.measure.config import SweepConfig
 from churchtune.storage.files import (
     load_points,
     read_packages,
     read_plan,
     read_session_mic_calibration,
+    read_undo,
     read_wizard_state,
 )
 from churchtune.storage.paths import Workspace
@@ -44,15 +47,18 @@ def rig(tmp_path):
     hall.place(10, "p1")
     hall.place(11, "p2")
     console = X32ConsolePort()
+    now = lambda: datetime(2026, 10, 14, 10, 0, 0)  # noqa: E731 - one clock for both
     services = Services(
         console=console,
         audio=HallAudio(hall),
         workspace=Workspace(tmp_path),
-        now=lambda: datetime(2026, 10, 14, 10, 0, 0),
+        now=now,
         stop=threading.Event(),
         dev_safe=True,
         sweep=SWEEP,
         sleep=lambda _s: None,
+        writes=X32WritePort(console.last, now),
+        words=Translator("en"),
     )
     yield emulator, hall, services
     console.close()
@@ -82,9 +88,9 @@ def test_full_goal_with_two_microphones(rig):
     assert state.calibration_set is not None
     assert len(state.measured) == 8
     # Step numbering counts only the applicable steps; choosing two microphones adds the
-    # calibration step, so the total grows from 12 to 13 at that point (SPEC §7).
-    assert [h.total for h in volunteer.headers] == [12] * 6 + [13] * 7
-    assert [h.number for h in volunteer.headers] == list(range(1, 14))
+    # calibration step, so the total grows from 13 to 14 at that point (SPEC §7).
+    assert [h.total for h in volunteer.headers] == [13] * 6 + [14] * 8
+    assert [h.number for h in volunteer.headers] == list(range(1, 15))
     session = latest_session(services)
     assert session is not None
     assert read_wizard_state(session).completed[-1] == "finish"
@@ -94,7 +100,8 @@ def test_full_goal_with_two_microphones(rig):
         or "finding-spread-large" in volunteer.shown_keys()
     )
     assert volunteer.meters
-    assert emulator.writes == []  # the wizard of M3 never writes to the console
+    assert emulator.writes == []  # Enter at the typed word cancels: nothing is written
+    assert "apply-cancelled" in volunteer.shown_keys()
 
 
 def test_quit_and_resume_continues_after_the_last_step(rig):
@@ -119,7 +126,7 @@ def test_one_microphone_skips_the_calibration(rig):
     result = start(volunteer, services, "uk")
     assert result.finished
     assert "step-calibration-title" not in [h.title.key for h in volunteer.headers]
-    assert {h.total for h in volunteer.headers} == {12}
+    assert {h.total for h in volunteer.headers} == {13}
 
 
 def test_no_sound_until_the_measurement_channels_are_muted(rig):
@@ -302,3 +309,59 @@ def test_a_plan_without_a_hall_size_keeps_the_stored_plan(rig):
     start(second, services, "en")
     again = read_plan(services.workspace, "test-church")
     assert again == stored
+
+
+def _main_eq_writes(emulator):
+    return [address for address, _ in emulator.writes if address.startswith("/main/st/eq/")]
+
+
+def test_typing_the_word_writes_the_chosen_packages_with_an_undo_file(rig):
+    emulator, hall, services = rig
+    volunteer = _volunteer(emulator, hall, **{"apply-type": "apply"})
+    result = start(volunteer, services, "en")
+    assert result.finished
+    keys = volunteer.shown_keys()
+    assert "apply-done" in keys
+    assert "apply-scene-not-saved" in keys
+    assert _main_eq_writes(emulator)
+    assert result.state.applied_undo is not None
+    undo = read_undo(services.workspace.root / result.state.applied_undo)
+    assert undo.what == "packages"
+    assert len(undo.results) == len(undo.changes)
+    assert all(r.ok for r in undo.results)
+    assert emulator.unknown == []
+
+
+def test_a_console_changed_after_the_proposal_is_refused(rig):
+    emulator, hall, services = rig
+
+    def turn_a_knob(prompt):
+        emulator.hand_change("/main/st/eq/3/g", 0.9)  # someone boosts band 3 meanwhile
+        return Answer("")
+
+    volunteer = _volunteer(
+        emulator, hall, **{"step-results-next-milestones": turn_a_knob, "apply-type": "apply"}
+    )
+    result = start(volunteer, services, "en")
+    assert result.finished
+    assert "apply-console-changed" in volunteer.shown_keys()
+    assert emulator.writes == []
+    assert result.state.applied_undo is None
+
+
+def test_a_write_that_does_not_read_back_stops_and_offers_the_way_back(rig):
+    emulator, hall, services = rig
+    volunteer = _volunteer(emulator, hall, **{"apply-type": "apply", "undo-type": "undo"})
+
+    def ignore_main_eq(prompt):
+        emulator.ignored.update(f"/main/st/eq/{n}/{k}" for n in range(1, 7) for k in "fgq")
+        return Answer("apply")
+
+    volunteer.rules["apply-type"] = ignore_main_eq
+    result = start(volunteer, services, "en")
+    assert result.finished
+    keys = volunteer.shown_keys()
+    assert "apply-readback-failed" in keys
+    assert "apply-offer-undo" in keys
+    assert result.state.applied_undo is not None
+    assert "undo-done" in keys or "undo-nothing" in keys or "undo-incomplete" in keys

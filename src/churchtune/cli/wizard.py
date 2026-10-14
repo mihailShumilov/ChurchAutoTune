@@ -18,8 +18,9 @@ import typer
 from churchtune.audio.base import MultiChannelBackend
 from churchtune.audio.devices import list_devices, simulator_device
 from churchtune.audio.factory import open_multi_backend
-from churchtune.cli.context import EXIT_OK, EXIT_USER, FS_HZ, fail, settings_of
-from churchtune.errors import DevSafeViolation
+from churchtune.cli.apply_packages import X32WritePort
+from churchtune.cli.context import EXIT_OK, EXIT_USER, FS_HZ, Console, fail, settings_of
+from churchtune.errors import DevSafeViolation, UnsafeWrite
 from churchtune.i18n import LANGUAGES, Translator, detect_language
 from churchtune.mixers.base import DiscoveredConsole, MixerDriver
 from churchtune.mixers.x32.client import X32Client
@@ -48,6 +49,7 @@ class X32ConsolePort:
     """Discovery and read-only connections to X32/M32 consoles; closes them at the end."""
 
     transports: list[UdpTransport] = field(default_factory=list)
+    connections: list[tuple[str, Console]] = field(default_factory=list)
 
     def discover(self, extra: Sequence[tuple[str, int]]) -> list[DiscoveredConsole]:
         """Broadcast (outside dev-safe) plus the known addresses."""
@@ -57,7 +59,20 @@ class X32ConsolePort:
         """A read-only driver for one console."""
         transport = UdpTransport(host, port)
         self.transports.append(transport)
-        return X32Driver.connect(X32Client(transport))
+        client = X32Client(transport)
+        driver = X32Driver.connect(client)
+        self.connections.append((host, Console(transport, client)))
+        return driver
+
+    def last(self) -> tuple[str, Console]:
+        """The console connected last: the one the wizard works with.
+
+        Raises:
+            UnsafeWrite: No console is connected.
+        """
+        if not self.connections:
+            raise UnsafeWrite("no console is connected")
+        return self.connections[-1]
 
     def close(self) -> None:
         """Close every transport."""
@@ -211,6 +226,7 @@ def build_services(ctx: typer.Context) -> tuple[Services, X32ConsolePort]:
         audio_name=settings.audio,
         known_consoles=known,
         default_port=X32_PORT,
+        writes=X32WritePort(console.last, settings.now),
     )
     return services, console
 
@@ -237,6 +253,7 @@ def _run(
     connection closes under it.
     """
     translate = Translator(language)
+    services.words = translate
     if plain or not sys.stdin.isatty() or not sys.stdout.isatty():
         result: RunResult | None = begin(LinePrompter(translate))
     else:

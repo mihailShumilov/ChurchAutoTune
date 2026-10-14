@@ -194,3 +194,25 @@ def wire_value(state: StripState, path: str, laws: ValueLaws) -> WireValue:
     if mix == "fader":
         return laws.fader_wire(state.fader_db)
     return laws.band_wire_values(state.eq.band(int(band_no)))[0][kind]
+
+
+# Address segments as console-neutral parameter names.
+_PARAM_NAMES = {"type": "type", "f": "freq", "g": "gain", "q": "q"}
+
+
+def describe_path(path: str) -> tuple[SignalRef, int | None, str]:
+    """A writable address as (strip, band or None, parameter): ``gain``, ``fader``, ``eq_on``.
+
+    Raises:
+        UnsafeWrite: The address is not a strip parameter a plan may write.
+    """
+    match = _STRIP_RE.fullmatch(path)
+    if match is None:
+        raise UnsafeWrite(f"not a strip parameter a plan may write: {path}", path=path)
+    _, what, band_no, kind, mix = match.groups()
+    strip = strip_of(path)
+    if what == "eq/on":
+        return strip, None, "eq_on"
+    if mix is not None:
+        return strip, None, mix
+    return strip, int(band_no), _PARAM_NAMES[kind]

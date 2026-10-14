@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Protocol
 
 from churchtune.audio.base import MultiChannelBackend
+from churchtune.domain.snapshot import SignalRef
 from churchtune.measure.config import SweepConfig
 from churchtune.mixers.base import DiscoveredConsole, MixerDriver
+from churchtune.storage.models import PackageModel
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.protocol import Prompter
 from churchtune.wizard.state import StateBox
@@ -61,6 +63,106 @@ class AudioPort(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class PlannedWrite:
+    """One console write as the person sees it.
+
+    Attributes:
+        path: The console parameter (for logs and experts).
+        strip: The strip it belongs to.
+        band: EQ band number, or None for a strip parameter.
+        param: ``type``, ``freq``, ``gain``, ``q``, ``eq_on``, ``fader`` or ``on``.
+        before: Its value now, as the console shows it.
+        after: Its value after the write, on the console's grid.
+    """
+
+    path: str
+    strip: SignalRef
+    band: int | None
+    param: str
+    before: str
+    after: str
+
+
+@dataclass(frozen=True, slots=True)
+class WritePlan:
+    """Writes ready for a typed confirmation; nothing is sent yet.
+
+    Attributes:
+        writes: The writes in the order they will be sent (never louder in between).
+        token: The port's own plan, handed back to ``apply`` unchanged.
+        already_old: Undo only: parameters that already have their old value.
+        changed_by_hand: Undo only: parameters changed since; they are left alone.
+    """
+
+    writes: tuple[PlannedWrite, ...]
+    token: object
+    already_old: tuple[str, ...] = ()
+    changed_by_hand: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class WriteOutcome:
+    """How a confirmed plan went.
+
+    Attributes:
+        undo_path: The undo file, on disk before the first write.
+        sent: Writes sent and confirmed by readback.
+        complete: Every write was sent and confirmed.
+        stopped: The person stopped it between writes.
+        failed_path: The first write that did not read back, if any.
+    """
+
+    undo_path: Path
+    sent: int
+    complete: bool
+    stopped: bool = False
+    failed_path: str | None = None
+
+
+class WritePort(Protocol):
+    """The only way the wizard changes the console (SPEC S12, §9.2-9.3).
+
+    The port reads the console fresh, validates every write against the write scopes, orders the
+    writes so nothing is louder in between, writes the undo file before the first write and reads
+    every write back. The wizard only shows the plan and asks for the typed word.
+    """
+
+    def plan_packages(self, packages: Sequence[PackageModel]) -> WritePlan:
+        """The writes of the chosen packages from a fresh read.
+
+        Raises:
+            UnsafeWrite: The console changed since the measurement (``mismatches`` parameter),
+                or a write is outside the write scopes.
+        """
+        ...
+
+    def plan_undo(self, undo_path: Path) -> WritePlan:
+        """The writes that put an undo file's old values back where nobody changed them.
+
+        Raises:
+            UnsafeWrite: The undo file is damaged or names a write outside the scopes.
+        """
+        ...
+
+    def apply(  # noqa: PLR0913 - every input of a write is explicit
+        self,
+        plan: WritePlan,
+        typed: str,
+        expected: str,
+        undo_path: Path,
+        should_stop: Callable[[], bool],
+        *,
+        reverts: Path | None = None,
+    ) -> WriteOutcome:
+        """Send a plan after the typed word; the undo file is written first.
+
+        Raises:
+            UnsafeWrite: The word does not match or the plan was refused; nothing was sent.
+        """
+        ...
+
+
 @dataclass(slots=True)
 class Services:
     """Everything outside the wizard.
@@ -79,6 +181,8 @@ class Services:
         default_port: Console port when an address is typed without one.
         sleep: Waits (the countdown before a sweep); instant in tests.
         shutdown: Set by the UI when it goes away; the stop flag then stays set for good.
+        writes: Writes to the connected console (None: this run never writes).
+        words: A message key as text in the session's language (typed confirmation words).
     """
 
     console: ConsolePort
@@ -93,6 +197,8 @@ class Services:
     default_port: int = 10023
     sleep: Callable[[float], None] = time.sleep
     shutdown: threading.Event = field(default_factory=threading.Event)
+    writes: WritePort | None = None
+    words: Callable[[str], str] = str
 
     def reset_stop(self) -> bool:
         """Clear the stop flag for what comes next; False (flag kept) once the UI is gone.

@@ -8,8 +8,9 @@ written only by the wizard, or by ``ctune sub`` with ``--write-unverified``.
 """
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -38,6 +39,7 @@ from churchtune.mixers.x32.laws import X32ValueLaws
 from churchtune.mixers.x32.nodes import read_console_state
 from churchtune.mixers.x32.plan_writes import (
     PlannedChange,
+    describe_path,
     plan_writes,
     runs_by_scope,
     strip_of,
@@ -59,6 +61,7 @@ from churchtune.wizard.applying import (
     speaker_chains,
     strip_states,
 )
+from churchtune.wizard.services import PlannedWrite, WriteOutcome, WritePlan
 
 LAWS = X32ValueLaws()
 FS_HZ = 48000.0
@@ -124,6 +127,7 @@ def send_runs(
     undo_path: Path,
     word: TypedWord,
     policy: WritePolicy,
+    should_stop: Callable[[], bool] | None = None,
 ) -> tuple[list[records.WriteResultLike], bool]:
     """Send the runs of one scope each, in order; stop at the first write that fails.
 
@@ -142,7 +146,7 @@ def send_runs(
         auth = authorize_typed(
             scope, changes, undo_path, word, policy, undo_sha256=_sha256(undo_path)
         )
-        sent = list(ScopedWriter(console.transport, console.client, auth).apply())
+        sent = list(ScopedWriter(console.transport, console.client, auth).apply(should_stop))
         results.extend(sent)
         undo = files.read_undo(undo_path)
         update = {"results": records.result_models(results)}
@@ -152,16 +156,18 @@ def send_runs(
     return results, True
 
 
-def _undo_file(
-    settings: Settings,
+def package_undo_file(
+    created: str,
+    ip: str | None,
     planned: Sequence[PlannedChange],
     *,
     proposal: Path | None = None,
     reverts: Path | None = None,
 ) -> UndoFile:
+    """The undo file of a package plan (or of its undo): every write with its scope."""
     return UndoFile(
-        created=settings.timestamp(),
-        ip=settings.venue.console_host,
+        created=created,
+        ip=ip,
         scope=planned[0].scope,
         what="packages" if reverts is None else "undo of packages",
         proposal=None if proposal is None else str(proposal),
@@ -171,12 +177,7 @@ def _undo_file(
 
 
 def _new_undo_path(settings: Settings, *, revert: bool = False) -> Path:
-    path, counter = settings.workspace.undo_path(None, settings.now(), revert=revert), 1
-    candidate = path
-    while candidate.exists():
-        counter += 1
-        candidate = path.with_name(f"{path.stem}_{counter}{path.suffix}")
-    return candidate
+    return settings.workspace.new_undo_path(None, settings.now(), revert=revert)
 
 
 def apply_packages_command(
@@ -226,7 +227,12 @@ def apply_packages_command(
             say("Отменено — ничего не записано.")
             raise typer.Exit(EXIT_USER)
         undo_path = _new_undo_path(settings)
-        files.write_json(undo_path, _undo_file(settings, planned, proposal=proposal))  # BEFORE
+        files.write_json(
+            undo_path,
+            package_undo_file(
+                settings.timestamp(), settings.venue.console_host, planned, proposal=proposal
+            ),
+        )  # BEFORE
         shown = relative_to_home(undo_path, settings.workspace)
         say(f"undo-файл: {undo_path}")
         try:
@@ -329,7 +335,12 @@ def undo_packages(
         say("Отменено — ничего не записано.")
         return EXIT_USER
     revert_path = _new_undo_path(settings, revert=True)
-    files.write_json(revert_path, _undo_file(settings, plan.planned, reverts=source))
+    files.write_json(
+        revert_path,
+        package_undo_file(
+            settings.timestamp(), settings.venue.console_host, plan.planned, reverts=source
+        ),
+    )
     say(f"undo-файл: {revert_path}")
     policy = package_policy(state, roles)
     try:
@@ -341,3 +352,89 @@ def undo_packages(
         return EXIT_READBACK
     say("Готово.")
     return EXIT_OK
+
+
+@dataclass(slots=True)
+class X32WritePort:
+    """The wizard's write port on an X32/M32 (``wizard.services.WritePort``).
+
+    Attributes:
+        connection: The console the wizard connected last, as (address, transport and client).
+        now: Wall clock for the undo files.
+    """
+
+    connection: Callable[[], tuple[str, Console]]
+    now: Callable[[], datetime]
+
+    def _fresh(self) -> tuple[str, Console, ConsoleState, WritePolicy]:
+        host, console = self.connection()
+        state = read_console_state(console.client)
+        try:
+            roles = detect_roles(state)
+        except ValueError as error:
+            raise UnsafeWrite(f"speaker roles unclear: {error}") from error
+        return host, console, state, package_policy(state, roles)
+
+    def plan_packages(self, packages: Sequence[PackageModel]) -> WritePlan:
+        """The writes of the chosen packages from a fresh read (delay and polarity are advice)."""
+        _, _, state, policy = self._fresh()
+        writable = [p for p in packages if p not in _advice_only(packages)]
+        planned = plan_package_writes(writable, state, policy) if writable else ()
+        return WritePlan(_rows(planned), planned)
+
+    def plan_undo(self, undo_path: Path) -> WritePlan:
+        """Three-way undo of a package undo file."""
+        try:
+            undo = files.read_undo(undo_path)
+        except (ValueError, OSError) as error:
+            raise UnsafeWrite(f"damaged undo file: {error}") from error
+        _, _, state, policy = self._fresh()
+        plan = plan_package_undo(undo, state, policy)
+        return WritePlan(_rows(plan.planned), plan.planned, plan.already_old, plan.changed_by_hand)
+
+    def apply(
+        self,
+        plan: WritePlan,
+        typed: str,
+        expected: str,
+        undo_path: Path,
+        should_stop: Callable[[], bool],
+        *,
+        reverts: Path | None = None,
+    ) -> WriteOutcome:
+        """Fresh policy, undo file first, then the runs of one scope each."""
+        from churchtune.mixers.x32.writer import STOPPED  # noqa: PLC0415 - lazy by design
+
+        word = TypedWord(typed, expected)
+        if not word.matches():
+            raise UnsafeWrite("the confirmation word does not match; nothing is written")
+        planned = _planned_of(plan)
+        host, console, _, policy = self._fresh()
+        created = self.now().isoformat(timespec="seconds")
+        files.write_json(undo_path, package_undo_file(created, host, planned, reverts=reverts))
+        results, complete = send_runs(console, planned, undo_path, word, policy, should_stop)
+        stopped = any(r.error == STOPPED for r in results)
+        failed = next((r.path for r in results if not r.ok and r.error != STOPPED), None)
+        sent = sum(1 for r in results if r.ok)
+        return WriteOutcome(undo_path, sent, complete, stopped, failed)
+
+
+def _rows(planned: Sequence[PlannedChange]) -> tuple[PlannedWrite, ...]:
+    rows = []
+    for item in planned:
+        change = item.change
+        strip, band, param = describe_path(change.path)
+        rows.append(
+            PlannedWrite(change.path, strip, band, param, change.old_display, change.new_display)
+        )
+    return tuple(rows)
+
+
+def _planned_of(plan: WritePlan) -> tuple[PlannedChange, ...]:
+    """The port's own plan back from the wizard; anything else is refused."""
+    token = plan.token
+    if not isinstance(token, tuple) or not all(isinstance(p, PlannedChange) for p in token):
+        raise UnsafeWrite("the plan was not made by this console's write port")
+    if not token:
+        raise UnsafeWrite("an empty plan is never sent")
+    return token

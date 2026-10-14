@@ -1,6 +1,7 @@
-"""The wizard steps in SPEC order (S0-S14; S12/S13 arrive with M5)."""
+"""The wizard steps in SPEC order (S0-S14; S13 verify arrives later in M5)."""
 
 from churchtune.wizard.engine import Step
+from churchtune.wizard.steps.apply import Apply
 from churchtune.wizard.steps.finish import Finish, Results
 from churchtune.wizard.steps.measure import (
     Calibration,
@@ -34,5 +35,6 @@ def all_steps() -> list[Step]:
         Calibration(),
         MeasurePoints(),
         Results(),
+        Apply(),
         Finish(),
     ]
