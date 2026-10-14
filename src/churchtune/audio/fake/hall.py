@@ -56,6 +56,25 @@ SpeakerGains = Callable[[], Mapping[str, float]]
 
 
 @dataclass(frozen=True, slots=True)
+class SpeakerChain:
+    """What the console does to one speaker's feed after Main LR.
+
+    Attributes:
+        eq: The EQ of the speaker's matrix.
+        gain_db: Change of its fader since the hall was set up (the speakers were balanced as
+            the console was found).
+        inverted: Polarity of the matrix.
+    """
+
+    eq: SystemEq
+    gain_db: float = 0.0
+    inverted: bool = False
+
+
+SpeakerChains = Callable[[], Mapping[str, SpeakerChain]]
+
+
+@dataclass(frozen=True, slots=True)
 class FakeMic:
     """One simulated measurement microphone.
 
@@ -96,6 +115,7 @@ class FakeHall:
         seed: Seed of the noise.
         main_eq: Returns the console's Main LR EQ now; the playback goes through it (every
             speaker hangs behind Main LR), so a check measurement hears what was written.
+        speaker_chains: Returns each speaker's matrix EQ, fader change and polarity now.
     """
 
     fs_hz: float
@@ -104,6 +124,7 @@ class FakeHall:
     latency_samples: int = 1800
     speaker_gains: SpeakerGains | None = None
     main_eq: Callable[[], SystemEq] | None = None
+    speaker_chains: SpeakerChains | None = None
     input_count: int = DEFAULT_INPUTS
     seed: int = 11
     name: str = "simulator-hall"
@@ -122,6 +143,9 @@ class FakeHall:
     )
     _shapes: dict[int, FloatArray] = field(default_factory=dict, init=False, repr=False)
     _eq_state: tuple[SystemEq, FloatArray] | None = field(default=None, init=False, repr=False)
+    _chain_states: dict[str, tuple[SystemEq, FloatArray]] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _rng: np.random.Generator = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -247,11 +271,32 @@ class FakeHall:
         level = gains if gains is not None else self._gains_now()
         out = self._through_main_eq(out)
         left, right = out[:, 0], out[:, 1]
-        return {
+        feeds = {
             "top_l": left * level["top_l"],
             "top_r": right * level["top_r"],
             "sub": (left + right) / 2 * level["sub"],
         }
+        return self._through_speaker_chains(feeds)
+
+    def _through_speaker_chains(self, feeds: dict[str, FloatArray]) -> dict[str, FloatArray]:
+        """Each feed through its matrix: EQ (state kept between blocks), fader change, polarity."""
+        if self.speaker_chains is None:
+            return feeds
+        chains = self.speaker_chains()
+        for speaker, chain in chains.items():
+            feed = feeds[speaker]
+            if chain.eq.on:
+                sections = [s for b in chain.eq.bands if (s := band_sos(b, self.fs_hz)) is not None]
+                if sections:
+                    sos = np.concatenate(sections)
+                    state = self._chain_states.get(speaker)
+                    if state is None or state[0] != chain.eq:
+                        state = (chain.eq, np.zeros((sos.shape[0], 2)))
+                    feed, zi = signal.sosfilt(sos, feed, zi=state[1])
+                    self._chain_states[speaker] = (chain.eq, zi)
+            sign = -1.0 if chain.inverted else 1.0
+            feeds[speaker] = np.asarray(feed, dtype=np.float64) * sign * db_to_lin(chain.gain_db)
+        return feeds
 
     def _through_main_eq(self, out: FloatArray) -> FloatArray:
         """The playback after the console's Main LR EQ (unchanged without one).

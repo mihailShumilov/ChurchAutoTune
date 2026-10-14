@@ -54,6 +54,7 @@ MIN_ALIGNMENT_GAIN_DB = 1.0
 # The sub fader moves at most this much in one package, and never above 0 dB.
 # Below the ±10 dB of the levels scope by more than a fader step, so a proposal always passes it.
 MAX_LEVEL_STEP_DB = 9.5
+LOWEST_PROPOSED_FADER_DB = -89.5  # below about −90 dB an X32/M32 fader reads as down
 MAX_FADER_DB = 0.0
 # A predicted EQ change is limited to this much per frequency (near the zeros of cut filters).
 EQ_CHANGE_LIMIT_DB = 24.0
@@ -479,6 +480,8 @@ def _sub_level(
     if change == 0.0:
         return None
     subs = [ctx.snapshot.matrices[n] for n in roles.sub]
+    if any(s.fader_db + change < LOWEST_PROPOSED_FADER_DB for s in subs):
+        return None  # the console would read the fader as down (−∞): not a level to propose
     levels = tuple(LevelChange(s.ref, s.fader_db, round(s.fader_db + change, 1)) for s in subs)
     suggest_only = any(level.after_db > MAX_FADER_DB for level in levels)
     notes = [Note(NoteCode.SUB_LEVEL, {"change_db": round(change, 1)})]

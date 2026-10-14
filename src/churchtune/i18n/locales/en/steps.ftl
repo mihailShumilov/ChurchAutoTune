@@ -380,34 +380,45 @@ step-finish-undo-later = If the sound is not right at the service, you can put t
 step-finish-reverted = The console has its old settings again; there is nothing to save.
 
 ## S10b Junction
-step-junction-title = Subwoofer and main speakers apart
 mute-word = mute
-mute-word-mismatch = That is not the word “{ $word }”, so nothing was muted. Type it again, or press Enter on an empty line to skip this measurement.
+
+## S10b Junction (after the UX review)
+step-junction-title = Subwoofer and main speakers apart
+mute-word-mismatch = That is not the word “{ $word }”, so nothing was switched off. Type it again, or press Enter on an empty line to skip this measurement.
 junction-what = { $count ->
-    [one] Now we measure 1 place three times in a row: the subwoofer alone, the main speakers alone, and everything together. This shows where they meet and whether they cancel each other.
-   *[other] Now we measure { $count } places three times in a row: the subwoofer alone, the main speakers alone, and everything together. This shows where they meet and whether they cancel each other.
+    [one] At 1 place we play three short test sounds: the subwoofer alone, the main speakers alone, then everything. This shows where they meet and whether they cancel each other out.
+   *[other] At { $count } places we play three short test sounds: the subwoofer alone, the main speakers alone, then everything. This shows where they meet and whether they cancel each other out.
 }
-junction-mutes = For this the program mutes the subwoofer or the main speakers on the console for a few seconds (only their matrices) and puts every switch back right after, also if you stop it. Before the first mute it saves how the switches were.
-junction-type = To allow the short mutes, type the word “{ $word }” and press Enter. An empty line skips this measurement (then no crossover is proposed).
-junction-cancelled = Skipped: nothing was muted. The program will not propose a crossover this time.
-junction-sweeps = three sweeps in a row: subwoofer, main speakers, everything
-junction-done = { $count ->
-    [one] Done: 1 place measured with the subwoofer and the main speakers apart. Every switch is back.
-   *[other] Done: { $count } places measured with the subwoofer and the main speakers apart. Every switch is back.
-}
-junction-not-possible = The subwoofer and the main speakers cannot be measured apart here: the program mutes only matrices, and at least one of them does not come from its own matrix. No crossover will be proposed.
-junction-skipped-pending = Some mutes of an earlier measurement are still not back, so this measurement is skipped.
-junction-restore-by-hand = The console did not confirm that the mutes are back. Look at the console now and switch on these matrices by hand if they are off: { $matrices }. The program will check them again next time.
-junction-mute-failed = The console did not confirm a mute, so the measurement stopped. The program put the switches back.
-junction-quiet-block = At { $point } one of the three sweeps was very quiet: check that the subwoofer and the main speakers really played.
-mutes-pending-what = An earlier measurement stopped before it could switch some matrices back on. This is what the program would put back (read from the console just now):
-mutes-pending-type = To put them back, type the word “{ $word }” and press Enter. An empty line leaves them as they are.
-mutes-pending-left = Left as they are. Switch them back by hand, or let the program do it next time.
-mutes-pending-changed = The console changed while the list was on the screen. Nothing was written; the program will ask again.
-mutes-pending-done = The matrix switches are back as they were.
-mutes-pending-cannot-finish = Some matrices may still be muted from the measurement. Switch them back first (the program asks again next time), then finish.
-apply-advice-side-delay = delay { $side } by { $ms } ms
-apply-advice-side-sub = the subwoofer
-apply-advice-side-tops = the main speakers
-apply-level-far = { $path }: the fader would go to { $after_db } dB; when this venue was first read it was at { $first_db } dB. That is a big change from how the system was set up.
-apply-level-far-question = Are you sure the subwoofer level should change this much?
+junction-mutes = To hear them apart, the program switches off the sound of the subwoofer or the main speakers on the console for a few seconds (the Mute button of their matrices, the console outputs that feed these speakers). Before that it writes down how every button was, and afterwards it switches them back and checks. If the console does not confirm, the program tells you which buttons to look at.
+junction-type = To allow this, type the word “{ $word }” and press Enter (a typed word protects against an accidental key press). Enter on an empty line skips it: the rest of the tuning continues, only no crossover (the split between the subwoofer and the main speakers) is proposed.
+junction-cancelled = Skipped: nothing was switched off. The rest of the tuning continues; no crossover is proposed this time.
+junction-sweeps = three short test sounds in a row: first only the subwoofer, then only the main speakers, then everything. The silence in between is planned. Do not press Mute on the console meanwhile.
+junction-done = Done: places measured with the subwoofer and the main speakers apart — { $count }. Every Mute button is back as it was.
+junction-partial = { $done } of { $total } places measured. The rest were not measured, so no crossover is proposed for now.
+junction-not-possible = The subwoofer and the main speakers cannot be measured apart here: the program switches off only matrices, and at least one of them does not come from its own matrix. The rest of the tuning continues. For a crossover, the subwoofer and the main speakers need their own matrices: ask whoever set up the system.
+junction-no-writes = This run does not change the console, so the subwoofer and the main speakers are not measured apart. The rest of the tuning continues.
+junction-skipped-pending = So this measurement is skipped, and no crossover is proposed this time.
+junction-matrix = { $matrix } ({ $name })
+junction-restore-by-hand = The console did not confirm that the sound is back on. Look at the console now: on { $matrices } the Mute button must not be lit. If it is lit, press it. The program checks them again before it finishes.
+junction-mute-failed = The console did not confirm that the sound was switched off, so the measurement stopped. The sound is back on.
+mutes-pending-what = An earlier measurement stopped before it could switch the sound back on. These speakers are silent until then (read from the console just now):
+mutes-pending-type = To switch them back on, type the word “{ $word }” and press Enter. Enter on an empty line leaves them off: then these speakers stay silent.
+mutes-pending-left = Left off. Take the Mute off these matrices by hand, or start the program again.
+mutes-pending-changed = The console changed while the list was on the screen, so nothing was written. Start the program again to see a fresh list.
+mutes-pending-done = The sound is back on: every Mute button is as it was before the measurement.
+mutes-pending-cannot-finish = The program closes now: some matrices are still switched off from the measurement. Take the Mute off them by hand, or start the program again and it will offer to do it. Save the scene only after that.
+apply-level-far = { $path }: the fader would go from { $first_db } dB (as it was at the first visit) to { $after_db } dB, that is { $delta_db } dB { $louder ->
+    [yes] louder
+   *[no] quieter
+}. That is far from how the system was set up.
+apply-level-far-question = Write this level anyway? “No” writes nothing at all; to keep the other changes, go back and leave this package out.
+apply-advice-side-delay = { $side }: add { $ms } ms of delay (in the speakers' processor, or on the console output that feeds them)
+apply-advice-side-sub = Subwoofer
+apply-advice-side-tops = Main speakers
+junction-rejected-clipped = At place { $number } ({ $place }) the recording was too loud (clipping), so this place is not used. Lower the level and measure it again later.
+junction-rejected-quiet = At place { $number } ({ $place }) one of the three sounds was missing, so this place is not used. Check that the subwoofer and the main speakers both play.
+junction-rejected-mismatch = At place { $number } ({ $place }) the three sounds do not add up: probably a Mute switched late or something moved. This place is not used.
+apply-still-muted = The console did not confirm that { $matrices } came back on after a short mute. Take the Mute off them by hand now; the program checks again before it finishes.
+apply-mutes-pending = Some speakers may still be muted from an earlier measurement, so nothing is written now.
+verify-mutes-pending = Some speakers may still be muted, so the check measurement is skipped: it would compare the wrong sound.
+apply-advice-package = { $package }: set the values of this package by hand, as shown in the change plan

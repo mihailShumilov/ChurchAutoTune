@@ -8,12 +8,13 @@ are advice only in the wizard: the person sets them by hand after the writes (th
 never verified on hardware, ADR 0005).
 """
 
+import logging
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from churchtune.domain.snapshot import SignalRef, SourceKind
+from churchtune.domain.snapshot import ConsoleSnapshot, SignalRef, SourceKind
 from churchtune.errors import ChurchTuneError, ConsoleUnreachable, UnsafeWrite
 from churchtune.storage.files import read_packages, read_snapshot, read_wizard_state
 from churchtune.storage.models import PackageModel, WizardStateFile
@@ -32,9 +33,11 @@ from churchtune.wizard.steps.proposal import path_text
 from churchtune.wizard.steps.setup import ensure_driver, measuring
 from churchtune.wizard.ui import confirm, info, kebab, t, task, typed_word
 
-APPLY_WORD, UNDO_WORD = "apply-word", "undo-word"
+logger = logging.getLogger(__name__)
+APPLY_WORD, UNDO_WORD, MUTE_WORD = "apply-word", "undo-word", "mute-word"
 # The English words count in every language: typing them is just as deliberate.
-ENGLISH_WORDS = {APPLY_WORD: "apply", UNDO_WORD: "undo", "mute-word": "mute"}
+ENGLISH_WORDS = {APPLY_WORD: "apply", UNDO_WORD: "undo", MUTE_WORD: "mute"}
+FAR_FROM_FIRST_DB = 12.0  # SPEC §9.2 levels: further from the venue's first snapshot needs a "yes"
 WRITING_GOALS = frozenset({"full", "sub"})
 REPLANS = 3  # the console changed while the list was shown: read it again at most this often
 KHZ = 1000.0
@@ -93,9 +96,12 @@ def _advice(packages: Sequence[PackageModel]) -> list[Text]:
             for p in package.polarities
             if p.after != p.before
         )
+        shown_as_values = package.delays or package.polarities or package.delay_ms
+        if package.suggest_only and not shown_as_values:
+            lines.append(t("apply-advice-package", package=t(f"package-{kebab(package.kind)}")))
         if package.delay_ms and package.delay_side and not package.delays:
             side = t(f"apply-advice-side-{package.delay_side}")
-            lines.append(t("apply-advice-side-delay", side=side, ms=package.delay_ms))
+            lines.append(t("apply-advice-side-delay", side=side, ms=round(package.delay_ms, 1)))
     return lines
 
 
@@ -236,6 +242,9 @@ class Apply:
         """Plan from a fresh read, show it, ask for the word, write, report."""
         state = ctx.box.state
         root = ctx.services.workspace.root
+        if not restore_pending_mutes(ctx):  # never write while a speaker may still be muted
+            info(ctx.prompter, t("apply-mutes-pending"))
+            return Outcome.DONE
         if not state.proposal_file:
             info(ctx.prompter, t("apply-nothing"))
             return Outcome.DONE
@@ -291,11 +300,8 @@ class Apply:
         info(ctx.prompter, t("apply-console-keeps-changing"))
 
 
-FAR_FROM_FIRST_DB = 12.0  # SPEC §9.2 levels: further from the venue's first snapshot needs a "yes"
-
-
-def first_fader_db(ctx: WizardContext, strip: SignalRef) -> float | None:
-    """The fader of a matrix in the venue's first snapshot (None when there is none)."""
+def first_snapshot(ctx: WizardContext) -> ConsoleSnapshot | None:
+    """The venue's first readable snapshot (None when there is none)."""
     workspace = ctx.services.workspace
     for session in workspace.sessions_of(ctx.box.state.venue):
         try:
@@ -303,32 +309,40 @@ def first_fader_db(ctx: WizardContext, strip: SignalRef) -> float | None:
             if path is None:
                 continue
             stored = read_snapshot(workspace.root / path)
-            snapshot = ensure_driver(ctx).parse_snapshot(
-                stored.identity(), stored.raw, stored.taken_at
-            )
-        except (ValueError, OSError, ChurchTuneError):
-            continue
-        strips = snapshot.matrices if strip.kind is SourceKind.MATRIX else {}
-        found = strips.get(strip.number)
-        return found.fader_db if found is not None else None
+            return ensure_driver(ctx).parse_snapshot(stored.identity(), stored.raw, stored.taken_at)
+        except (ValueError, OSError, ChurchTuneError) as error:
+            logger.warning("snapshot of %s not usable for the level check: %s", session, error)
     return None
+
+
+def first_fader_db(snapshot: ConsoleSnapshot | None, strip: SignalRef) -> float | None:
+    """The fader of a matrix in a snapshot (None without one)."""
+    if snapshot is None or strip.kind is not SourceKind.MATRIX:
+        return None
+    found = snapshot.matrices.get(strip.number)
+    return found.fader_db if found is not None else None
 
 
 def _far_levels_confirmed(ctx: WizardContext, plan: WritePlan) -> bool:
     """A fader more than 12 dB away from the venue's first snapshot needs a separate "yes"."""
+    faders = [w for w in plan.writes if w.param == "fader" and isinstance(w.after_value, float)]
+    if not faders:
+        return True
+    snapshot = first_snapshot(ctx)
     far: list[Text] = []
-    for write in plan.writes:
-        if write.param != "fader" or not isinstance(write.after_value, float):
+    for write in faders:
+        first = first_fader_db(snapshot, write.strip)
+        after = float(write.after_value)
+        if first is None or math.isinf(first) or math.isinf(after):
             continue
-        first = first_fader_db(ctx, write.strip)
-        if first is None or math.isinf(first) or math.isinf(write.after_value):
-            continue
-        if abs(write.after_value - first) > FAR_FROM_FIRST_DB:
+        if abs(after - first) > FAR_FROM_FIRST_DB:
             text = t(
                 "apply-level-far",
                 path=path_text(write.strip),
                 first_db=round(first, 1),
-                after_db=round(write.after_value, 1),
+                after_db=round(after, 1),
+                delta_db=round(abs(after - first), 1),
+                louder="yes" if after > first else "no",
             )
             far.append(text)
     if not far:
@@ -336,9 +350,53 @@ def _far_levels_confirmed(ctx: WizardContext, plan: WritePlan) -> bool:
     return confirm(ctx.prompter, *far, t("apply-level-far-question"), default=False)
 
 
+def restore_pending_mutes(ctx: WizardContext) -> bool:  # noqa: PLR0911 - one exit per case
+    """Switch back on what an interrupted measurement left muted (fresh read, table, word).
+
+    Returns:
+        True when nothing is pending any more.
+    """
+    writes = ctx.services.writes
+    if writes is None:
+        return True
+    try:
+        if writes.clear_settled_mutes():
+            return True
+        plan = writes.pending_mutes()
+    except ConsoleUnreachable:
+        info(ctx.prompter, t("apply-console-lost"))
+        return False
+    if plan is None:
+        return True
+    word = ctx.services.words(UNDO_WORD)
+    answer = ask_word(
+        ctx,
+        UNDO_WORD,
+        t("mutes-pending-what"),
+        t("mutes-pending-type", word=word),
+        table=write_table(plan),
+    )
+    if answer is None:
+        info(ctx.prompter, t("mutes-pending-left"))
+        return False
+    try:
+        writes.restore_pending_mutes(plan, *answer)
+    except UnsafeWrite:
+        info(ctx.prompter, t("mutes-pending-changed"))
+        return False
+    except ConsoleUnreachable:
+        info(ctx.prompter, t("apply-console-lost"))
+        return False
+    info(ctx.prompter, t("mutes-pending-done"))
+    return True
+
+
 def _report(ctx: WizardContext, outcome: WriteOutcome, plan: WritePlan) -> None:
     """Say how the writing went; offer the way back when it stopped half-way."""
     ctx.box.update(applied_state=APPLIED if outcome.sent else NOTHING)
+    if outcome.still_muted:
+        names = tuple(path_text(SignalRef(SourceKind.MATRIX, n)) for n in outcome.still_muted)
+        info(ctx.prompter, t("apply-still-muted", matrices=names))
     if outcome.complete:
         info(ctx.prompter, t("apply-done", count=outcome.sent), t("apply-scene-not-saved"))
         return

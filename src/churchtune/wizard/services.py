@@ -116,6 +116,7 @@ class WriteOutcome:
         complete: Every write was sent and confirmed.
         stopped: The person stopped it between writes.
         failed_path: The first write that did not read back, if any.
+        still_muted: Speaker matrices the plan muted for a moment and could not switch back on.
     """
 
     undo_path: Path
@@ -123,6 +124,7 @@ class WriteOutcome:
     complete: bool
     stopped: bool = False
     failed_path: str | None = None
+    still_muted: tuple[int, ...] = ()
 
 
 class MuteSession(Protocol):
@@ -200,8 +202,16 @@ class WritePort(Protocol):
         """The writes that put the mutes of an interrupted measurement back; None if none."""
         ...
 
-    def restore_pending_mutes(self, plan: WritePlan, typed: str, expected: str) -> bool:
-        """Put pending mutes back as shown, after a fresh read.
+    def clear_settled_mutes(self) -> bool:
+        """Remove the pending record when the console already has every original switch.
+
+        Raises:
+            ConsoleUnreachable: The console did not answer.
+        """
+        ...
+
+    def restore_pending_mutes(self, plan: WritePlan, typed: str, expected: str) -> None:
+        """Put pending mutes back as shown, after a fresh read; the record goes after it.
 
         Raises:
             UnsafeWrite: The word does not match or the console changed (``mismatches``).

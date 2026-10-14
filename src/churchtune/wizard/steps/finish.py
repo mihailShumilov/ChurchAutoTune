@@ -18,7 +18,7 @@ from churchtune.storage.models import MicCalibrationFile, WizardStateFile
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
-from churchtune.wizard.steps.junction import restore_pending_mutes
+from churchtune.wizard.steps.apply import restore_pending_mutes
 from churchtune.wizard.steps.proposal import propose
 from churchtune.wizard.steps.setup import measuring
 from churchtune.wizard.ui import info, t, task

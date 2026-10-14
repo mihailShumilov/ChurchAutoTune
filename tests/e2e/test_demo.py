@@ -33,9 +33,9 @@ class DemoAudio:
 
 def test_the_demo_reaches_the_writes_and_the_check(tmp_path):
     emulator = X32Emulator().start()
+    console = X32ConsolePort()
     try:
         link = prepare_demo(emulator)
-        console = X32ConsolePort()
         now = lambda: datetime(2026, 10, 14, 10, 0, 0)  # noqa: E731 - one clock for both
         services = Services(
             console=console, audio=DemoAudio(link), workspace=Workspace(tmp_path), now=now,
@@ -58,6 +58,6 @@ def test_the_demo_reaches_the_writes_and_the_check(tmp_path):
         assert result.state.junction_measured
         assert result.state.applied_state == "applied", [k for k in keys if k.startswith("apply")]
         assert result.state.verify_verdict is not None
-        console.close()
     finally:
+        console.close()
         emulator.stop()

@@ -29,7 +29,12 @@ from churchtune.storage.models import WizardStateFile
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
-from churchtune.wizard.steps.apply import APPLIED, WRITING_GOALS, undo_applied
+from churchtune.wizard.steps.apply import (
+    APPLIED,
+    WRITING_GOALS,
+    restore_pending_mutes,
+    undo_applied,
+)
 from churchtune.wizard.steps.finish import session_analysis
 from churchtune.wizard.steps.measure import measure_rounds, place_text, venue_plan
 from churchtune.wizard.steps.setup import measuring
@@ -167,6 +172,9 @@ class Verify:
     def run(self, ctx: WizardContext) -> Outcome:
         """Pick the points, measure them again, judge, offer the way back when worse."""
         state = ctx.box.state
+        if not restore_pending_mutes(ctx):  # a muted speaker would spoil the comparison
+            info(ctx.prompter, t("verify-mutes-pending"))
+            return Outcome.DONE
         if state.applied_state != APPLIED or state.applied_undo is None:
             info(ctx.prompter, t("verify-nothing-applied"))
             return Outcome.DONE
