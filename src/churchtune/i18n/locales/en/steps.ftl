@@ -133,7 +133,7 @@ step-points-done = { $count } places measured.
 step-results-title = Results
 step-results-no-points = There are no measured places yet.
 step-results-what = What the measurement at { $count } places shows:
-step-results-next-milestones = Your choices are saved. Writing them to the console, undo and the check measurement come in the next version; until then nothing on the console has changed.
+step-results-next-milestones = Your choices are saved. The next step shows exactly what will change on the console and asks before it writes anything.
 finding-hump = A hump around { $freq_hz } Hz (+{ $gain_db } dB): voices may sound boomy or boxy.
 finding-rt60-dry = The hall is rather dry (RT60 { $rt60_s } s): good for speech.
 finding-rt60-good = The hall reverberates moderately (RT60 { $rt60_s } s): good for speech and music.
@@ -280,3 +280,55 @@ audit-possible-feedback-notch = { $count ->
    *[other] Channels { $channels } have narrow cuts (down to { $gain_db } dB), probably protection against feedback. Make them at most half as deep, during a rehearsal, with the monitors on.
 }
 audit-shared-cut-room = Channels { $channels } all cut around { $freq_hz } Hz (about { $gain_db } dB), where the system EQ now cuts too. After the tuning, make these cuts shallower, 3 dB at a time, one channel after another.
+
+## S12 Apply
+step-apply-title = Apply the changes
+apply-word = apply
+undo-word = undo
+write-what = Setting
+write-after = Will be
+value-console = { $value }
+write-eq-on = { $path }: EQ on/off
+write-fader = { $path }: fader
+write-on = { $path }: on/mute
+write-band-type = { $path }, band { $band }: type
+write-band-freq = { $path }, band { $band }: frequency
+write-band-gain = { $path }, band { $band }: gain
+write-band-q = { $path }, band { $band }: width (Q)
+apply-what = { $count ->
+    [one] The program will write 1 setting to the console, in this order.
+   *[other] The program will write { $count } settings to the console, in this order.
+}
+apply-undo-first = Before the first write, the old values are saved, so everything can be put back. The order is chosen so the sound never gets louder in between.
+apply-type = To write, type the word “{ $word }” and press Enter. Anything else cancels.
+apply-cancelled = Cancelled: nothing was written to the console.
+apply-done = { $count ->
+    [one] Done: 1 setting was written and checked on the console.
+   *[other] Done: { $count } settings were written and checked on the console.
+}
+apply-scene-not-saved = The scene on the console is NOT saved yet. Save it under a new name once you like the sound.
+apply-stopped = You stopped the writing. { $count } settings had been written before that.
+apply-readback-failed = The console did not confirm { $path }. The program stopped there ({ $count } settings were written before).
+apply-offer-undo = Put back what was written?
+apply-nothing = Nothing to write: no chosen change needs the console.
+apply-proposal-unreadable = The saved change plan cannot be read. Nothing was written. Measure again to make a new plan.
+apply-console-changed = The console has changed since the measurement (someone moved a setting). Nothing was written. Measure again, so the plan fits what the console has now.
+apply-refused = The program refused this plan because it breaks a safety limit. Nothing was written.
+apply-console-lost = The connection to the console was lost. Check the network cable and look at the console. If something was written, the old values are saved and you can put them back with the undo command.
+apply-advice-intro = Set these by hand on the console (the program does not write them yet):
+apply-advice-delay = { $output }: delay { $ms } ms
+apply-advice-polarity = { $path }: flip the polarity
+undo-what = { $count ->
+    [one] The program will put back 1 setting.
+   *[other] The program will put back { $count } settings.
+}
+undo-changed-by-hand = { $count ->
+    [one] 1 setting was changed by hand since; it stays as it is.
+   *[other] { $count } settings were changed by hand since; they stay as they are.
+}
+undo-type = To put them back, type the word “{ $word }” and press Enter. Anything else cancels.
+undo-nothing = Nothing to put back: the console already has the old values.
+undo-refused = The saved old values cannot be used. Nothing was written. Put the settings back by hand.
+undo-cancelled = Cancelled: nothing was put back.
+undo-done = The old values are back on the console.
+undo-incomplete = Not everything could be put back. Look at the console and set the rest by hand.

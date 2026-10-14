@@ -93,6 +93,9 @@ def used_keys() -> set[str]:
     keys |= {f"note-{c.value}" for c in PackageNoteCode}
     keys |= {f"effect-{m}" for m in ("junction-score", "rms-deviation")}
     keys |= {f"audio-problem-{p}" for p in ("channels", "sample-rate")}
+    keys |= {"apply-word", "undo-word"}  # typed confirmation words (wizard.steps.apply)
+    keys |= {f"write-{p}" for p in ("eq-on", "fader", "on")}
+    keys |= {f"write-band-{p}" for p in ("type", "freq", "gain", "q")}
     keys |= {"step-equipment-model-other"} if "other" in MIC_MODELS else set()
     keys |= {
         cls.i18n_key
@@ -101,7 +104,7 @@ def used_keys() -> set[str]:
     }
     keys |= {f"step-{s}-title" for s in ("welcome", "mac", "connect", "read", "topology", "equipment",
                                           "mics", "path", "level", "calibration", "points", "results",
-                                          "finish")}  # fmt: skip
+                                          "apply", "finish")}  # fmt: skip
     return keys
 
 

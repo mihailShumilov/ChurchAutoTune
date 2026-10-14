@@ -84,3 +84,8 @@ def typed_confirmation(
     """Ask for a typed word before a sound or a console change; anything else means no."""
     answer = _answer(prompter, Prompt(Kind.TYPED, body, default="", table=table))
     return answer.value.strip().lower() == word.lower()
+
+
+def typed_word(prompter: Prompter, *body: Text, table: Table | None = None) -> str:
+    """The word the person typed before a console change (the write port checks it)."""
+    return _answer(prompter, Prompt(Kind.TYPED, body, default="", table=table)).value

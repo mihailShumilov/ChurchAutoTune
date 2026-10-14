@@ -505,3 +505,5 @@ class WizardStateFile(FileModel):
     measured: dict[str, str] = {}
     junction_points: tuple[str, ...] = ()
     proposal_file: str | None = None
+    # Undo file of the packages written in S12 (relative to the home directory).
+    applied_undo: str | None = None

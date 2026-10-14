@@ -116,6 +116,17 @@ class Workspace:
         suffix = "_revert" if revert else ""
         return self.undo / f"{prefix}{now.strftime(TIMESTAMP_FORMAT)}{suffix}.json"
 
+    def new_undo_path(
+        self, scope: WriteScope | None, now: datetime, *, revert: bool = False
+    ) -> Path:
+        """Like :meth:`undo_path`, never the name of a file that exists (``_2``, ``_3``, ...)."""
+        path = candidate = self.undo_path(scope, now, revert=revert)
+        counter = 1
+        while candidate.exists():
+            counter += 1
+            candidate = path.with_name(f"{path.stem}_{counter}{path.suffix}")
+        return candidate
+
 
 def workspace_from_env(
     home: Path | None = None, environ: Mapping[str, str] | None = None
