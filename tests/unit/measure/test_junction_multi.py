@@ -73,12 +73,15 @@ def test_stop_during_the_round_silences_within_50_ms_and_restores_the_mutes():
     """SPEC M2: Ctrl+C at any moment -> silence within 50 ms and the mutes restored."""
     console, hall = _setup()
     stop = threading.Event()
-    original_gains = console.gains
+    pressed_at = []
+    plain_gains = console.gains
 
     def gains_and_stop():
-        if console.block is JunctionBlock.TOPS_ONLY:
-            stop.set()  # the operator presses Ctrl+C while the tops block plays
-        return original_gains()
+        if console.block is JunctionBlock.TOPS_ONLY and not stop.is_set():
+            # The operator presses Space while the tops block plays: remember the frame.
+            pressed_at.append(hall_frames(hall))
+            stop.set()
+        return plain_gains()
 
     hall.speaker_gains = gains_and_stop
     with pytest.raises(MeasurementAborted):
@@ -88,11 +91,48 @@ def test_stop_during_the_round_silences_within_50_ms_and_restores_the_mutes():
     assert console.block is JunctionBlock.ORIGINAL
     assert console.switches[-1] is JunctionBlock.ORIGINAL
     played = hall.played[-1]
-    stopped_at = hall.stopped_at
-    assert stopped_at is not None
     sounding = np.nonzero(np.any(played != 0, axis=1))[0]
-    assert (sounding.max() - stopped_at) / FS <= 0.05 if len(sounding) else True
-    assert not np.any(played[stopped_at:])
+    assert len(sounding) > 0
+    assert (int(sounding.max()) + 1 - pressed_at[0]) / FS <= 0.05
+
+
+def hall_frames(hall):
+    """Frames played so far in the current buffer (the hall fills ``played`` at the end)."""
+    return hall.current_frame
+
+
+def test_a_real_ctrl_c_during_the_round_restores_the_mutes():
+    console, hall = _setup()
+    original_switch = console.switch
+
+    def switch_then_interrupt(block):
+        original_switch(block)
+        if block is JunctionBlock.TOPS_ONLY:
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        measure_junction_round(
+            hall, [10], switch_then_interrupt, fs_hz=FS, sweep=SWEEP, level_dbfs=-24.0
+        )
+    assert console.block is JunctionBlock.ORIGINAL
+
+
+@pytest.mark.parametrize("inputs", [[], [10, 10]])
+def test_bad_inputs_are_refused_before_any_mute(inputs):
+    console, hall = _setup()
+    with pytest.raises(ValueError, match="inputs"):
+        measure_junction_round(
+            hall, inputs, console.switch, fs_hz=FS, sweep=SWEEP, level_dbfs=-24.0
+        )
+    assert console.switches == []
+
+
+def test_a_preroll_too_short_for_the_switch_is_refused():
+    console, hall = _setup()
+    short = SweepConfig(duration_s=1.5, tail_s=1.0, preroll_s=0.3)
+    with pytest.raises(ValueError, match="pre-roll"):
+        measure_junction_round(hall, [10], console.switch, fs_hz=FS, sweep=short, level_dbfs=-24.0)
+    assert console.switches == []
 
 
 def test_a_failed_switch_still_restores():

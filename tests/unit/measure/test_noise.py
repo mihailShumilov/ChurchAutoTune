@@ -51,3 +51,8 @@ def test_background_on_the_hall():
     assert [m.usb_input for m in result] == [10, 11]
     assert result[0].rms_dbfs == pytest.approx(-70, abs=1)
     assert result[1].rms_dbfs < result[0].rms_dbfs
+
+
+def test_a_ground_loop_hum_with_odd_harmonics_is_recognised():
+    hum = sum(3e-3 * np.sin(2 * np.pi * 50.0 * k * T) for k in (1, 3, 5))
+    assert hum_frequency(WHITE + hum, FS) == 50.0
