@@ -54,8 +54,8 @@ ChurchTune is built milestone by milestone (see [SPEC §15](docs/SPEC.md)).
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | Repository, port of the proven tool into a layered package, golden tests | done |
-| M1 | X32/M32 driver: discovery, full read-only snapshot, topology inference | next |
-| M2 | Audio and measurement engine: multi-mic, mic-set calibration, path checks | planned |
+| M1 | X32/M32 driver: discovery, full read-only snapshot, topology inference | in review |
+| M2 | Audio and measurement engine: multi-mic, mic-set calibration, path checks | next |
 | M3 | Guided wizard (Textual TUI), storage, English / Russian / Ukrainian | planned |
 | M4 | Analysis and proposals | planned |
 | M5 | Apply, undo, verify | planned |
@@ -102,6 +102,7 @@ cd ChurchAutoTune
 uv sync
 CTUNE_DEV_SAFE=1 uv run pytest -q          # all tests: X32 emulator + fake audio
 CTUNE_DEV_SAFE=1 uv run ctune --help       # expert CLI
+CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor   # find, read and explain an emulated X32
 ```
 
 The full check that CI runs:

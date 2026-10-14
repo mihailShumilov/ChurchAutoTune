@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy with private reporting, support page, issue forms (bug, feature, hardware check result), pull request
   template with a safety checklist, CODEOWNERS, Dependabot, CodeQL, `.editorconfig`, `.gitattributes`.
 
+- Console driver (M1): discovery of X32/M32 consoles (`/xinfo` only; loopback only in dev-safe
+  mode), a full read-only snapshot parsed into console-neutral models (inputs, buses, matrices,
+  mains, outputs, headamps, USB routing, clock), speaker topology inference with confidence and
+  reasons (multilingual names, cut filters, stereo links), the USB audio map, model capabilities
+  (`full` / `suggest_only`), meters as a stream and link quality.
+- `ctune doctor` (computer, console, link, snapshot, topology, USB card, capabilities; also
+  `--from-file`), `ctune snapshot` (saved to `console/<ts>-snapshot.json`), `ctune emulator` and the
+  global `--emulator` option.
+- The X32 emulator moved into the package `churchtune_emulator` with model variants, reply latency
+  and packet loss (ADR 0006); eight topology fixtures in `tests/fixtures/x32/topologies/`.
+
 ### Changed (compared with the original tool)
 - Output delay and matrix polarity are written only with `--write-unverified`; by default `sub align` prints
   them as advice and `undo` refuses a file that holds them (ADR 0005).
