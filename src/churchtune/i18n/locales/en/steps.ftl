@@ -332,3 +332,24 @@ undo-refused = The saved old values cannot be used. Nothing was written. Put the
 undo-cancelled = Cancelled: nothing was put back.
 undo-done = The old values are back on the console.
 undo-incomplete = Not everything could be put back. Look at the console and set the rest by hand.
+
+## S13 Verify
+step-verify-title = Check measurement
+verify-nothing-applied = Nothing was written to the console in this session, so there is nothing to check.
+verify-what = { $count ->
+    [one] Now we measure 1 point again, to see whether the changes helped.
+   *[other] Now we measure { $count } points again, to see whether the changes helped. Among them: the seat that sounded worst and the one in the middle of the hall.
+}
+verify-same-places = Put the microphones exactly where they stood before: same seats, same height.
+verify-no-points = The check measurement has no point to compare with the first one. Nothing was judged.
+verify-better = It got better.
+verify-no-change = No noticeable difference. You may keep the changes or put them back; listen at the next service.
+verify-worse = It got worse. I recommend putting the old values back.
+verify-m = Average distance from the target curve: { $before_db } dB before, { $after_db } dB now (smaller is better).
+verify-worst = The seat that sounded worst ({ $point }): { $delta_db } dB change (minus means better).
+verify-band = Largest change for the worse: { $delta_db } dB at { $freq_hz } Hz in { $point }.
+verify-chart = Picture: row 1 is before, row 2 is now; the taller the block, the further from the target (63 Hz on the left, 8 kHz on the right).
+verify-offer-undo = Put the old values back now?
+step-finish-scene = Save the scene on the console under a new name (for example with today's date), so the new settings survive a restart.
+step-finish-undo-later = To put the old values back later, run: { $command }
+undo-console-changed = The console changed while the list was on the screen. Nothing was put back. Look at the console and start the undo again.

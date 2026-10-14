@@ -46,6 +46,7 @@ def rig(tmp_path):
     hall = FakeHall(FS, {10: FakeMic(), 11: FakeMic(sensitivity_db=1.5)}, gain_db=10.0)
     hall.place(10, "p1")
     hall.place(11, "p2")
+    hall.main_eq = emulator.main_eq  # the hall hears what is written to Main LR
     console = X32ConsolePort()
     now = lambda: datetime(2026, 10, 14, 10, 0, 0)  # noqa: E731 - one clock for both
     services = Services(
@@ -88,9 +89,9 @@ def test_full_goal_with_two_microphones(rig):
     assert state.calibration_set is not None
     assert len(state.measured) == 8
     # Step numbering counts only the applicable steps; choosing two microphones adds the
-    # calibration step, so the total grows from 13 to 14 at that point (SPEC §7).
-    assert [h.total for h in volunteer.headers] == [13] * 6 + [14] * 8
-    assert [h.number for h in volunteer.headers] == list(range(1, 15))
+    # calibration step, so the total grows from 14 to 15 at that point (SPEC §7).
+    assert [h.total for h in volunteer.headers] == [14] * 6 + [15] * 9
+    assert [h.number for h in volunteer.headers] == list(range(1, 16))
     session = latest_session(services)
     assert session is not None
     assert read_wizard_state(session).completed[-1] == "finish"
@@ -126,7 +127,7 @@ def test_one_microphone_skips_the_calibration(rig):
     result = start(volunteer, services, "uk")
     assert result.finished
     assert "step-calibration-title" not in [h.title.key for h in volunteer.headers]
-    assert {h.total for h in volunteer.headers} == {13}
+    assert {h.total for h in volunteer.headers} == {14}
 
 
 def test_no_sound_until_the_measurement_channels_are_muted(rig):
@@ -330,6 +331,37 @@ def test_typing_the_word_writes_the_chosen_packages_with_an_undo_file(rig):
     assert len(undo.results) == len(undo.changes)
     assert all(r.ok for r in undo.results)
     assert emulator.unknown == []
+    # S13 measured again and judged against the same points.
+    assert result.state.verify_verdict in ("better", "no_change")
+    assert len(result.state.verify_points) == 4
+    assert set(result.state.verify_measured) == set(result.state.verify_points)
+    assert "verify-chart" in keys
+
+
+def test_a_check_that_got_worse_offers_the_way_back(rig):
+    emulator, hall, services = rig
+
+    def spoil_it(prompt):
+        emulator.hand_change("/main/st/eq/5/g", 0.7)  # someone boosts +6 dB after the write
+        emulator.hand_change("/main/st/eq/5/f", 0.6)
+        return Answer("")
+
+    volunteer = _volunteer(
+        emulator,
+        hall,
+        **{
+            "apply-type": "apply",
+            "apply-done": spoil_it,
+            "undo-type": "undo",
+            "step-points-bad": "accept",
+        },
+    )
+    result = start(volunteer, services, "en")
+    assert result.finished
+    keys = volunteer.shown_keys()
+    assert result.state.verify_verdict == "worse"
+    assert "verify-offer-undo" in keys
+    assert "undo-done" in keys or "undo-nothing" in keys
 
 
 def test_a_console_changed_after_the_proposal_is_refused(rig):

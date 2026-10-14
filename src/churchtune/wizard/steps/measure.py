@@ -5,7 +5,9 @@ of a run the console is read again: a measurement microphone whose channel still
 a send would feed back, so no sound plays until those channels are muted (SPEC §7 S6).
 """
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -530,7 +532,13 @@ def place_text(plan: PointPlan, point: str) -> Text:
     )
 
 
-def _save_round(ctx: WizardContext, measurement: RoundMeasurement, points: dict[int, str]) -> None:
+def _save_round(
+    ctx: WizardContext,
+    measurement: RoundMeasurement,
+    points: dict[int, str],
+    directory: Path,
+    record: Callable[[str], None],
+) -> None:
     for mic in measurement.mics:
         point = points[mic.usb_input]
         quality = mic.quality
@@ -556,7 +564,7 @@ def _save_round(ctx: WizardContext, measurement: RoundMeasurement, points: dict[
         )
         response = magnitude_db(mic.ir, measurement.fs_hz)
         save_point(
-            ctx.session_dir,
+            directory,
             meta,
             recording=None,
             ir=mic.ir,
@@ -564,7 +572,43 @@ def _save_round(ctx: WizardContext, measurement: RoundMeasurement, points: dict[
             grid_hz=GRID_HZ,
             response_db=response,
         )
-        ctx.box.update(measured={**ctx.box.state.measured, point: point})
+        record(point)
+
+
+def measure_rounds(
+    ctx: WizardContext,
+    todo: Sequence[str],
+    plan: PointPlan,
+    directory: Path,
+    record: Callable[[str], None],
+) -> None:
+    """For each round of the points: place, warn, count down, sweep, check the quality, save."""
+    for one in plan_rounds(todo, list(ctx.box.state.mic_inputs)):
+        placement = {p.usb_input: p.point for p in one.placements}
+        MeasurePoints.place(ctx, one, plan)
+        while True:
+            warn_before_sound(ctx, t("step-points-sweeps"), countdown=True)
+            measurement = measure_round(
+                ensure_backend(ctx),
+                list(one.inputs),
+                fs_hz=FS_HZ,
+                sweep=ctx.services.sweep,
+                gates=GATES,
+                level_dbfs=ctx.box.state.sweep_level_dbfs,
+                stop=ctx.services.stop,
+            )
+            bad = [m for m in measurement.mics if m.quality.verdict.value == "bad"]
+            if not bad:
+                break
+            codes = sorted({w.code.value for m in bad for w in m.quality.warnings})
+            choice = choose(
+                ctx.prompter,
+                [t("step-points-bad", count=len(bad)), *(t(f"gate-{c}") for c in codes)],
+                [Option(RETRY, t("common-retry"), True), Option(ACCEPT, t("step-points-keep"))],
+            )
+            if choice == ACCEPT:
+                break
+        _save_round(ctx, measurement, placement, directory, record)
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,7 +624,8 @@ class MeasurePoints:
         return measuring(state)
 
     @staticmethod
-    def _place(ctx: WizardContext, rounds: Round, plan: PointPlan) -> None:
+    def place(ctx: WizardContext, rounds: Round, plan: PointPlan) -> None:
+        """Tell the person where each microphone goes in this round."""
         state = ctx.box.state
         points = plan.ids
         lines = [
@@ -625,31 +670,10 @@ class MeasurePoints:
             picture=ascii_map(plan),
         )
         todo = [p for p in points if p not in state.measured]
-        for one in plan_rounds(todo, list(state.mic_inputs)):
-            placement = {p.usb_input: p.point for p in one.placements}
-            self._place(ctx, one, plan)
-            while True:
-                warn_before_sound(ctx, t("step-points-sweeps"), countdown=True)
-                measurement = measure_round(
-                    ensure_backend(ctx),
-                    list(one.inputs),
-                    fs_hz=FS_HZ,
-                    sweep=ctx.services.sweep,
-                    gates=GATES,
-                    level_dbfs=ctx.box.state.sweep_level_dbfs,
-                    stop=ctx.services.stop,
-                )
-                bad = [m for m in measurement.mics if m.quality.verdict.value == "bad"]
-                if not bad:
-                    break
-                codes = sorted({w.code.value for m in bad for w in m.quality.warnings})
-                choice = choose(
-                    ctx.prompter,
-                    [t("step-points-bad", count=len(bad)), *(t(f"gate-{c}") for c in codes)],
-                    [Option(RETRY, t("common-retry"), True), Option(ACCEPT, t("step-points-keep"))],
-                )
-                if choice == ACCEPT:
-                    break
-            _save_round(ctx, measurement, placement)
+
+        def record(point: str) -> None:
+            ctx.box.update(measured={**ctx.box.state.measured, point: point})
+
+        measure_rounds(ctx, todo, plan, ctx.session_dir, record)
         info(ctx.prompter, t("step-points-done", count=len(ctx.box.state.measured)))
         return Outcome.DONE

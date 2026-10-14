@@ -1,4 +1,4 @@
-"""The wizard steps in SPEC order (S0-S14; S13 verify arrives later in M5)."""
+"""The wizard steps in SPEC order (S0-S14)."""
 
 from churchtune.wizard.engine import Step
 from churchtune.wizard.steps.apply import Apply
@@ -18,6 +18,7 @@ from churchtune.wizard.steps.setup import (
     Topology,
     Welcome,
 )
+from churchtune.wizard.steps.verify import Verify
 
 
 def all_steps() -> list[Step]:
@@ -36,5 +37,6 @@ def all_steps() -> list[Step]:
         MeasurePoints(),
         Results(),
         Apply(),
+        Verify(),
         Finish(),
     ]

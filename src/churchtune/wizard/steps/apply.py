@@ -99,8 +99,9 @@ def undo_applied(ctx: WizardContext, undo_path: Path) -> bool:
     try:
         outcome = writes.apply(plan, typed, word, revert, ctx.services.stop.is_set,
                                reverts=undo_path)  # fmt: skip
-    except UnsafeWrite:
-        info(ctx.prompter, t("undo-cancelled"))
+    except UnsafeWrite as error:
+        changed = "mismatches" in error.context
+        info(ctx.prompter, t("undo-console-changed") if changed else t("undo-cancelled"))
         return False
     except ConsoleUnreachable:
         info(ctx.prompter, t("apply-console-lost"))
@@ -161,8 +162,9 @@ class Apply:
         ctx.services.reset_stop()
         try:
             outcome = writes.apply(plan, typed, word, undo_path, ctx.services.stop.is_set)
-        except UnsafeWrite:
-            info(ctx.prompter, t("apply-cancelled"))
+        except UnsafeWrite as error:
+            changed = "mismatches" in error.context
+            info(ctx.prompter, t("apply-console-changed") if changed else t("apply-cancelled"))
             return Outcome.DONE
         except ConsoleUnreachable:
             if undo_path.exists():
