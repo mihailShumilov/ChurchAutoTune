@@ -54,10 +54,16 @@ def confirm(
     return value == YES
 
 
-def choose(prompter: Prompter, body: Sequence[Text], options: Sequence[Option]) -> str:
+def choose(
+    prompter: Prompter,
+    body: Sequence[Text],
+    options: Sequence[Option],
+    *,
+    table: Table | None = None,
+) -> str:
     """Pick one option; Enter takes the recommended one."""
     default = next((o.id for o in options if o.recommended), options[0].id)
-    prompt = Prompt(Kind.CHOOSE, tuple(body), tuple(options), default)
+    prompt = Prompt(Kind.CHOOSE, tuple(body), tuple(options), default, table)
     value = _answer(prompter, prompt).value or default
     return value if any(o.id == value for o in options) else default
 

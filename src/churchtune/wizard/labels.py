@@ -15,6 +15,7 @@ from churchtune.wizard.ui import kebab, t
 _LABEL = re.compile(r"^(?P<kind>[a-z_]+)(?: (?P<number>\d+))?$")
 _DELAY = re.compile(r"^(?P<ms>[0-9.]+) ms$")
 SOURCE_KINDS = frozenset(k.value for k in SourceKind)
+MAIN_LR = "main_lr"  # the Main LR strip as one EQ block
 OUTPUT_KINDS = frozenset(k.value for k in OutputKind)
 
 
@@ -30,6 +31,8 @@ def output_text(kind: str, number: int) -> Text:
 
 def label_text(label: str) -> Text | str:
     """A driver label (``matrix 3``, ``main 8``) as a text; anything else stays as it is."""
+    if label == MAIN_LR:
+        return t("signal-main-lr")
     match = _LABEL.match(label)
     if match is None:
         return label

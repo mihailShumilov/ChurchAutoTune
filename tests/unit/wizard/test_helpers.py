@@ -7,6 +7,7 @@ import pytest
 
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.i18n import Translator
+from churchtune.measure.plan import plan_points
 from churchtune.storage.models import MicCalibrationFile, MicCalibrationModel
 from churchtune.wizard.labels import issue_args, label_text, signal_text
 from churchtune.wizard.protocol import Answer, Kind, Nav, Option, Prompt, Text, render_text, to_dict
@@ -90,10 +91,13 @@ def test_not_hall_sizes(typed):
     assert parse_hall_size(typed) is None
 
 
-def test_places_of_the_default_plan_and_of_others():
-    points = tuple(f"p{n}" for n in range(1, 9))
-    assert ru(place_text(points, "p1")) == "передние ряды, слева"
-    assert ru(place_text(("a", "b"), "b")) == "место 2"
+def test_places_are_named_by_row_and_side():
+    plan = plan_points(14.0, 22.0)
+    first = plan.points[0]
+    text = ru(place_text(plan, first.id))
+    assert text.startswith("передние ряды")
+    assert "м от сцены" in text
+    assert "центрального прохода" in text
 
 
 class Words:

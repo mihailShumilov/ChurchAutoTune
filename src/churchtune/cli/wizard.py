@@ -37,6 +37,7 @@ from churchtune.wizard.protocol import (
     StepHeader,
     Text,
     render_text,
+    split_question,
 )
 from churchtune.wizard.run import latest_session, run_wizard, start
 from churchtune.wizard.services import AudioDeviceInfo, Services
@@ -110,7 +111,8 @@ class LinePrompter:
         typer.echo(f"\n== {step} · {title} ==")
 
     def _show(self, prompt: Prompt) -> None:
-        for paragraph in prompt.body:
+        before, question = split_question(prompt)
+        for paragraph in before:
             typer.echo(self._text(paragraph))
         if prompt.table is not None:
             typer.echo("  " + " | ".join(self._text(h) for h in prompt.table.headers))
@@ -118,6 +120,8 @@ class LinePrompter:
                 typer.echo("  " + " | ".join(self._text(c) for c in row))
         if prompt.picture:
             typer.echo(prompt.picture)
+        for paragraph in question:
+            typer.echo(self._text(paragraph))
         recommended = self._text(Text("common-recommended"))
         for number, option in enumerate(prompt.options, start=1):
             mark = f" {recommended}" if option.recommended else ""

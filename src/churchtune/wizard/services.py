@@ -20,6 +20,9 @@ from churchtune.storage.paths import Workspace
 from churchtune.wizard.protocol import Prompter
 from churchtune.wizard.state import StateBox
 
+# Sample rate of every measurement and of the EQ model (the console card runs at 48 kHz).
+FS_HZ = 48000.0
+
 
 class ConsolePort(Protocol):
     """Finding and connecting a console."""

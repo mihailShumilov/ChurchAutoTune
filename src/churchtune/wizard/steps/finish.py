@@ -16,6 +16,7 @@ from churchtune.storage.models import MicCalibrationFile, WizardStateFile
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
+from churchtune.wizard.steps.proposal import propose
 from churchtune.wizard.steps.setup import measuring
 from churchtune.wizard.ui import info, t, task
 
@@ -74,7 +75,7 @@ def findings(analysis: Analysis) -> list[Text]:
 
 @dataclass(frozen=True, slots=True)
 class Results:
-    """S11: the analysis in plain words."""
+    """S11: the analysis in plain words, then the change packages to choose from."""
 
     id: str = "results"
     title: str = "step-results-title"
@@ -103,7 +104,8 @@ class Results:
             point_cal_db=_point_corrections(calibration, mics),
         )
         info(ctx.prompter, t("step-results-what", count=len(stored)), *findings(analysis))
-        info(ctx.prompter, t("step-results-next-milestones"), t("glossary-crossover"))
+        propose(ctx, analysis)
+        info(ctx.prompter, t("step-results-next-milestones"))
         return Outcome.DONE
 
 

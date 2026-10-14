@@ -88,17 +88,55 @@ PLACE = Prompt(
     ),
 )
 
+PACKAGE = Prompt(
+    Kind.CHOOSE,
+    (
+        t("package-system-eq"),
+        t("package-system-eq-why"),
+        Text("note-system-eq-on", {"path": t("signal-main-lr")}),
+        t("effect-rms-deviation", before_db=1.5, after_db=1.1),
+        t("risk-low"),
+        t("package-question", package=t("package-system-eq")),
+    ),
+    (
+        Option("keep", t("package-keep"), recommended=True),
+        Option("skip", t("package-skip")),
+    ),
+    default="keep",
+    table=Table(
+        (t("change-what"), t("change-before"), t("change-after")),
+        (
+            (
+                Text("eq-path-band", {"path": t("signal-main-lr"), "band": 2}),
+                t("eq-band-flat"),
+                t("eq-band-peq", type="PEQ", freq_hz=480, gain_db=-4.0, q=2.2),
+            ),
+            (
+                Text("eq-path-band", {"path": t("signal-main-lr"), "band": 6}),
+                t("eq-band-flat"),
+                t("eq-band-peq", type="PEQ", freq_hz=51, gain_db=-6.0, q=3.7),
+            ),
+        ),
+    ),
+)
+
 
 class Script:
     """A stand-in engine: shows a header and prompts, records the answers."""
 
-    def __init__(self, prompts: Sequence[Prompt], levels: dict[str, float] | None = None) -> None:
+    def __init__(
+        self,
+        prompts: Sequence[Prompt],
+        levels: dict[str, float] | None = None,
+        title: str = "step-welcome-title",
+    ) -> None:
         self.prompts = prompts
         self.levels = levels
+        self.title = title
         self.answers: list[Answer] = []
 
     def __call__(self, prompter: TuiPrompter) -> RunResult:
-        prompter.header(StepHeader(1, 13, t("step-welcome-title"), "Main hall"))
+        prompter.header(StepHeader(1, 13, t(self.title), "Main hall"))
         if self.levels:
             prompter.meter(self.levels)
         for prompt in self.prompts:
@@ -274,13 +312,15 @@ SIZES = [(80, 24), (120, 40)]
         ("meter", [READY], {"1": -16.0, "2": -38.5}),
         ("warning", [WARNING], None),
         ("place", [PLACE], None),
+        ("package", [PACKAGE], None),
     ],
-    ids=["choose", "table", "meter", "warning", "place"],
+    ids=["choose", "table", "meter", "warning", "place", "package"],
 )
 def test_screen_snapshots(  # type: ignore[no-untyped-def]
     snap_compare, lang, size, name, prompts, levels
 ) -> None:
-    script = Script(prompts, levels)
+    title = "step-results-title" if name == "package" else "step-welcome-title"
+    script = Script(prompts, levels, title)
     app, _ = make_app(script, lang)
 
     async def run_before(pilot: Pilot[object]) -> None:
