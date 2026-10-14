@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as described.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. **If the bug lets the app write to a console without confirmation, play audio
+        louder than intended, or leave the console changed after an error, do not file it here.** Report it
+        privately instead: https://github.com/mihailShumilov/ChurchAutoTune/security/advisories/new
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. CTUNE_DEV_SAFE=1 uv run ctune ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or log
+      description: Paste the terminal output. Remove anything personal.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "e.g. 0.1.0.dev0 or the commit hash"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where did it happen?
+      options:
+        - Emulator and fake audio (development)
+        - Real console
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: console
+    attributes:
+      label: Console model and firmware
+      placeholder: "e.g. X32 Producer 4.09, or n/a"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and Python
+      placeholder: "e.g. macOS 15.5, Python 3.12.8"

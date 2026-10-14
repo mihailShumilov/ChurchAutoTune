@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # Tests run only against the emulator on 127.0.0.1 and the fake audio backend.
   CTUNE_DEV_SAFE: "1"

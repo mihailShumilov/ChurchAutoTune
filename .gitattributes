@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+*.wav binary
+*.png binary
+*.npz binary
+
+# Recorded fixtures and the lock file are not hand-written code.
+tests/fixtures/** linguist-generated
+uv.lock linguist-generated
