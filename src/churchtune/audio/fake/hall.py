@@ -354,7 +354,13 @@ class FakeHall:
     def record_multi(
         self, duration_s: float, inputs: Sequence[int], stop: StopFlag | None = None
     ) -> MultiRecording:
-        """Record ``inputs`` while playing silence."""
+        """Record ``inputs`` while playing silence.
+
+        Listening to every input is how a mic mapping starts: the development rig then has a
+        simulated person scratch the next microphone of ``auto_scratch``.
+        """
+        if self.auto_scratch and len(inputs) == self.input_count:
+            self.scratch_next()
         silent = np.zeros((int(duration_s * self.fs_hz), OUTPUT_CHANNELS), dtype=np.float32)
         return self.playrec_multi(silent, inputs, stop=stop)
 
