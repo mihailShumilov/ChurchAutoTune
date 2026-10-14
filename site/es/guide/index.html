@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía — ChurchTune</title>
+<meta name="description" content="Cómo probar ChurchTune hoy: instalar la versión para desarrolladores, usarla con el emulador de consola, verificar tu X32 o M32 y reportar el resultado, y qué equipo necesitarás más adelante.">
+<link rel="canonical" href="https://mihailshumilov.github.io/ChurchAutoTune/es/guide/">
+<link rel="alternate" hreflang="en" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/"><link rel="alternate" hreflang="uk" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/guide/"><link rel="alternate" hreflang="es" href="https://mihailshumilov.github.io/ChurchAutoTune/es/guide/"><link rel="alternate" hreflang="x-default" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/">
+<link rel="icon" href="../../assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../assets/style.css">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f141c" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ChurchTune">
+<meta property="og:title" content="Guía — ChurchTune">
+<meta property="og:description" content="Cómo probar ChurchTune hoy: instalar la versión para desarrolladores, usarla con el emulador de consola, verificar tu X32 o M32 y reportar el resultado, y qué equipo necesitarás más adelante.">
+<meta property="og:url" content="https://mihailshumilov.github.io/ChurchAutoTune/es/guide/">
+<meta property="og:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ChurchTune: ajuste gratuito del sistema de sonido para iglesias con Behringer X32 o Midas M32">
+<meta property="og:locale" content="es_ES">
+<meta property="og:locale:alternate" content="en_US"><meta property="og:locale:alternate" content="uk_UA">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Guía — ChurchTune">
+<meta name="twitter:description" content="Cómo probar ChurchTune hoy: instalar la versión para desarrolladores, usarla con el emulador de consola, verificar tu X32 o M32 y reportar el resultado, y qué equipo necesitarás más adelante.">
+<meta name="twitter:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
+<meta name="twitter:image:alt" content="ChurchTune: ajuste gratuito del sistema de sonido para iglesias con Behringer X32 o Midas M32">
+</head>
+
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<header class="site-header">
+<div class="wrap">
+<a class="brand" href="../../es/"><img src="../../assets/logo.svg" alt="" width="34" height="34">ChurchTune</a>
+<nav class="main-nav" aria-label="Principal"><ul><li><a href="../../es/#how">Cómo funciona</a></li><li><a href="../../es/roadmap/">Hoja de ruta</a></li><li><a href="../../es/guide/" aria-current="page">Guía</a></li><li><a href="../../es/#help">Colabora</a></li><li><a href="../../es/#faq">Preguntas</a></li><li><a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a></li></ul></nav>
+<nav class="lang-switch" aria-label="Idioma"><ul><li><a href="../../en/guide/" hreflang="en" lang="en"><abbr title="English" style="text-decoration:none">EN</abbr></a></li><li><a href="../../uk/guide/" hreflang="uk" lang="uk"><abbr title="Українська" style="text-decoration:none">UK</abbr></a></li><li><a href="../../es/guide/" hreflang="es" lang="es" aria-current="page"><abbr title="Español" style="text-decoration:none">ES</abbr></a></li></ul></nav>
+</div>
+</header>
+
+<main id="main">
+<div class="page-head"><div class="wrap">
+<p class="eyebrow">Guía</p>
+<h1>ChurchTune hoy</h1>
+<p class="lead">Una guía honesta de lo que puedes hacer ahora y de lo que viene. Crecerá con cada etapa.</p>
+<p class="updated">Última actualización: <time datetime="2026-10-14">14 de octubre de 2026</time></p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alfa.</strong> Todavía no hay aplicación para voluntarios. Lo que se puede probar hoy es para desarrolladores y testers. Mira la <a href="../../es/roadmap/">hoja de ruta</a>.</p></div>
+<nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">En esta página</h2><ol><li><a href="#today">Qué puedes hacer hoy</a></li><li><a href="#equipment">El equipo que necesitarás</a></li><li><a href="#developers">Para desarrolladores y testers</a></li><li><a href="#hardware-check">Para dueños de consolas: verificaciones de equipo</a></li><li><a href="#volunteer-workflow">Más adelante: ajustar tu sistema</a></li><li><a href="#get-help">Preguntas y problemas</a></li></ol></nav>
+</div></div>
+<section class="section section-alt" id="today"><div class="wrap prose"><h2>Qué puedes hacer hoy <span class="tag tag-now">Ahora</span></h2>
+<ul>
+<li><strong>Desarrolladores y testers</strong> pueden instalar el proyecto, correr las pruebas y probar la línea de
+comandos experta con el emulador de consola incluido y audio simulado. No se usa ninguna consola ni altavoz real.</li>
+<li><strong>Dueños de consolas</strong> pueden hacer una verificación en una X32 o M32 real y reportar el resultado.
+Es la ayuda más valiosa ahora mismo.</li>
+<li><strong>Si eres voluntario</strong> y quieres ajustar el sistema de tu iglesia, te pedimos que esperes al asistente
+guiado. Sigue los lanzamientos en <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> para enterarte cuando esté listo.</li>
+</ul></div></section>
+<section class="section" id="equipment"><div class="wrap prose"><h2>El equipo que necesitarás</h2>
+<p>Para el ajuste real, más adelante. Nada de esto hace falta para probar la versión para desarrolladores.</p>
+<ul>
+<li><strong>Una Mac</strong> (la aplicación está hecha para macOS).</li>
+<li><strong>Una Behringer X32 o Midas M32</strong> con firmware 4.x y una <strong>tarjeta de audio USB</strong>: X-USB o
+X-LIVE en la X32, DN32-USB o DN32-LIVE en la M32. Las señales de prueba se reproducen y graban por esta tarjeta.</li>
+<li><strong>Un cable USB</strong> de la Mac a la consola y una <strong>conexión de red</strong> con la consola (cable o
+Wi-Fi), que ChurchTune usa para leer su configuración.</li>
+<li><strong>Un micrófono de medición</strong>, por ejemplo un Behringer ECM8000, con pedestal y cable XLR a una entrada
+de la consola. También está previsto usar varios micrófonos a la vez, con calibración.</li>
+<li><strong>Un salón vacío y silencioso</strong> y unas 1–2 horas.</li>
+</ul></div></section>
+<section class="section section-alt" id="developers"><div class="wrap prose"><h2>Para desarrolladores y testers</h2>
+<p>Todo lo siguiente funciona solo con un emulador en tu propia computadora y audio simulado. Pon siempre
+<code>CTUNE_DEV_SAFE=1</code> delante de los comandos que ejecutan la aplicación o las pruebas: así el código rechaza
+cualquier consola real y cualquier dispositivo de audio real.</p>
+<h3 id="install">1. Instalar</h3>
+<p>Necesitas macOS o Linux, Python 3.12 y <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a> (uv puede instalar Python por ti). En Debian o Ubuntu
+instala también <code>libportaudio2 libsndfile1</code>.</p>
+<pre><code>git clone https://github.com/mihailShumilov/ChurchAutoTune.git
+cd ChurchAutoTune
+uv sync</code></pre>
+<h3 id="tests">2. Correr las pruebas</h3>
+<pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # todas: emulador de consola + audio simulado
+CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # la sesión real del salón, 2026-10-02</code></pre>
+<h3 id="emulator">3. Probar la línea de comandos con el emulador</h3>
+<p>Por ahora el emulador de consola vive dentro de las pruebas (un comando <code>ctune emulator</code> está previsto
+para M1). Inícialo en una terminal; mostrará su puerto:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run python -c "import time; from tests.emulator.x32_emulator import X32Emulator; e = X32Emulator().start(); print('Emulator port:', e.port, flush=True); time.sleep(3600)"</code></pre>
+<p>En una segunda terminal, ejecuta la revisión de solo lectura con audio simulado (cambia <code>PORT</code>):</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo check
+CTUNE_DEV_SAFE=1 uv run ctune --help</code></pre>
+<p>Por ahora los textos de la línea de comandos están en ruso. Es una herramienta provisional para desarrolladores; en
+M3 la reemplaza el asistente para voluntarios.</p>
+<h3 id="full-check">4. Antes de un pull request</h3>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ruff format --check . &amp;&amp; uv run ruff check . &amp;&amp; uv run mypy \
+  &amp;&amp; CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json &amp;&amp; uv run python scripts/check_coverage.py</code></pre>
+<p>Lee primero la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">guía para colaborar</a> (en inglés), sobre todo las reglas de seguridad.</p></div></section>
+<section class="section" id="hardware-check"><div class="wrap prose"><h2>Para dueños de consolas: verificaciones de equipo</h2>
+<p>Parte del comportamiento de la consola solo lo puede confirmar una persona frente a una consola real. Cada
+verificación es una fila de la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación de equipos</a> (en inglés). Tu reporte
+hace que una función pase de «solo consejo» a «ChurchTune puede escribir esto» para ese modelo y firmware.</p>
+<h3 id="hardware-check-before">Antes de empezar</h3>
+<ul>
+<li>Hazlo con el <strong>salón vacío</strong>, nunca durante un culto o un ensayo.</li>
+<li>Mantén el sistema a un <strong>nivel bajo y seguro</strong>.</li>
+<li><strong>Guarda una escena</strong> en la consola primero, para poder restaurarlo todo.</li>
+<li>Instala la versión para desarrolladores en la Mac (ver <a href="#install">Instalar</a> arriba) y conéctala a la
+red de la consola.</li>
+</ul>
+<h3 id="hardware-check-steps">Pasos</h3>
+<ol>
+<li>Abre la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a> y elige una fila para tu consola. Las filas 1 y 2
+(<code>ctune hwcheck delay</code> y <code>ctune hwcheck polarity</code>) ya se pueden hacer hoy; las demás dependen de
+funciones que aún se están construyendo.</li>
+<li>Lee la fila: qué verificar, el comando y el resultado esperado.</li>
+<li>Ejecuta el comando mirando la pantalla de la consola. Compara lo que pasa con el resultado esperado.</li>
+<li>Restaura el valor anterior como indica la fila (con el archivo para deshacer o recuperando tu escena).</li>
+<li>Envía el resultado con el <a href="https://github.com/mihailShumilov/ChurchAutoTune/issues/new?template=hardware_report.yml">formulario de verificación de equipo</a>: el número de fila, el modelo
+y firmware de tu consola, el commit de ChurchTune (<code>git rev-parse --short HEAD</code>) y lo que viste. El
+formulario está en inglés; basta con frases sencillas.</li>
+</ol>
+<h3 id="console-dumps">Volcados de consola</h3>
+<p>Los volcados de solo lectura de otros modelos, versiones de firmware y ruteos ayudan al controlador de la consola
+(M1) a reconocer más sistemas. Quita antes los nombres y cualquier dato personal; la
+<a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">guía para colaborar</a> explica cómo.</p></div></section>
+<section class="section section-alt" id="volunteer-workflow"><div class="wrap prose"><h2>Más adelante: ajustar tu sistema <span class="tag">Más adelante</span></h2>
+<p>Así está previsto que funcione el asistente guiado cuando terminen las etapas M3–M6. Todavía no existe.</p>
+<ol>
+<li id="workflow-read"><strong>Leer la consola.</strong> ChurchTune encuentra la consola y muestra lo que encontró, por
+ejemplo: «X32 Producer, altavoces principales en Matrix 1/2, subwoofer en Matrix 3. ¿Es correcto?». Solo pregunta lo
+que no puede leer.</li>
+<li id="workflow-measure"><strong>Medir.</strong> Encuentra la entrada del micrófono, comprueba el camino de la señal
+con un tono corto y suave, ajusta el nivel y luego muestra un mapa sencillo de puntos y te guía: «pon el micrófono
+aquí y pulsa Enter».</li>
+<li id="workflow-analyse"><strong>Analizar.</strong> Promedia los puntos y revisa el salón, incluido cuánto resuena y
+cómo se une el subwoofer con los altavoces principales.</li>
+<li id="workflow-propose"><strong>Proponer.</strong> Muestra los problemas con palabras sencillas y sugiere unos pocos
+cambios, cada uno con un breve «por qué».</li>
+<li id="workflow-apply"><strong>Aplicar.</strong> Ves cada cambio y lo confirmas escribiendo; primero se guarda un
+archivo para deshacer y cada valor se relee después de escribirlo.</li>
+<li id="workflow-verify"><strong>Verificar e informar.</strong> Mide de nuevo, muestra el antes y el después, ofrece
+deshacer si no mejoró, guarda un informe y te recuerda guardar una escena en la consola.</li>
+</ol></div></section>
+<section class="section" id="get-help"><div class="wrap prose"><h2>Preguntas y problemas</h2>
+<ul>
+<li>Preguntas e ideas: <a href="https://github.com/mihailShumilov/ChurchAutoTune/discussions">GitHub Discussions</a>.</li>
+<li>Errores y sugerencias: <a href="https://github.com/mihailShumilov/ChurchAutoTune/issues/new/choose">formularios de issues</a>.</li>
+<li>Un problema de seguridad: por favor, <a href="https://github.com/mihailShumilov/ChurchAutoTune/security/advisories/new">repórtalo en privado</a>, no en un issue público.</li>
+<li>Respuestas breves: <a href="../../es/#faq">preguntas frecuentes</a>.</li>
+</ul></div></section>
+</main>
+<footer class="site-footer">
+<div class="wrap">
+<div class="cols">
+<div>
+<h2>ChurchTune</h2>
+<p>Software libre bajo la licencia <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/LICENSE">GPL-3.0-or-later</a>.</p>
+<p>Este sitio no usa cookies, analítica ni rastreadores.</p>
+</div>
+<div>
+<h2>Páginas</h2>
+<ul>
+<li><a href="../../es/">Inicio</a></li>
+<li><a href="../../es/roadmap/">Hoja de ruta</a></li>
+<li><a href="../../es/guide/">Guía</a></li>
+<li><a href="../../es/#faq">Preguntas</a></li>
+</ul>
+</div>
+<div>
+<h2>Proyecto</h2>
+<ul>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune">Código fuente en GitHub</a></li>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">Guía para colaborar (inglés)</a></li>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CHANGELOG.md">Registro de cambios (inglés)</a></li>
+<li><a href="https://github.com/mihailShumilov/ChurchAutoTune/security/advisories/new">Reportar un problema de seguridad</a></li>
+</ul>
+</div>
+<div>
+<h2>Idioma</h2>
+<ul><li><a href="../../en/guide/" hreflang="en" lang="en">English</a></li><li><a href="../../uk/guide/" hreflang="uk" lang="uk">Українська</a></li><li><a href="../../es/guide/" hreflang="es" lang="es">Español</a></li></ul>
+</div>
+</div>
+<p>Behringer, X32, Midas y M32 son marcas registradas de sus respectivos dueños. ChurchTune es un proyecto independiente y no está afiliado a ellos ni cuenta con su respaldo.</p>
+<p>Última actualización: <time datetime="2026-10-14">14 de octubre de 2026</time></p>
+</div>
+</footer>
+</body>
+</html>

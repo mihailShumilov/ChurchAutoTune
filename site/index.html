@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChurchTune — choose your language</title>
+<meta name="description" content="ChurchTune: a free, open-source macOS app for tuning church sound systems on a Behringer X32 or Midas M32. Choose English, Українська or Español.">
+<link rel="canonical" href="https://mihailshumilov.github.io/ChurchAutoTune/">
+<link rel="alternate" hreflang="en" href="https://mihailshumilov.github.io/ChurchAutoTune/en/">
+<link rel="alternate" hreflang="uk" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/">
+<link rel="alternate" hreflang="es" href="https://mihailshumilov.github.io/ChurchAutoTune/es/">
+<link rel="alternate" hreflang="x-default" href="https://mihailshumilov.github.io/ChurchAutoTune/">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ChurchTune">
+<meta property="og:title" content="ChurchTune — free sound system tuning for churches with an X32 or M32">
+<meta property="og:description" content="A free, open-source macOS app that will guide church sound volunteers through measuring the room and tuning a Behringer X32 or Midas M32. In development (pre-alpha).">
+<meta property="og:url" content="https://mihailshumilov.github.io/ChurchAutoTune/">
+<meta property="og:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
+<script>
+  // Send the visitor to the first supported language in their browser preferences; English otherwise.
+  // Without JavaScript the list of links below is shown instead.
+  (function () {
+    var supported = ["en", "uk", "es"];
+    var prefs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+    for (var i = 0; i < prefs.length; i++) {
+      var code = String(prefs[i] || "").toLowerCase().split("-")[0];
+      if (supported.indexOf(code) !== -1) {
+        location.replace(code + "/");
+        return;
+      }
+    }
+    location.replace("en/");
+  })();
+</script>
+</head>
+<body>
+<main class="picker">
+<div>
+<img src="assets/logo.svg" alt="" width="72" height="72">
+<h1>ChurchTune</h1>
+<ul>
+<li><a href="en/" hreflang="en" lang="en">English<small>Free sound system tuning for churches</small></a></li>
+<li><a href="uk/" hreflang="uk" lang="uk">Українська<small>Безкоштовне налаштування звуку для церков</small></a></li>
+<li><a href="es/" hreflang="es" lang="es">Español<small>Ajuste gratuito del sonido para iglesias</small></a></li>
+</ul>
+</div>
+</main>
+</body>
+</html>
