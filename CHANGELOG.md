@@ -96,6 +96,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Five write scopes (temporary matrix mutes, system EQ, sub level, output delay, polarity) with
   their limits, an authorization bound to the typed word and to the undo file's content, and a
   stop between writes. The simulated hall now hears the console's Main LR EQ.
+- Subwoofer and main speakers measured apart (M5): at the junction points the wizard plays three
+  sweeps in a row — subwoofer alone, main speakers alone, everything — muting only their matrices
+  for a few seconds after a typed word (`mute` / `заглушить` / `заглушити`). The switches are saved
+  before the first mute and put back right after, also on a stop; mutes left by an interrupted
+  run are put back first, after a fresh read and the word. With this measurement the wizard can
+  propose and write the crossover (ADR 0011).
+- The write order finds more safe ways: a change waits while others move, a cut is held by a
+  spare band while it moves, and a speaker matrix may be muted briefly for a change that has no
+  other safe order (never Main LR).
+- A sub level more than 12 dB away from the venue's first reading asks a separate question;
+  `ctune apply-packages --yes-i-am-at-the-console` confirms without the typed word.
+- `ctune --emulator` goes all the way: the demo mutes its microphone channels and the simulated
+  hall hears the emulator's EQ and matrix switches.
 
 ### Changed (compared with the original tool)
 - The speakers' low roll-off is the start of the pass band; a sub/top cancellation or a room dip

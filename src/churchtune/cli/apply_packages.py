@@ -79,6 +79,14 @@ def apply_packages_command(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Show the writes, write nothing.")
     ] = False,
+    at_the_console: Annotated[
+        bool,
+        typer.Option(
+            "--yes-i-am-at-the-console",
+            help="Non-interactive: confirm without typing the word (SPEC §9.3). Everything else "
+            "stays: fresh read, the same plan again right before sending, undo file, readback.",
+        ),
+    ] = False,
 ) -> None:
     """Write the chosen packages of a wizard proposal (fresh read, typed word, undo file)."""
     settings = settings_of(ctx)
@@ -109,7 +117,11 @@ def apply_packages_command(
         if dry_run:
             say("--dry-run: ничего не записано.")
             raise typer.Exit(EXIT_OK)
-        typed = ask(f"Чтобы записать {len(changes)} изменений, введите «{CONFIRMATION_WORD}»: ")
+        if at_the_console:
+            say("Подтверждено флагом --yes-i-am-at-the-console.")
+            typed = CONFIRMATION_WORD
+        else:
+            typed = ask(f"Чтобы записать {len(changes)} изменений, введите «{CONFIRMATION_WORD}»: ")
         word = TypedWord(typed, CONFIRMATION_WORD)
         if not word.matches():
             say("Отменено — ничего не записано.")
