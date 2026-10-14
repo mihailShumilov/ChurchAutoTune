@@ -13,6 +13,8 @@ classifiers = [
     "Environment :: Console",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3.12",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Religion",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
 ]
 dependencies = [
@@ -25,6 +27,12 @@ dependencies = [
     "soundfile>=0.14.0",
     "typer>=0.27.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mihailShumilov/ChurchAutoTune"
+Repository = "https://github.com/mihailShumilov/ChurchAutoTune"
+Issues = "https://github.com/mihailShumilov/ChurchAutoTune/issues"
+Changelog = "https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ctune = "churchtune.cli.main:run"
@@ -54,6 +62,8 @@ target-version = "py312"
 src = ["src", "tests"]
 # Claude Code hooks are standalone scripts with their own style; Markdown code blocks are documentation.
 extend-exclude = [".claude", "docs", "*.md"]
+# Keep the excludes when pre-commit passes file names explicitly.
+force-exclude = true
 
 [tool.ruff.lint]
 # Rule sets from docs/CODING_STANDARDS.md §1.
