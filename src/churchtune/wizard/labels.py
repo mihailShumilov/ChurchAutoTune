@@ -1,0 +1,69 @@
+"""Console words as translated texts: "matrix 3", "bus 1", "output 8" (skill wizard-ux).
+
+The driver describes signals with short codes (``SignalRef.label()``: ``matrix 3``, ``main_l``)
+and topology issues carry them in their parameters. These helpers turn such codes into message
+keys, so the interface shows "матриця 3" instead of "matrix 3".
+"""
+
+import re
+from collections.abc import Mapping
+
+from churchtune.domain.snapshot import OutputKind, SignalRef, SourceKind
+from churchtune.wizard.protocol import ArgValue, Text
+from churchtune.wizard.ui import kebab, t
+
+_LABEL = re.compile(r"^(?P<kind>[a-z_]+)(?: (?P<number>\d+))?$")
+_DELAY = re.compile(r"^(?P<ms>[0-9.]+) ms$")
+SOURCE_KINDS = frozenset(k.value for k in SourceKind)
+OUTPUT_KINDS = frozenset(k.value for k in OutputKind)
+
+
+def signal_text(ref: SignalRef) -> Text:
+    """A mix signal: "matrix 3", "Main L", "direct out of channel 10"."""
+    return t(f"signal-{kebab(ref.kind.value)}", number=ref.number)
+
+
+def output_text(kind: str, number: int) -> Text:
+    """A physical output: "output 8", "aux out 2"."""
+    return t(f"output-{kind}", number=number)
+
+
+def label_text(label: str) -> Text | str:
+    """A driver label (``matrix 3``, ``main 8``) as a text; anything else stays as it is."""
+    match = _LABEL.match(label)
+    if match is None:
+        return label
+    kind, number = match["kind"], int(match["number"] or 0)
+    if kind in OUTPUT_KINDS and number:
+        return output_text(kind, number)
+    if kind in SOURCE_KINDS:
+        return t(f"signal-{kebab(kind)}", number=number)
+    return label
+
+
+def _alignment_item(item: str) -> Text | str:
+    """``main 8: 1.5 ms`` or ``matrix 3: polarity inverted`` as a text."""
+    where, _, what = item.partition(": ")
+    delay = _DELAY.match(what)
+    if delay is not None:
+        return t("alignment-delay", where=label_text(where), ms=float(delay["ms"]))
+    if what == "polarity inverted":
+        return t("alignment-polarity", where=label_text(where))
+    return item
+
+
+def issue_args(params: Mapping[str, str | float | int] | None) -> dict[str, ArgValue]:
+    """Parameters of a topology issue with console words translated."""
+    args: dict[str, ArgValue] = {}
+    for name, value in (params or {}).items():
+        if not isinstance(value, str):
+            args[name] = value
+        elif name == "items":
+            args[name] = tuple(_alignment_item(i) for i in value.split("; "))
+        elif name == "role":
+            args[name] = t(f"role-{kebab(value)}")
+        elif name in ("path", "paths", "mains", "matrices"):
+            args[name] = tuple(label_text(v) for v in value.split(", "))
+        else:
+            args[name] = value
+    return args

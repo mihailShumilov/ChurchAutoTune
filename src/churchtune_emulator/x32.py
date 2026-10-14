@@ -184,6 +184,14 @@ class X32Emulator:
         """Writes outside the given address prefixes."""
         return [w for w in self.writes if not w[0].startswith(allowed_prefixes)]
 
+    def press_mute(self, channel: int) -> None:
+        """A person pressing MUTE on an input channel (not an OSC write; for tests and demos)."""
+        path = f"ch/{channel:02d}/mix"
+        head, _, rest = self.nodes[path].partition(" ")
+        state, _, tail = rest.partition(" ")
+        if state == "ON":
+            self.nodes[path] = f"{head} OFF {tail}"
+
     def eq_line(self, i: int) -> str:
         """``/node`` line of Main LR band ``i``."""
         return f"/main/st/eq/{i} {_band_text(self.eq_x[i])}"

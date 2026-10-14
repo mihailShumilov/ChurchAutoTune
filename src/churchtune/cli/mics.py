@@ -119,8 +119,6 @@ def map_command(
     while len(found) < count:
         number = len(found) + 1
         ask(f"Микрофон {number}: нажмите Enter и сразу слегка поскребите по его сетке… ")
-        if isinstance(backend, FakeHall):
-            backend.scratch_next()  # development rig: a simulated person scratches the next mic
         recording = backend.record_multi(LISTEN_S, candidates)
         result = find_scratch(
             np.asarray(recording.samples, dtype=np.float64), candidates, FS_HZ, found
