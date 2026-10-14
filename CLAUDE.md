@@ -26,6 +26,9 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 ## Workflow
 - Work milestone by milestone (SPEC §15). Start each milestone in plan mode: read the relevant SPEC
   sections and skills, propose a plan, get approval, then implement test-first.
+- Keep the project website (`site/`, GitHub Pages, en/uk/es) in step with progress: whenever a milestone
+  or a user-visible feature lands, update the status, roadmap and the detailed how-to instructions on all
+  language pages in the same PR (or a follow-up PR right after). Honest status only, no invented claims.
 - Small, atomic Conventional Commits. Update `CHANGELOG.md`, ADRs (`docs/adr/`), this file when rules
   or the code map change.
 - Use Context7 MCP for library docs (Textual, Typer, sounddevice, pydantic, numpy, scipy, fluent.runtime).
@@ -52,13 +55,20 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M0. Modules marked (M1+) are in SPEC §5 but not written yet.
+State after M1. Modules marked (M2+) are in SPEC §5 but not written yet.
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
-  `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`
+  `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`,
+  `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`)
 - `app/` Textual UI (M3) · `wizard/` UI-agnostic step engine (M3) · `i18n/` catalogues (M3)
-- `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`
-- `mixers/x32/` `transport` (the only socket), `codec`, `client` (read-only allowlist), `params`, `nodes`, `dump`,
-  `topology`, `laws` (value laws given to the policy), `writer` (the only writer) · `mixers/base.py`, `capabilities` (M1)
+- `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`,
+  `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants)
+- `mixers/base.py` driver contract (`MixerDriver`, `Capabilities`/`Feature`/`Support`, meters, discovery result)
+- `mixers/x32/` `transport` (the only socket; also `/xinfo`-only discovery), `codec`, `client` (read-only allowlist),
+  `params`, `nodes`, `dump`, `snapshot` (node list, read, tolerant parse), `routing` (source ids, blocks, headamps),
+  `names` (multilingual speaker names), `topology` (`infer_topology`; M0 `detect_roles`), `usb`, `models`
+  (model strings, capabilities), `driver` (`X32Driver`, `discover_consoles`), `laws`, `writer` (the only writer)
+- `churchtune_emulator/` (separate top-level package, loopback only, ADR 0006): `x32` emulator with model variants,
+  latency and loss; seeded from the packaged reference dump
 - `audio/` `base` (protocol, −6 dBFS limiter), `sounddevice_backend`, `factory`, `fake/` (room simulation)
 - `measure/` `config`, `stimulus`, `deconvolution`, `gates`, `point`, `junction` · mic mapping/calibration (M2)
 - `analysis/` `bands`, `response`, `rt60`, `points` · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
@@ -67,7 +77,8 @@ State after M0. Modules marked (M1+) are in SPEC §5 but not written yet.
 - `storage/` `models`, `migrations`, `paths`, `files` · `report/` `texts`, `markdown`, `plots` · `platform/` `devsafe`
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).
 - Writes never verified on hardware (output delay, polarity) need `--write-unverified` (ADR 0005).
-- Tests: `tests/emulator/` (X32 emulator), `tests/fixtures/` (anonymized dumps, golden hall data), `tests/golden/`.
+- Tests: `tests/emulator/` (subclass of the packaged emulator), `tests/fixtures/` (anonymized dumps, golden hall data,
+  `x32/topologies/*.toml` = dump + overrides + expected roles), `tests/golden/`.
 
 ## Commands
 ```bash
@@ -76,9 +87,9 @@ CTUNE_DEV_SAFE=1 uv run pytest -q               # all tests (emulator + fake aud
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q  # the hall session of 2026-10-02
 CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json && uv run python scripts/check_coverage.py   # coverage gates
 CTUNE_DEV_SAFE=1 uv run ctune --help            # expert CLI; --console HOST[:PORT] --audio fake --home DIR
-# From M1 (the emulator moves into the package) and M3 (TUI snapshots):
+# Emulator and doctor (M1); TUI snapshots arrive in M3:
 CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P   # prints port
-CTUNE_DEV_SAFE=1 uv run ctune --emulator                     # wizard against an in-process emulator + fake audio
+CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor              # doctor against an in-process emulator
 CTUNE_DEV_SAFE=1 uv run pytest tests/tui --snapshot-update   # only after reviewing visual diffs
 ```
 
