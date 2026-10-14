@@ -1,0 +1,137 @@
+"""A saved proposal becomes ordered steps only from a fresh read that still matches it."""
+
+import math
+
+import pytest
+
+from churchtune.domain.console import ConsoleState, MatrixState
+from churchtune.domain.eq import Band, EqType, SystemEq
+from churchtune.domain.snapshot import SignalRef, SourceKind
+from churchtune.errors import UnsafeWrite
+from churchtune.mixers.x32.laws import X32ValueLaws
+from churchtune.safety.order import check_order
+from churchtune.storage.models import (
+    EqModel,
+    LevelModel,
+    PackageModel,
+    PackagesFile,
+    PathEqModel,
+    PathRefModel,
+)
+from churchtune.wizard.applying import (
+    MAIN,
+    changed_strips,
+    chosen_packages,
+    ordered_steps,
+    package_target,
+    same_eq,
+    speaker_chains,
+    strip_states,
+)
+
+FS = 48000.0
+LAWS = X32ValueLaws()
+SUB = SignalRef(SourceKind.MATRIX, 3)
+FREQS = (60.0, 120.0, 250.0, 480.0, 1000.0, 2000.0)
+
+
+def flat() -> SystemEq:
+    return SystemEq(True, tuple(Band(n, EqType.PEQ, FREQS[n - 1], 0.0, 1.4) for n in range(1, 7)))
+
+
+def console(main: SystemEq | None = None, sub_fader: float = -20.0) -> ConsoleState:
+    matrices = {
+        n: MatrixState(n, f"M{n}", flat(), True, sub_fader if n == 3 else 0.0, False, ())
+        for n in (1, 2, 3)
+    }
+    return ConsoleState(main or flat(), matrices, {})
+
+
+def eq_package(before: SystemEq, after: SystemEq, **extra) -> PackageModel:
+    path = PathEqModel(
+        path=PathRefModel(kind="main_l"),
+        before=EqModel.from_domain(before),
+        after=EqModel.from_domain(after),
+    )
+    fields = {"kind": "system_eq", "suggest_only": False, "risk": "low", "selected": True}
+    return PackageModel(**{**fields, "eq": (path,), **extra})
+
+
+def level_package(before_db: float, after_db: float) -> PackageModel:
+    level = LevelModel(path=PathRefModel(kind="matrix", number=3), before_db=before_db,
+                       after_db=after_db)  # fmt: skip
+    return PackageModel(kind="sub_level", suggest_only=False, risk="low", selected=True,
+                        levels=(level,))  # fmt: skip
+
+
+def packages_file(*packages: PackageModel) -> PackagesFile:
+    return PackagesFile.model_construct(packages=packages)
+
+
+CUT = flat().with_band(Band(4, EqType.PEQ, 480.0, -9.0, 1.5))
+
+
+def test_strips_and_chains_cover_main_and_every_matrix():
+    states = strip_states(console())
+    assert set(states) == {MAIN, *(SignalRef(SourceKind.MATRIX, n) for n in (1, 2, 3))}
+    assert states[SUB].fader_db == -20.0
+    chains = speaker_chains(states)
+    assert chains["main"] == (MAIN,)
+    assert chains["matrix 3"] == (MAIN, SUB)
+
+
+def test_a_matching_package_becomes_ordered_steps():
+    fresh = strip_states(console())
+    target = package_target(eq_package(flat(), CUT), fresh, LAWS)
+    assert target.mismatches == ()
+    steps = ordered_steps(target, fresh, FS)
+    assert changed_strips(steps) == {MAIN}
+    whole_after = {**fresh, **target.after}
+    check_order(fresh, steps, whole_after, speaker_chains(fresh), FS)
+
+
+def test_a_console_changed_by_hand_is_refused():
+    fresh = strip_states(console(main=CUT))  # someone already cut 480 Hz
+    target = package_target(eq_package(flat(), CUT), fresh, LAWS)
+    assert target.mismatches == ("main_l",)
+    with pytest.raises(UnsafeWrite, match="changed since"):
+        ordered_steps(target, fresh, FS)
+
+
+def test_a_fader_is_compared_on_the_console_grid():
+    fresh = strip_states(console(sub_fader=-19.98))
+    assert package_target(level_package(-20.0, -26.0), fresh, LAWS).mismatches == ()
+    moved = strip_states(console(sub_fader=-15.0))
+    assert package_target(level_package(-20.0, -26.0), moved, LAWS).mismatches == ("matrix 3",)
+
+
+def test_a_fader_down_matches_minus_infinity():
+    fresh = strip_states(console(sub_fader=-math.inf))
+    assert package_target(level_package(-math.inf, -30.0), fresh, LAWS).mismatches == ()
+
+
+def test_a_strip_the_console_does_not_have_is_refused():
+    level = LevelModel(path=PathRefModel(kind="matrix", number=6), before_db=0.0, after_db=-3.0)
+    package = PackageModel(kind="sub_level", suggest_only=False, risk="low", selected=True,
+                           levels=(level,))  # fmt: skip
+    with pytest.raises(UnsafeWrite, match="no matrix 6"):
+        package_target(package, strip_states(console()), LAWS)
+
+
+def test_only_chosen_packages_that_are_not_suggestions():
+    chosen = eq_package(flat(), CUT)
+    skipped = eq_package(flat(), CUT, selected=False)
+    suggestion = eq_package(flat(), CUT, suggest_only=True)
+    assert chosen_packages(packages_file(skipped, suggestion, chosen)) == [chosen]
+
+
+def test_a_package_needs_what_it_requires_first():
+    needs = eq_package(flat(), CUT, requires=("crossover",))
+    with pytest.raises(UnsafeWrite, match="needs crossover"):
+        chosen_packages(packages_file(needs))
+
+
+def test_same_eq_uses_the_grid_and_the_switch():
+    assert same_eq(LAWS, flat(), flat().with_band(Band(4, EqType.PEQ, 480.0, 0.01, 1.4)))
+    assert not same_eq(LAWS, flat(), flat().with_on(False))
+    assert not same_eq(LAWS, flat(), CUT)

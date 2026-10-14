@@ -43,8 +43,8 @@ ALLOWED: dict[str, set[str]] = {
         "measure",
         "analysis",
         "design",
-        # No "safety" yet: the M3 wizard is read-only on the console (ADR 0008). The write
-        # steps of M5 bring it back together with their safety review.
+        # Pure policy only: ordering and validation of write plans (M5, ADR 0010).
+        "safety",
         "storage",
         "report",
     },
