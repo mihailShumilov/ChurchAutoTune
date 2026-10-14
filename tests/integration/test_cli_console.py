@@ -3,10 +3,11 @@
 import pytest
 from typer.testing import CliRunner
 
-from churchtune.cli.console import from_file, to_file
 from churchtune.cli.context import EXIT_OK, EXIT_UNREACHABLE
 from churchtune.cli.main import app
+from churchtune.mixers.x32.snapshot import parse_snapshot
 from churchtune.storage.files import latest_snapshot, read_snapshot
+from churchtune.storage.models import SnapshotFile
 from churchtune.storage.paths import Workspace
 from churchtune_emulator.x32 import X32Emulator
 from tests.emulator.x32_emulator import LOOPBACK
@@ -25,9 +26,9 @@ def test_snapshot_saves_a_file_that_parses_back(emu, tmp_path):
     assert path is not None
     stored = read_snapshot(path)
     assert stored.model == "X32P"
-    snapshot = from_file(stored)
+    snapshot = parse_snapshot(stored.identity(), stored.raw, stored.taken_at)
     assert snapshot.matrices[3].name == "Sub buffer"
-    assert to_file(snapshot) == stored
+    assert SnapshotFile.from_snapshot(snapshot) == stored
     assert emu.writes == []
 
 
@@ -43,7 +44,8 @@ def test_doctor_on_the_in_process_emulator(tmp_path):
 
 
 def test_doctor_from_a_saved_snapshot(emu, tmp_path):
-    invoke("--console", f"{LOOPBACK}:{emu.port}", "snapshot", home=tmp_path)
+    saved = invoke("--console", f"{LOOPBACK}:{emu.port}", "snapshot", home=tmp_path)
+    assert saved.exit_code == EXIT_OK
     path = latest_snapshot(Workspace(tmp_path))
     result = invoke("doctor", "--from-file", str(path), home=tmp_path)
     assert result.exit_code == EXIT_OK

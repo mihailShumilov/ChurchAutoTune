@@ -5,7 +5,6 @@ Read-only. Transitional expert CLI with Russian operator texts (docs/adr/0003).
 
 import time
 from dataclasses import replace
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -21,11 +20,11 @@ from churchtune.cli.context import (
     say,
     settings_of,
 )
-from churchtune.domain.snapshot import ConsoleFamily, ConsoleIdentity, ConsoleSnapshot
+from churchtune.domain.snapshot import ConsoleSnapshot
 from churchtune.domain.topology import Issue, TopologyGuess
-from churchtune.errors import ChurchTuneError, ConsoleUnreachable
-from churchtune.mixers.base import Feature, Support
-from churchtune.mixers.x32.driver import LinkQuality, X32Driver, discover_consoles
+from churchtune.errors import ChurchTuneError
+from churchtune.mixers.base import Feature, LinkQuality, Support
+from churchtune.mixers.x32.driver import X32Driver, discover_consoles
 from churchtune.mixers.x32.snapshot import parse_snapshot
 from churchtune.mixers.x32.topology import infer_topology
 from churchtune.platform.devsafe import is_dev_safe
@@ -35,6 +34,8 @@ from churchtune.storage.models import SnapshotFile
 LOSS_WARN = 0.05
 SLOW_LINK_MS = 50.0
 PROGRESS_EVERY = 250
+# More unparsed nodes than this: the network or the console misbehaved during the read.
+INCOMPLETE_SNAPSHOT = 50
 
 ROLE_TEXT = {
     "top_l": "портал левый",
@@ -43,6 +44,7 @@ ROLE_TEXT = {
     "sub": "саб",
     "fill": "фронтфил",
     "delay": "задержанные / балкон",
+    "zone": "другое помещение",
     "monitor": "монитор",
     "unused": "не колонки",
 }
@@ -62,10 +64,39 @@ ISSUE_TEXT = {
     "sub_on_bus_suggest_only": (
         "саб на шине {bus}: запись в шины не проверена на железе — только подсказки"
     ),
-    "sub_not_fed_by_main": "матрица саба {matrix} не получает сигнал с Main LR",
-    "crossover_hpf_suggest_only": (
-        "порталы идут прямо с Main LR: ФВЧ кроссовера поставить некуда — только подсказка"
+    "sub_pair": "сабы стоят парой ({paths}) — настраиваются как один саб",
+    "sub_not_fed": "матрица саба {matrix} ни от чего не получает сигнал",
+    "sub_fed_by_main_and_mono": (
+        "матрица саба {matrix} получает сигнал и с Main LR, и с Mono — каналы на Mono "
+        "попадут в саб дважды"
     ),
+    "playback_not_sent_to_sub_bus": (
+        "каналы воспроизведения не посылают сигнал в шину саба {bus} — саб будет молчать "
+        "во время замера"
+    ),
+    "main_hpf_feeds_sub": (
+        "на Main LR стоит срез низов {freq_hz:.0f} Гц, а саб питается от Main — "
+        "саб недополучит низы"
+    ),
+    "crossover_hpf_suggest_only": (
+        "порталы идут прямо с Main LR: ФВЧ кроссовера не ставьте на Main LR (саб тоже питается "
+        "от него) — его ставят в DSP колонок или переводят порталы на матрицы"
+    ),
+    "main_and_matrix_tops": (
+        "на выходах и Main L/R ({mains}), и матрицы-порталы ({matrices}); вероятно, Main L/R "
+        "идут на запись или в фойе — подтвердите"
+    ),
+    "no_sub_path_ask": (
+        "отдельного пути саба нет. Если сабвуфер есть, он, вероятно, стоит на Main LR вместе "
+        "с порталами — тогда кроссовер настроить нельзя"
+    ),
+    "zone_will_hear_sweep": (
+        "{path} — колонки в другом помещении: там услышат тестовый сигнал. Предупредите людей "
+        "или замьютьте этот путь"
+    ),
+    "side_conflict": "сторона L/R по имени и по связке не совпадает ({path}) — проверьте",
+    "existing_alignment": "на путях колонок уже стоят задержка или полярность: {items}",
+    "lcr_not_supported": "режим LCR с центральным кластером в этой версии не настраивается",
     "other_speakers_audible": (
         "{path} ({role}) включён и будет звучать во время замера; в MVP не настраивается"
     ),
@@ -81,32 +112,14 @@ FEATURE_TEXT = {
     Feature.MATRIX_POLARITY: "полярность матриц",
     Feature.OUTPUT_DELAY: "задержка выходов",
     Feature.BUS_EQ: "EQ шин",
-    Feature.CHANNEL_MUTE: "mute каналов",
+    Feature.BUS_MUTE: "mute шин",
+    Feature.BUS_FADER: "фейдеры шин",
     Feature.MONO_EQ: "EQ Main Mono",
+    Feature.MONO_MUTE: "mute Main Mono",
+    Feature.MONO_FADER: "фейдер Main Mono",
+    Feature.MAIN_MUTE: "mute Main LR",
+    Feature.CHANNEL_MUTE: "mute каналов",
 }
-
-
-# ------------------------------------------------------------------ snapshot files
-def to_file(snapshot: ConsoleSnapshot) -> SnapshotFile:
-    """The stored form of a snapshot: identity and raw lines."""
-    identity = snapshot.identity
-    return SnapshotFile(
-        taken_at=snapshot.taken_at,
-        family=identity.family.value,
-        model=identity.model,
-        name=identity.name,
-        firmware=identity.firmware,
-        host=identity.host,
-        raw=dict(snapshot.raw),
-    )
-
-
-def from_file(stored: SnapshotFile) -> ConsoleSnapshot:
-    """Parse a stored snapshot with this version's parser."""
-    identity = ConsoleIdentity(
-        ConsoleFamily(stored.family), stored.model, stored.name, stored.firmware, stored.host
-    )
-    return parse_snapshot(identity, stored.raw, stored.taken_at)
 
 
 # ------------------------------------------------------------------ printing
@@ -192,6 +205,18 @@ def _find_console(settings: Settings) -> Settings:
     return replace(settings, venue=venue)
 
 
+def _print_unparsed(snapshot: ConsoleSnapshot, indent: str = "   ") -> None:
+    """Warn about nodes that were missing or not understood; many of them make the read unusable."""
+    count = len(snapshot.unparsed)
+    if not count:
+        return
+    mark = "✗" if count > INCOMPLETE_SNAPSHOT else "!"
+    shown = ", ".join(snapshot.unparsed[:8])
+    say(f"{indent}{mark} не поняты {count} узл.: {shown}")
+    if count > INCOMPLETE_SNAPSHOT:
+        say(f"{indent}  снимок неполный: проверьте сеть и повторите; топологии не доверяйте")
+
+
 def _read(settings: Settings, driver: X32Driver) -> tuple[ConsoleSnapshot, Path, float]:
     def progress(done: int, total: int) -> None:
         if done % PROGRESS_EVERY == 0 or done == total:
@@ -200,7 +225,7 @@ def _read(settings: Settings, driver: X32Driver) -> tuple[ConsoleSnapshot, Path,
     start = time.monotonic()
     snapshot = driver.read_snapshot(progress)
     elapsed = time.monotonic() - start
-    path = write_snapshot(settings.workspace, to_file(snapshot), settings.now())
+    path = write_snapshot(settings.workspace, SnapshotFile.from_snapshot(snapshot), settings.now())
     return snapshot, path, elapsed
 
 
@@ -210,15 +235,14 @@ def snapshot_command(ctx: typer.Context) -> None:
     with open_console(settings) as console:
         try:
             driver = X32Driver.connect(console.client)
-        except ConsoleUnreachable as error:
+        except ChurchTuneError as error:  # silent console or another model
             fail(f"✗ {error}", EXIT_UNREACHABLE)
         snapshot, path, elapsed = _read(settings, driver)
     say(
         f"✓ снимок: {len(snapshot.raw)} узлов за {elapsed:.1f} с → "
         f"{relative_to_home(path, settings.workspace)}"
     )
-    if snapshot.unparsed:
-        say(f"! не поняты {len(snapshot.unparsed)} узл.: {', '.join(snapshot.unparsed[:8])}")
+    _print_unparsed(snapshot, indent="")
     raise typer.Exit(EXIT_OK)
 
 
@@ -233,7 +257,8 @@ def doctor_command(
     settings = settings_of(ctx)
     say("ctune doctor — проверка без звука, в пульт ничего не пишется")
     if snapshot_file is not None:
-        snapshot = from_file(read_snapshot(snapshot_file))
+        stored = read_snapshot(snapshot_file)
+        snapshot = parse_snapshot(stored.identity(), stored.raw, stored.taken_at)
         identity = snapshot.identity
         say(
             f"Снимок {snapshot.taken_at}: {identity.model} «{identity.name}» fw {identity.firmware}"
@@ -263,11 +288,12 @@ def doctor_command(
             f"   ✓ {len(snapshot.raw)} узлов за {elapsed:.1f} с → "
             f"{relative_to_home(path, settings.workspace)}"
         )
+        _print_unparsed(snapshot)
         if snapshot.clock is not None:
             say(f"   частота {snapshot.clock.fs_hz} Гц, клок {snapshot.clock.source}")
         say(
             "   Сохраните сцену на пульте: SCENES → свободный слот → SAVE, имя "
-            f"before-ctune-{datetime.now().strftime('%Y-%m-%d')}. Это страховка без компьютера."
+            f"before-ctune-{settings.now().strftime('%Y-%m-%d')}. Это страховка без компьютера."
         )
         say("4. Топология")
         print_topology(driver.infer_topology(snapshot))

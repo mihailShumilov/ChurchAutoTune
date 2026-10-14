@@ -69,8 +69,14 @@ class Workspace:
         return self.root / "console"
 
     def snapshot_path(self, now: datetime) -> Path:
-        """Name of a new snapshot file taken at ``now``."""
-        return self.console_dir / f"{now.strftime(TIMESTAMP_FORMAT)}{SNAPSHOT_SUFFIX}"
+        """Name of a new snapshot file taken at ``now``; never the name of an existing file."""
+        stamp = now.strftime(TIMESTAMP_FORMAT)
+        path = self.console_dir / f"{stamp}{SNAPSHOT_SUFFIX}"
+        number = 2
+        while path.exists():
+            path = self.console_dir / f"{stamp}_{number}{SNAPSHOT_SUFFIX}"
+            number += 1
+        return path
 
     def undo_path(self, scope: WriteScope, now: datetime, *, revert: bool = False) -> Path:
         """Name of a new undo file for a plan applied at ``now``."""

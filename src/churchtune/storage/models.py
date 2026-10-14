@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from churchtune.domain.changes import Change, WriteScope
 from churchtune.domain.eq import Band, EqType, SystemEq
+from churchtune.domain.snapshot import ConsoleFamily, ConsoleIdentity, ConsoleSnapshot
 
 SCHEMA_VERSION: Literal[1] = 1
 ParamValue = float | int | str | bool | None
@@ -272,9 +273,27 @@ class SnapshotFile(FileModel):
 
     schema_version: Literal[1] = SCHEMA_VERSION
     taken_at: str
-    family: str
+    family: ConsoleFamily
     model: str
     name: str
     firmware: str
     host: str
     raw: dict[str, str]
+
+    @classmethod
+    def from_snapshot(cls, snapshot: ConsoleSnapshot) -> "SnapshotFile":
+        """The stored form of a snapshot: identity and raw lines."""
+        identity = snapshot.identity
+        return cls(
+            taken_at=snapshot.taken_at,
+            family=identity.family,
+            model=identity.model,
+            name=identity.name,
+            firmware=identity.firmware,
+            host=identity.host,
+            raw=dict(snapshot.raw),
+        )
+
+    def identity(self) -> ConsoleIdentity:
+        """The console identity stored in the file."""
+        return ConsoleIdentity(self.family, self.model, self.name, self.firmware, self.host)

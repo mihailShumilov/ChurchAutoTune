@@ -42,3 +42,13 @@ def test_unknown_versions_are_refused(tmp_path, version):
     path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(UnsupportedSchema):
         read_snapshot(path)
+
+
+def test_two_snapshots_in_the_same_second_keep_both(tmp_path):
+    workspace = Workspace(tmp_path)
+    now = datetime(2026, 10, 14, 9, 0, 0)
+    first = write_snapshot(workspace, STORED, now)
+    second = write_snapshot(workspace, STORED, now)
+    third = write_snapshot(workspace, STORED, now)
+    assert len({first, second, third}) == 3
+    assert second.name == "20261014_090000_2-snapshot.json"

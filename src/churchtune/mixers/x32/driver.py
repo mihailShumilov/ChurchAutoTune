@@ -5,16 +5,16 @@ Read-only. Writing stays in ``writer.py`` behind a ``WriteAuthorization`` (SPEC 
 
 import statistics
 import time
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Mapping
 from datetime import datetime
 
-from churchtune.domain.snapshot import ConsoleSnapshot, UsbAudioMap
+from churchtune.domain.snapshot import ConsoleIdentity, ConsoleSnapshot, UsbAudioMap
 from churchtune.domain.topology import TopologyGuess
 from churchtune.errors import ConsoleUnreachable, UnsupportedConsole
 from churchtune.mixers.base import (
     ConsoleModel,
     DiscoveredConsole,
+    LinkQuality,
     MeterFrame,
     MeterSet,
     ProgressCb,
@@ -33,28 +33,6 @@ LINK_PING_TIMEOUT_S = 0.5
 _CH, _AUX, _FX, _BUS, _MTX = 32, 8, 8, 16, 6
 _BUS_FIRST = _CH + _AUX + _FX
 _MTX_FIRST = _BUS_FIRST + _BUS
-
-
-@dataclass(frozen=True, slots=True)
-class LinkQuality:
-    """Round trips of repeated ``/xinfo`` requests.
-
-    Attributes:
-        sent: Requests sent.
-        answered: Requests answered in time.
-        median_ms: Median round trip of the answered requests; None when none was answered.
-        max_ms: Slowest answered round trip; None when none was answered.
-    """
-
-    sent: int
-    answered: int
-    median_ms: float | None
-    max_ms: float | None
-
-    @property
-    def loss(self) -> float:
-        """Share of unanswered requests, 0..1."""
-        return 1.0 - self.answered / self.sent if self.sent else 0.0
 
 
 def discover_consoles(
@@ -138,6 +116,12 @@ class X32Driver:
         taken_at = self._now().isoformat(timespec="seconds")
         raw = read_raw(self._client, progress)
         return parse_snapshot(self._model.identity, raw, taken_at)
+
+    def parse_snapshot(
+        self, identity: ConsoleIdentity, raw: Mapping[str, str], taken_at: str
+    ) -> ConsoleSnapshot:
+        """Rebuild a snapshot from stored raw lines. Pure."""
+        return parse_snapshot(identity, raw, taken_at)
 
     def infer_topology(self, snapshot: ConsoleSnapshot) -> TopologyGuess:
         """Guess speaker roles. Pure."""
