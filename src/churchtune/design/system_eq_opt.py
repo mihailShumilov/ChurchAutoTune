@@ -58,6 +58,7 @@ RESIDUAL_SCALE = 10.0
 # Optimised gains below this are set to zero.
 MIN_GAIN_DB = 0.5
 ZONE_HALF_OCT = 1 / 3
+MIN_ZONE_HALF_OCT = 1 / 12
 MODE_COMMON = 0.5
 _SKIPS_KEPT_FROM_GREEDY = frozenset({SkipCode.NARROW_DIP, SkipCode.LOCAL_PEAK})
 
@@ -168,19 +169,43 @@ class _Zones:
     grid_hz: FloatArray
     mask: np.ndarray
 
-    def mean(self, curve: FloatArray, freq_hz: float) -> float:
+    def mean(self, curve: FloatArray, freq_hz: float, half_oct: float = ZONE_HALF_OCT) -> float:
         near = (
-            (self.grid_hz >= freq_hz * 2**-ZONE_HALF_OCT)
-            & (self.grid_hz <= freq_hz * 2**ZONE_HALF_OCT)
+            (self.grid_hz >= freq_hz * 2**-half_oct)
+            & (self.grid_hz <= freq_hz * 2**half_oct)
             & self.mask
         )
         return float(curve[near].mean()) if near.any() else 0.0
 
-    def points_above(self, point_devs: tuple[FloatArray, ...], freq_hz: float, db: float) -> int:
-        return sum(1 for d in point_devs if self.mean(d, freq_hz) > db)
+    def points_above(
+        self,
+        point_devs: tuple[FloatArray, ...],
+        freq_hz: float,
+        db: float,
+        half_oct: float = ZONE_HALF_OCT,
+    ) -> int:
+        return sum(1 for d in point_devs if self.mean(d, freq_hz, half_oct) > db)
 
-    def points_below(self, point_devs: tuple[FloatArray, ...], freq_hz: float, db: float) -> int:
-        return sum(1 for d in point_devs if self.mean(d, freq_hz) < db)
+    def points_below(
+        self,
+        point_devs: tuple[FloatArray, ...],
+        freq_hz: float,
+        db: float,
+        half_oct: float = ZONE_HALF_OCT,
+    ) -> int:
+        return sum(1 for d in point_devs if self.mean(d, freq_hz, half_oct) < db)
+
+
+def band_half_oct(q: float) -> float:
+    """Half the width a band acts on, in octaves.
+
+    1/(2Q), never narrower than 1/12 octave and never wider than the third of an octave the rule
+    used before.
+
+    The commonness rule asks whether the points show the feature where the band acts; averaging
+    a narrow resonance over a fixed wide zone would wash it out and mistake narrow for local.
+    """
+    return min(ZONE_HALF_OCT, max(MIN_ZONE_HALF_OCT, 1 / (2 * q)))
 
 
 def _revert_uncommon(  # noqa: PLR0913 - one pass over everything the rule check needs
@@ -201,7 +226,9 @@ def _revert_uncommon(  # noqa: PLR0913 - one pass over everything the rule check
         if not old.adjustable or untouched:
             continue
         if new.gain_db < 0:
-            n_bad = zones.points_above(data.point_devs_db, new.freq_hz, cfg.peak_point_db)
+            n_bad = zones.points_above(
+                data.point_devs_db, new.freq_hz, cfg.peak_point_db, band_half_oct(new.q)
+            )
             share = MODE_COMMON if new.freq_hz < cfg.mode_below_hz else cfg.peak_common
         else:
             n_bad = zones.points_below(data.point_devs_db, new.freq_hz, -cfg.dip_point_db)
