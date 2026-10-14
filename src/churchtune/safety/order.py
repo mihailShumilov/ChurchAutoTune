@@ -229,6 +229,85 @@ def _switches_and_faders(
     return sorted(late, key=lambda step: LATE_ORDER.index(step.what))
 
 
+def _muted_change(
+    sim: _Simulation, ref: SignalRef, rest: Sequence[tuple[SignalRef, Band, Band]]
+) -> list[Step] | None:
+    """Mute the strip, change all its remaining bands, switch it back on; None if not safe.
+
+    A muted path is never louder; switched on again, the strip has all its planned bands.
+    """
+    if not sim.states[ref].on:
+        return None
+    steps = [Step(ref, "on", value=False)]
+    for _, old_band, new_band in rest:
+        steps.extend(_band_orders(ref, old_band, new_band)[0])
+    steps.append(Step(ref, "on", value=True))
+    return steps if sim.safe(steps) else None
+
+
+def _hold_a_cut(
+    sim: _Simulation,
+    stuck: list[tuple[SignalRef, Band, Band]],
+    after: Mapping[SignalRef, StripState],
+    helped: set[tuple[SignalRef, int]],
+) -> tuple[SignalRef, Band, Band] | None:
+    """Copy a stuck cut into a spare band of its strip, so the cut itself can move.
+
+    Two cuts that swap places (Main 50 -> 80 Hz while the sub goes 80 -> 50 Hz) have no order:
+    whichever moves first leaves a frequency uncut. A spare band (flat now and after) takes a
+    copy of the old cut first (adding a cut is never louder); the cut then moves, and the copy
+    is removed later like any other change.
+
+    Returns:
+        The removal of the copy, to be ordered with the rest; None when no cut can be held.
+    """
+    for ref, old_band, _new in stuck:
+        if (ref, old_band.band) in helped or not old_band.adjustable or old_band.gain_db >= 0:
+            continue
+        eq = sim.states[ref].eq
+        spare = next(
+            (b for b in eq.bands
+             if b.adjustable and b.gain_db == 0 and b == after[ref].eq.band(b.band)
+             and all(item[0] != ref or item[1].band != b.band for item in stuck)),
+            None,
+        )  # fmt: skip
+        if spare is None:
+            continue
+        copy = replace(old_band, band=spare.band)
+        steps = _band_steps(ref, spare, copy, ("type", "freq_hz", "q", "gain_db"))
+        if sim.safe(steps):
+            sim.take(steps)
+            helped.add((ref, old_band.band))
+            return ref, copy, spare
+    return None
+
+
+def _mute_one_strip(
+    sim: _Simulation,
+    stuck: list[tuple[SignalRef, Band, Band]],
+    mutable: Collection[SignalRef],
+) -> list[tuple[SignalRef, Band, Band]]:
+    """Finish one mutable strip with it muted; the bands still waiting after that.
+
+    Raises:
+        UnsafeWrite: No mutable strip can be finished that way: there is no safe order.
+    """
+    for ref in dict.fromkeys(item[0] for item in stuck):
+        if ref not in mutable:
+            continue
+        rest = [item for item in stuck if item[0] == ref]
+        muted = _muted_change(sim, ref, rest)
+        if muted is not None:
+            sim.take(muted)
+            return [item for item in stuck if item[0] != ref]
+    ref, _, new_band = stuck[0]
+    raise UnsafeWrite(
+        f"no safe order for band {new_band.band} of {ref.label()}",
+        strip=ref.label(),
+        band=new_band.band,
+    )
+
+
 def order_steps(
     before: Mapping[SignalRef, StripState],
     after: Mapping[SignalRef, StripState],
@@ -268,21 +347,23 @@ def order_steps(
         if old_band != new_band
     ]
     pending.sort(key=lambda item: item[2].gain_db - item[1].gain_db)
-    for ref, old_band, new_band in pending:
-        orders = _band_orders(ref, old_band, new_band)
-        if ref in mutable and sim.states[ref].on:
-            muted = [Step(ref, "on", value=False), *orders[0], Step(ref, "on", value=True)]
-            orders.append(muted)
-        for steps in orders:
-            if sim.safe(steps):
-                sim.take(steps)
-                break
-        else:
-            raise UnsafeWrite(
-                f"no safe order for band {new_band.band} of {ref.label()}",
-                strip=ref.label(),
-                band=new_band.band,
-            )
+    # A band that has no safe order now may have one once another band has moved: try again
+    # while anything moves; then mute a mutable strip for the rest of its bands, or refuse.
+    waiting = list(pending)
+    helped: set[tuple[SignalRef, int]] = set()
+    while waiting:
+        left = []
+        for ref, old_band, new_band in waiting:
+            for steps in _band_orders(ref, old_band, new_band):
+                if sim.safe(steps):
+                    sim.take(steps)
+                    break
+            else:
+                left.append((ref, old_band, new_band))
+        if len(left) == len(waiting):
+            removal = _hold_a_cut(sim, left, after, helped)
+            left = [*left, removal] if removal is not None else _mute_one_strip(sim, left, mutable)
+        waiting = left
     if not sim.safe(late):
         raise UnsafeWrite("raising faders or unmuting last would still be too loud")
     sim.take(late)

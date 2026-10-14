@@ -300,3 +300,53 @@ def test_main_lr_is_never_muted_for_a_change():
     after = {MAIN: state(lpf), TOPS: state(), SUB: state()}
     with pytest.raises(UnsafeWrite, match="no safe order"):
         order_steps(before, after, CHAINS, FS, mutable={SUB, TOPS})
+
+
+def test_two_cuts_that_swap_places_are_held_by_a_spare_band_meanwhile():
+    at_50 = flat_eq().with_band(Band(1, EqType.PEQ, 50.0, -12.0, 0.7))
+    at_80 = flat_eq().with_band(Band(1, EqType.PEQ, 80.0, -12.0, 0.7))
+    before = {MAIN: state(at_50, -20.0), TOPS: state(on=False), SUB: state(at_80, -20.0)}
+    after = {MAIN: state(at_80, -20.0), TOPS: state(on=False), SUB: state(at_50, -20.0)}
+    steps = plan(before, after)
+    spare = [s for s in steps if s.band is not None and s.band.band != 1]
+    assert spare  # a copy of a cut held the place
+    assert spare[-1].band is not None
+    assert spare[-1].band.gain_db == 0.0  # and was removed again
+
+
+def test_a_strip_that_is_already_muted_is_not_muted_again():
+    before = {MAIN: state(), TOPS: state(on=False), SUB: state()}
+    sim = order._Simulation(before, before, CHAINS, FS)
+    band = Band(1, EqType.PEQ, 60.0, -3.0, 1.4)
+    assert order._muted_change(sim, TOPS, [(TOPS, flat_eq().band(1), band)]) is None
+
+
+def test_a_cut_without_a_spare_band_is_not_held():
+    busy = _apply(flat_eq(), [Band(n, EqType.PEQ, FREQS[n - 1], -3.0, 1.4) for n in range(1, 7)])
+    moved = busy.with_band(Band(1, EqType.PEQ, 100.0, -3.0, 1.4))
+    before = {MAIN: state(busy), TOPS: state(), SUB: state()}
+    after = {MAIN: state(moved), TOPS: state(), SUB: state()}
+    sim = order._Simulation(before, after, CHAINS, FS)
+    stuck = [(MAIN, busy.band(1), moved.band(1))]
+    assert order._hold_a_cut(sim, stuck, after, set()) is None
+
+
+def test_a_mutable_strip_that_cannot_be_finished_muted_is_skipped(monkeypatch):
+    before = {MAIN: state(), TOPS: state(), SUB: state()}
+    sim = order._Simulation(before, before, CHAINS, FS)
+    monkeypatch.setattr(order, "_muted_change", lambda sim, ref, rest: None)
+    band = flat_eq().band(1)
+    with pytest.raises(UnsafeWrite, match="no safe order"):
+        order._mute_one_strip(sim, [(SUB, band, band)], {SUB})
+
+
+def test_a_boost_or_a_cut_already_held_is_never_copied():
+    boost = flat_eq().with_band(Band(1, EqType.PEQ, 60.0, 3.0, 1.4))
+    moved = flat_eq().with_band(Band(1, EqType.PEQ, 100.0, 3.0, 1.4))
+    before = {MAIN: state(boost), TOPS: state(), SUB: state()}
+    after = {MAIN: state(moved), TOPS: state(), SUB: state()}
+    sim = order._Simulation(before, after, CHAINS, FS)
+    assert order._hold_a_cut(sim, [(MAIN, boost.band(1), moved.band(1))], after, set()) is None
+    cut = flat_eq().with_band(Band(1, EqType.PEQ, 60.0, -3.0, 1.4))
+    stuck = [(MAIN, cut.band(1), moved.band(1))]
+    assert order._hold_a_cut(sim, stuck, after, {(MAIN, 1)}) is None
