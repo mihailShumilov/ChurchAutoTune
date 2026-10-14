@@ -409,3 +409,5 @@ mutes-pending-cannot-finish = Some matrices may still be muted from the measurem
 apply-advice-side-delay = delay { $side } by { $ms } ms
 apply-advice-side-sub = the subwoofer
 apply-advice-side-tops = the main speakers
+apply-level-far = { $path }: the fader would go to { $after_db } dB; when this venue was first read it was at { $first_db } dB. That is a big change from how the system was set up.
+apply-level-far-question = Are you sure the subwoofer level should change this much?

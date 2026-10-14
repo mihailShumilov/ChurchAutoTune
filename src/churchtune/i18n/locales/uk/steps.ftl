@@ -422,3 +422,5 @@ mutes-pending-cannot-finish = Деякі матриці, можливо, ще з
 apply-advice-side-delay = затримати { $side } на { $ms } мс
 apply-advice-side-sub = саб
 apply-advice-side-tops = портали
+apply-level-far = { $path }: фейдер стане { $after_db } дБ, а під час першого читання цієї зали він стояв на { $first_db } дБ. Це велика зміна порівняно з початковим налаштуванням системи.
+apply-level-far-question = Ви впевнені, що рівень саба треба змінювати так сильно?

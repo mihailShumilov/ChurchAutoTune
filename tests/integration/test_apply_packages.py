@@ -485,3 +485,11 @@ def test_the_port_sends_only_the_plan_that_was_shown(emu, client, transport, tmp
         port.apply(tampered, "применить", "применить", tmp_path / "u.json", lambda: False)
     assert emu.writes == []
     assert not (tmp_path / "u.json").exists()
+
+
+def test_the_non_interactive_flag_confirms_without_the_word(emu, home, run, client):
+    proposal = write_proposal(home, client)
+    result = run(["apply-packages", proposal, "--yes-i-am-at-the-console"])
+    assert result.exit_code == EXIT_OK, result.output
+    assert emu.writes
+    assert undo_files(home)  # the undo file is there as always

@@ -13,8 +13,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from churchtune.errors import ConsoleUnreachable, UnsafeWrite
-from churchtune.storage.files import read_packages
+from churchtune.domain.snapshot import SignalRef, SourceKind
+from churchtune.errors import ChurchTuneError, ConsoleUnreachable, UnsafeWrite
+from churchtune.storage.files import read_packages, read_snapshot, read_wizard_state
 from churchtune.storage.models import PackageModel, WizardStateFile
 from churchtune.wizard.applying import chosen_packages, ref_of
 from churchtune.wizard.labels import label_text, output_text
@@ -28,7 +29,7 @@ from churchtune.wizard.services import (
 )
 from churchtune.wizard.state import Outcome
 from churchtune.wizard.steps.proposal import path_text
-from churchtune.wizard.steps.setup import measuring
+from churchtune.wizard.steps.setup import ensure_driver, measuring
 from churchtune.wizard.ui import confirm, info, kebab, t, task, typed_word
 
 APPLY_WORD, UNDO_WORD = "apply-word", "undo-word"
@@ -268,6 +269,9 @@ class Apply:
             if not plan.writes:
                 info(ctx.prompter, *notice, t("apply-nothing"))
                 return
+            if not _far_levels_confirmed(ctx, plan):
+                info(ctx.prompter, t("apply-cancelled"))
+                return
             word = ctx.services.words(APPLY_WORD)
             answer = ask_word(
                 ctx, APPLY_WORD, *notice, t("apply-what", count=len(plan.writes)),
@@ -285,6 +289,51 @@ class Apply:
                 _report(ctx, outcome, plan)
             return
         info(ctx.prompter, t("apply-console-keeps-changing"))
+
+
+FAR_FROM_FIRST_DB = 12.0  # SPEC §9.2 levels: further from the venue's first snapshot needs a "yes"
+
+
+def first_fader_db(ctx: WizardContext, strip: SignalRef) -> float | None:
+    """The fader of a matrix in the venue's first snapshot (None when there is none)."""
+    workspace = ctx.services.workspace
+    for session in workspace.sessions_of(ctx.box.state.venue):
+        try:
+            path = read_wizard_state(session).snapshot_file
+            if path is None:
+                continue
+            stored = read_snapshot(workspace.root / path)
+            snapshot = ensure_driver(ctx).parse_snapshot(
+                stored.identity(), stored.raw, stored.taken_at
+            )
+        except (ValueError, OSError, ChurchTuneError):
+            continue
+        strips = snapshot.matrices if strip.kind is SourceKind.MATRIX else {}
+        found = strips.get(strip.number)
+        return found.fader_db if found is not None else None
+    return None
+
+
+def _far_levels_confirmed(ctx: WizardContext, plan: WritePlan) -> bool:
+    """A fader more than 12 dB away from the venue's first snapshot needs a separate "yes"."""
+    far: list[Text] = []
+    for write in plan.writes:
+        if write.param != "fader" or not isinstance(write.after_value, float):
+            continue
+        first = first_fader_db(ctx, write.strip)
+        if first is None or math.isinf(first) or math.isinf(write.after_value):
+            continue
+        if abs(write.after_value - first) > FAR_FROM_FIRST_DB:
+            text = t(
+                "apply-level-far",
+                path=path_text(write.strip),
+                first_db=round(first, 1),
+                after_db=round(write.after_value, 1),
+            )
+            far.append(text)
+    if not far:
+        return True
+    return confirm(ctx.prompter, *far, t("apply-level-far-question"), default=False)
 
 
 def _report(ctx: WizardContext, outcome: WriteOutcome, plan: WritePlan) -> None:
