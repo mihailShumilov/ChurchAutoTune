@@ -55,11 +55,13 @@ from churchtune.safety.policy import WritePolicy
 from churchtune.storage import files
 from churchtune.storage.models import ChangeModel, PackageModel, UndoFile
 from churchtune.wizard.applying import (
+    CROSSOVER,
     chosen_packages,
     combined_target,
     ordered_steps,
     speaker_chains,
     strip_states,
+    writable_packages,
 )
 from churchtune.wizard.services import PlannedWrite, WriteOutcome, WritePlan
 
@@ -75,8 +77,14 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def package_policy(state: ConsoleState, roles: Roles) -> WritePolicy:
-    """The policy of a package plan: the speaker matrices, the sub's fader as it is now."""
+def package_policy(
+    state: ConsoleState, roles: Roles, *, allow_cut_filters: bool = False
+) -> WritePolicy:
+    """The policy of a package plan: the speaker matrices, the sub's fader as it is now.
+
+    Cut filters may be written only by a plan that holds the crossover package, or by the undo
+    of one.
+    """
     baselines = tuple((f"/mtx/{n:02d}/mix/fader", state.matrices[n].fader_db) for n in roles.sub)
     return WritePolicy(
         LAWS,
@@ -84,13 +92,8 @@ def package_policy(state: ConsoleState, roles: Roles) -> WritePolicy:
         sub_matrices=frozenset(roles.sub),
         top_matrices=frozenset(roles.mains),
         level_baselines=baselines,
-        allow_cut_filters=True,
+        allow_cut_filters=allow_cut_filters,
     )
-
-
-def _advice_only(packages: Sequence[PackageModel]) -> list[PackageModel]:
-    """Packages with output delays or polarity: shown as advice, never written here."""
-    return [p for p in packages if p.delays or p.polarities or p.delay_ms]
 
 
 def _show_advice(packages: Sequence[PackageModel]) -> None:
@@ -121,6 +124,42 @@ def plan_package_writes(
     return planned
 
 
+def has_crossover(packages: Sequence[PackageModel]) -> bool:
+    """True when the plan holds the crossover package (the only one that sets cut filters)."""
+    return any(p.kind == CROSSOVER for p in packages)
+
+
+def plan_differences(
+    shown: Sequence[PlannedChange], fresh: Sequence[PlannedChange]
+) -> tuple[str, ...]:
+    """Writes that differ between the plan the person saw and one made from a fresh read."""
+    if [(p.scope, p.change.path) for p in shown] != [(p.scope, p.change.path) for p in fresh]:
+        return tuple(sorted({p.change.path for p in (*shown, *fresh)}))
+    differ = []
+    for a, b in zip(shown, fresh, strict=True):
+        kind = a.change.path.rsplit("/", 1)[1]
+        if not (
+            same_step(LAWS, kind, a.change.old_value, b.change.old_value)
+            and same_step(LAWS, kind, a.change.new_value, b.change.new_value)
+        ):
+            differ.append(a.change.path)
+    return tuple(differ)
+
+
+def require_same_plan(shown: Sequence[PlannedChange], fresh: Sequence[PlannedChange]) -> None:
+    """Refuse when the console changed while the plan was on the screen.
+
+    Raises:
+        UnsafeWrite: The fresh plan differs (``mismatches`` lists the writes).
+    """
+    differ = plan_differences(shown, fresh)
+    if differ:
+        raise UnsafeWrite(
+            "the console changed while the plan was shown: " + ", ".join(differ),
+            mismatches=", ".join(differ),
+        )
+
+
 def send_runs(
     console: Console,
     planned: Sequence[PlannedChange],
@@ -134,18 +173,25 @@ def send_runs(
     The undo file gets the results after every run, so an interruption leaves an honest record.
 
     Returns:
-        The results so far and whether every planned write was confirmed.
+        The results so far and whether every planned write was confirmed. A run refused after
+        an earlier run was written ends the plan there as incomplete (the undo file holds what
+        was written).
 
     Raises:
-        UnsafeWrite: A run was refused by the authorization or by the writer.
+        UnsafeWrite: The first run was refused: nothing was written.
     """
     from churchtune.mixers.x32.writer import ScopedWriter  # noqa: PLC0415 - lazy by design
 
     results: list[records.WriteResultLike] = []
     for scope, changes in runs_by_scope(planned):
-        auth = authorize_typed(
-            scope, changes, undo_path, word, policy, undo_sha256=_sha256(undo_path)
-        )
+        try:
+            auth = authorize_typed(
+                scope, changes, undo_path, word, policy, undo_sha256=_sha256(undo_path)
+            )
+        except UnsafeWrite:
+            if not results:
+                raise
+            return results, False
         sent = list(ScopedWriter(console.transport, console.client, auth).apply(should_stop))
         results.extend(sent)
         undo = files.read_undo(undo_path)
@@ -197,9 +243,8 @@ def apply_packages_command(
         fail(f"ОТКАЗ: файл предложения не читается: {error}", EXIT_REFUSED)
     except UnsafeWrite as error:
         fail(f"ОТКАЗ: {error}", EXIT_REFUSED)
-    advice = _advice_only(packages)
+    packages, advice = writable_packages(packages)
     _show_advice(advice)
-    packages = [p for p in packages if p not in advice]
     if not packages:
         say("Нечего записывать: не выбран ни один пакет, который пишет программа.")
         raise typer.Exit(EXIT_OK)
@@ -209,7 +254,8 @@ def apply_packages_command(
             roles = detect_roles(state)
         except ValueError as error:
             fail(f"ОТКАЗ: не понятно, какие матрицы саб и сателлиты: {error}", EXIT_REFUSED)
-        policy = package_policy(state, roles)
+        cut = has_crossover(packages)
+        policy = package_policy(state, roles, allow_cut_filters=cut)
         try:
             planned = plan_package_writes(packages, state, policy)
         except UnsafeWrite as error:
@@ -226,6 +272,14 @@ def apply_packages_command(
         if not word.matches():
             say("Отменено — ничего не записано.")
             raise typer.Exit(EXIT_USER)
+        # The person may have thought for a while: plan again from a fresh read, send only the
+        # plan that was shown.
+        state = read_console_state(console.client)
+        policy = package_policy(state, roles, allow_cut_filters=cut)
+        try:
+            require_same_plan(planned, plan_package_writes(packages, state, policy))
+        except UnsafeWrite as error:
+            fail(f"ОТКАЗ: {error}. Ничего не записано.", EXIT_REFUSED)
         undo_path = _new_undo_path(settings)
         files.write_json(
             undo_path,
@@ -271,6 +325,28 @@ class UndoPlan:
     changed_by_hand: tuple[str, ...]
 
 
+def collapsed_changes(changes: Sequence[ChangeModel]) -> list[ChangeModel]:
+    """One entry per path: the old value of its first write, the new value of its last.
+
+    A never-louder order may write a parameter twice (a gain to 0 dB, then to its value); the
+    console then holds the last value and the way back is the first old one.
+    """
+    first: dict[str, ChangeModel] = {}
+    last: dict[str, ChangeModel] = {}
+    for change in changes:
+        first.setdefault(change.path, change)
+        last[change.path] = change
+    collapsed = []
+    for path, start in first.items():
+        end = last[path]
+        if end.scope != start.scope:
+            raise UnsafeWrite(f"undo file names {path} in two scopes", path=path)
+        collapsed.append(
+            start.model_copy(update={"new_value": end.new_value, "new_display": end.new_display})
+        )
+    return collapsed
+
+
 def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) -> UndoPlan:
     """Three-way undo: revert what still has the new value, skip what was changed by hand.
 
@@ -282,7 +358,7 @@ def plan_package_undo(undo: UndoFile, state: ConsoleState, policy: WritePolicy) 
     target = dict(fresh)
     already_old: list[str] = []
     by_hand: list[str] = []
-    for stored in undo.changes:
+    for stored in collapsed_changes(undo.changes):
         if stored.scope not in PACKAGE_SCOPES:
             raise UnsafeWrite(f"undo file names a write outside the packages: {stored.path}")
         strip = strip_of(stored.path)
@@ -314,7 +390,7 @@ def undo_packages(
     except ValueError as error:
         fail(f"ОТКАЗ: не понятно, какие матрицы саб и сателлиты: {error}", EXIT_REFUSED)
     try:
-        plan = plan_package_undo(undo, state, package_policy(state, roles))
+        plan = plan_package_undo(undo, state, package_policy(state, roles, allow_cut_filters=True))
     except UnsafeWrite as error:
         fail(f"ОТКАЗ: повреждённый/опасный undo-файл: {error}", EXIT_REFUSED)
     say(f"Откат по {source} (параметров в файле: {len(undo.changes)})")
@@ -342,8 +418,10 @@ def undo_packages(
         ),
     )
     say(f"undo-файл: {revert_path}")
-    policy = package_policy(state, roles)
+    state = read_console_state(console.client)
+    policy = package_policy(state, roles, allow_cut_filters=True)
     try:
+        require_same_plan(plan.planned, plan_package_undo(undo, state, policy).planned)
         _, complete = send_runs(console, plan.planned, revert_path, word, policy)
     except UnsafeWrite as error:
         fail(f"ОТКАЗ: {error}", EXIT_REFUSED)
@@ -352,6 +430,19 @@ def undo_packages(
         return EXIT_READBACK
     say("Готово.")
     return EXIT_OK
+
+
+# A plan recipe: from a fresh read and its policy to the scoped writes.
+Recipe = Callable[[ConsoleState, WritePolicy], tuple[PlannedChange, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class _PortPlan:
+    """What the port hands the wizard inside a ``WritePlan``: how to plan again, and the plan."""
+
+    recipe: Recipe
+    planned: tuple[PlannedChange, ...]
+    allow_cut_filters: bool
 
 
 @dataclass(slots=True)
@@ -366,21 +457,31 @@ class X32WritePort:
     connection: Callable[[], tuple[str, Console]]
     now: Callable[[], datetime]
 
-    def _fresh(self) -> tuple[str, Console, ConsoleState, WritePolicy]:
+    def _fresh(self, allow_cut_filters: bool) -> tuple[str, Console, ConsoleState, WritePolicy]:
         host, console = self.connection()
         state = read_console_state(console.client)
         try:
             roles = detect_roles(state)
         except ValueError as error:
             raise UnsafeWrite(f"speaker roles unclear: {error}") from error
-        return host, console, state, package_policy(state, roles)
+        return (
+            host,
+            console,
+            state,
+            package_policy(state, roles, allow_cut_filters=allow_cut_filters),
+        )
 
     def plan_packages(self, packages: Sequence[PackageModel]) -> WritePlan:
         """The writes of the chosen packages from a fresh read (delay and polarity are advice)."""
-        _, _, state, policy = self._fresh()
-        writable = [p for p in packages if p not in _advice_only(packages)]
-        planned = plan_package_writes(writable, state, policy) if writable else ()
-        return WritePlan(_rows(planned), planned)
+        writable, _ = writable_packages(packages)
+        cut = has_crossover(writable)
+        _, _, state, policy = self._fresh(cut)
+
+        def recipe(fresh: ConsoleState, rules: WritePolicy) -> tuple[PlannedChange, ...]:
+            return plan_package_writes(writable, fresh, rules) if writable else ()
+
+        planned = recipe(state, policy)
+        return WritePlan(_rows(planned), _PortPlan(recipe, planned, cut))
 
     def plan_undo(self, undo_path: Path) -> WritePlan:
         """Three-way undo of a package undo file."""
@@ -388,9 +489,14 @@ class X32WritePort:
             undo = files.read_undo(undo_path)
         except (ValueError, OSError) as error:
             raise UnsafeWrite(f"damaged undo file: {error}") from error
-        _, _, state, policy = self._fresh()
+        _, _, state, policy = self._fresh(True)
         plan = plan_package_undo(undo, state, policy)
-        return WritePlan(_rows(plan.planned), plan.planned, plan.already_old, plan.changed_by_hand)
+
+        def recipe(fresh: ConsoleState, rules: WritePolicy) -> tuple[PlannedChange, ...]:
+            return plan_package_undo(undo, fresh, rules).planned
+
+        token = _PortPlan(recipe, plan.planned, True)
+        return WritePlan(_rows(plan.planned), token, plan.already_old, plan.changed_by_hand)
 
     def apply(
         self,
@@ -402,17 +508,20 @@ class X32WritePort:
         *,
         reverts: Path | None = None,
     ) -> WriteOutcome:
-        """Fresh policy, undo file first, then the runs of one scope each."""
+        """Plan again from a fresh read, send only the plan shown; undo file first."""
         from churchtune.mixers.x32.writer import STOPPED  # noqa: PLC0415 - lazy by design
 
         word = TypedWord(typed, expected)
         if not word.matches():
             raise UnsafeWrite("the confirmation word does not match; nothing is written")
-        planned = _planned_of(plan)
-        host, console, _, policy = self._fresh()
+        token = _planned_of(plan)
+        host, console, state, policy = self._fresh(token.allow_cut_filters)
+        require_same_plan(token.planned, token.recipe(state, policy))
         created = self.now().isoformat(timespec="seconds")
-        files.write_json(undo_path, package_undo_file(created, host, planned, reverts=reverts))
-        results, complete = send_runs(console, planned, undo_path, word, policy, should_stop)
+        files.write_json(
+            undo_path, package_undo_file(created, host, token.planned, reverts=reverts)
+        )
+        results, complete = send_runs(console, token.planned, undo_path, word, policy, should_stop)
         stopped = any(r.error == STOPPED for r in results)
         failed = next((r.path for r in results if not r.ok and r.error != STOPPED), None)
         sent = sum(1 for r in results if r.ok)
@@ -430,11 +539,11 @@ def _rows(planned: Sequence[PlannedChange]) -> tuple[PlannedWrite, ...]:
     return tuple(rows)
 
 
-def _planned_of(plan: WritePlan) -> tuple[PlannedChange, ...]:
+def _planned_of(plan: WritePlan) -> _PortPlan:
     """The port's own plan back from the wizard; anything else is refused."""
     token = plan.token
-    if not isinstance(token, tuple) or not all(isinstance(p, PlannedChange) for p in token):
+    if type(token) is not _PortPlan:
         raise UnsafeWrite("the plan was not made by this console's write port")
-    if not token:
+    if not token.planned:
         raise UnsafeWrite("an empty plan is never sent")
     return token

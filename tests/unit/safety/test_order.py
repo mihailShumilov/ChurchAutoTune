@@ -98,6 +98,16 @@ def test_a_fader_down_is_never_too_loud_even_from_minus_infinity():
     assert [s.what for s in plan(before, after)] == ["fader"]
 
 
+def test_a_shelf_that_moves_and_changes_type_keeps_its_gain():
+    high = flat_eq().with_band(Band(5, EqType.HSHV, 8000.0, 2.0, 1.4))
+    low = flat_eq().with_band(Band(5, EqType.LSHV, 60.0, 2.0, 1.4))
+    before = {MAIN: state(high), TOPS: state(), SUB: state()}
+    after = {MAIN: state(low), TOPS: state(), SUB: state()}
+    steps = plan(before, after)
+    assert steps[-1].band is not None
+    assert steps[-1].band == low.band(5)
+
+
 def test_a_band_without_a_safe_order_is_refused(monkeypatch):
     cut = flat_eq().with_band(Band(2, EqType.PEQ, 480.0, -9.0, 1.5))
     before = {MAIN: state(cut), TOPS: state(), SUB: state()}
@@ -150,3 +160,49 @@ strip_strategy = st.builds(
 def test_every_random_plan_is_ordered_never_louder(before, after):
     steps = order_steps(before, after, CHAINS, FS)
     check_order(before, steps, after, CHAINS, FS)
+
+
+shelf_band_strategy = st.builds(
+    lambda kind, n, f, g, q: Band(n, kind, f, g, q),
+    st.sampled_from([EqType.PEQ, EqType.VEQ, EqType.LSHV, EqType.HSHV]),
+    st.integers(1, 6),
+    st.sampled_from([50.0, 125.0, 315.0, 800.0, 2000.0, 8000.0]),
+    st.sampled_from([-12.0, -6.0, -2.0, 0.0, 2.0, 3.0]),
+    st.sampled_from([0.7, 1.0, 2.0]),
+)
+shelf_strip_strategy = st.builds(
+    StripState,
+    st.lists(shelf_band_strategy, max_size=2).map(lambda bands: _apply(flat_eq(), bands)),
+    st.sampled_from([-20.0, -10.0, 0.0]),
+    st.booleans(),
+)
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    st.fixed_dictionaries({MAIN: shelf_strip_strategy, TOPS: shelf_strip_strategy}),
+    st.fixed_dictionaries({MAIN: shelf_strip_strategy, TOPS: shelf_strip_strategy}),
+)
+def test_plans_with_shelves_are_never_louder_or_refused(before, after):
+    """A shelf with a high Q overshoots on its other side: some type changes have no safe order.
+
+    Refusing such a plan is safe; any order that is produced must still pass the simulation.
+    """
+    chains = {"tops": (MAIN, TOPS)}
+    try:
+        steps = order_steps(before, after, chains, FS)
+    except UnsafeWrite as refused:
+        reason = str(refused)
+    else:
+        check_order(before, steps, after, chains, FS)
+        return
+    assert "no safe order" in reason or "too loud" in reason
+
+
+def test_steps_that_miss_the_plan_are_refused_by_the_planner(monkeypatch):
+    cut = flat_eq().with_band(Band(2, EqType.PEQ, 480.0, -9.0, 1.5))
+    before = {MAIN: state(), TOPS: state(), SUB: state()}
+    after = {MAIN: state(cut), TOPS: state(), SUB: state()}
+    monkeypatch.setattr(order, "_band_orders", lambda strip, old, new: [[]])
+    with pytest.raises(UnsafeWrite, match="do not reach the planned state"):
+        order_steps(before, after, CHAINS, FS)

@@ -10,7 +10,7 @@ from churchtune.errors import UnsafeWrite
 from churchtune.mixers.x32 import params as P  # noqa: N812 - short alias kept from the original
 from churchtune.mixers.x32.codec import decode
 from churchtune.mixers.x32.writer import STOPPED, ScopedWriter
-from churchtune.safety.authorize import TypedWord, authorize_typed, verify
+from churchtune.safety.authorize import TypedWord, authorize, authorize_typed, verify
 from tests.fixtures.venues import reference_policy
 
 POLICY = reference_policy()
@@ -125,3 +125,14 @@ def test_a_policy_that_is_not_exactly_a_write_policy_is_refused(tmp_path):
     path, digest = undo_file(tmp_path)
     with pytest.raises(UnsafeWrite, match="exactly a WritePolicy"):
         authorize_typed(WriteScope.MAIN, PLAN, path, WORD, lax, undo_sha256=digest)
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [WriteScope.TEMP_MUTES, WriteScope.SYSTEM_EQ, WriteScope.LEVELS, WriteScope.DELAY,
+     WriteScope.POLARITY],
+)  # fmt: skip
+def test_the_new_scopes_never_accept_a_plain_yes(tmp_path, scope):
+    path, _ = undo_file(tmp_path)
+    with pytest.raises(UnsafeWrite, match="typed word"):
+        authorize(scope, PLAN, path, "y", POLICY)

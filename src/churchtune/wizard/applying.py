@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from churchtune.domain.console import ConsoleState
-from churchtune.domain.eq import SystemEq
+from churchtune.domain.eq import Band, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
 from churchtune.safety.laws import ValueLaws
@@ -21,6 +21,7 @@ from churchtune.safety.plan import same_step
 from churchtune.storage.models import EqModel, PackageModel, PackagesFile, PathRefModel
 
 MAIN = SignalRef(SourceKind.MAIN_L)
+CROSSOVER = "crossover"
 _BAND_KINDS = ("type", "f", "g", "q")
 
 
@@ -74,15 +75,72 @@ def chosen_packages(stored: PackagesFile) -> list[PackageModel]:
     return chosen
 
 
+def is_advice(package: PackageModel) -> bool:
+    """A package with output delays or polarity: shown as values to set by hand (ADR 0010)."""
+    return bool(package.delays or package.polarities or package.delay_ms)
+
+
+def writable_packages(
+    packages: Sequence[PackageModel],
+) -> tuple[list[PackageModel], list[PackageModel]]:
+    """The packages the program writes, and the advice packages it shows instead.
+
+    A package that requires an advice package is left out too: its "before" assumes a change
+    that the program does not make.
+    """
+    kept: list[PackageModel] = []
+    advice: list[PackageModel] = []
+    dropped: set[str] = set()
+    for package in packages:
+        if is_advice(package):
+            advice.append(package)
+            dropped.add(package.kind)
+        elif dropped.intersection(package.requires):
+            dropped.add(package.kind)
+        else:
+            kept.append(package)
+    return kept, advice
+
+
+def same_band(laws: ValueLaws, a: Band, b: Band) -> bool:
+    """True when two bands are the same on the console's grid."""
+    wire_a, wire_b = laws.band_wire_values(a)[0], laws.band_wire_values(b)[0]
+    return all(same_step(laws, kind, wire_a[kind], wire_b[kind]) for kind in _BAND_KINDS)
+
+
 def same_eq(laws: ValueLaws, a: SystemEq, b: SystemEq) -> bool:
     """True when two EQ blocks are the same on the console's grid."""
     if a.on != b.on:
         return False
-    for band_a, band_b in zip(a.bands, b.bands, strict=True):
-        wire_a, wire_b = laws.band_wire_values(band_a)[0], laws.band_wire_values(band_b)[0]
-        if not all(same_step(laws, kind, wire_a[kind], wire_b[kind]) for kind in _BAND_KINDS):
-            return False
-    return True
+    return all(same_band(laws, x, y) for x, y in zip(a.bands, b.bands, strict=True))
+
+
+def check_eq_change(
+    kind: str, label: str, now: SystemEq, wanted: SystemEq, laws: ValueLaws
+) -> None:
+    """Refuse what no package may do to an EQ block.
+
+    A package never switches an EQ on or off: a block that was off may hold bands that were
+    never checked (a +15 dB leftover), and switching it off again could drop a cut filter. A
+    cut filter (low cut, high cut, crossover slopes) is set, moved or removed only by the
+    crossover package.
+
+    Raises:
+        UnsafeWrite: The package does one of these.
+    """
+    if now.on != wanted.on:
+        raise UnsafeWrite(
+            f"package {kind} would switch the EQ of {label} on or off", eq_switch=label
+        )
+    if kind == CROSSOVER:
+        return
+    for old, new in zip(now.bands, wanted.bands, strict=True):
+        if (not old.adjustable or not new.adjustable) and not same_band(laws, old, new):
+            raise UnsafeWrite(
+                f"only the crossover package may change the cut filter in band {new.band} of "
+                f"{label}",
+                cut_filter=label,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +183,7 @@ def package_target(
         before.setdefault(ref, fresh[ref])
         if not same_eq(laws, fresh[ref].eq, _eq(path_eq.before)):
             mismatches.append(ref.label())
+        check_eq_change(package.kind, ref.label(), current.eq, _eq(path_eq.after), laws)
         after[ref] = replace(current, eq=_eq(path_eq.after))
     for level in package.levels:
         ref = ref_of(level.path)

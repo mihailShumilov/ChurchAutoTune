@@ -5,6 +5,7 @@ Never weaken, skip or xfail these tests: they are part of the safety suite.
 
 import json
 from dataclasses import replace
+from datetime import datetime
 
 import pytest
 from typer.testing import CliRunner
@@ -12,6 +13,8 @@ from typer.testing import CliRunner
 from churchtune.cli.context import EXIT_OK, EXIT_REFUSED, EXIT_USER
 from churchtune.cli.main import app
 from churchtune.domain.eq import EqType, SystemEq
+from churchtune.errors import UnsafeWrite
+from churchtune.mixers.x32 import params as P  # noqa: N812 - short alias as elsewhere
 from churchtune.mixers.x32.nodes import read_console_state
 from churchtune.storage import files
 from churchtune.storage.models import (
@@ -191,3 +194,182 @@ def test_an_undo_file_with_a_foreign_scope_is_refused(emu, home, run, client):
     result = run(["undo", str(undo)], answers=["вернуть"])
     assert result.exit_code == EXIT_REFUSED
     assert emu.writes == []
+
+
+# ------------------------------------------------------------ regressions of the M5 safety review
+def eq_proposal(home, kind, ref, before, after) -> str:
+    package = PackageModel(
+        kind=kind,
+        suggest_only=False,
+        risk="low",
+        selected=True,
+        eq=(
+            PathEqModel(
+                path=ref, before=EqModel.from_domain(before), after=EqModel.from_domain(after)
+            ),
+        ),
+    )
+    path = home / "proposal.json"
+    stored = PackagesFile(created="2026-10-14T10:00:00", session="s", fc_hz=100.0,
+                          packages=(package,))  # fmt: skip
+    files.write_json(path, stored)
+    return str(path)
+
+
+MAIN_REF = PathRefModel(kind="main_l")
+
+
+def test_a_package_never_switches_on_an_eq_with_a_hidden_boost(emu, home, run, client):
+    emu.hand_change("/main/st/eq/on", 0)
+    emu.hand_change("/main/st/eq/2/type", 2)
+    emu.hand_change("/main/st/eq/2/g", P.gain_to_norm(15.0))  # a leftover of an old scene
+    before = read_console_state(client).main_eq
+    proposal = eq_proposal(home, "system_eq", MAIN_REF, before, before.with_on(True))
+    result = run(["apply-packages", proposal], answers=["применить"])
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert emu.writes == []
+    assert not emu.main_eq().on
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"type": EqType.PEQ, "gain_db": 0.0},  # removing the top's low cut
+        {"freq_hz": 400.0},  # moving it
+    ],
+)
+def test_only_the_crossover_package_touches_a_cut_filter(emu, home, run, client, change):
+    before = read_console_state(client).matrices[1].eq
+    assert not before.band(1).adjustable  # the reference hall has a low cut on the tops
+    after = before.with_band(replace(before.band(1), **change))
+    ref = PathRefModel(kind="matrix", number=1)
+    result = run(["apply-packages", eq_proposal(home, "system_eq", ref, before, after)],
+                 answers=["применить"])  # fmt: skip
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert emu.writes == []
+
+
+def _port(client, transport):
+    from churchtune.cli.apply_packages import X32WritePort  # noqa: PLC0415
+    from churchtune.cli.context import Console  # noqa: PLC0415
+
+    return X32WritePort(lambda: (LOOPBACK, Console(transport, client)), datetime.now)
+
+
+def _two_packages(client, sub_step_db):
+    state = read_console_state(client)
+    fader = state.matrices[SUB_MATRIX].fader_db
+    level = PackageModel(
+        kind="sub_level", suggest_only=False, risk="low", selected=True,
+        levels=(LevelModel(path=PathRefModel(kind="matrix", number=SUB_MATRIX),
+                           before_db=fader, after_db=fader + sub_step_db),),
+    )  # fmt: skip
+    eq = PackageModel(
+        kind="system_eq", suggest_only=False, risk="low", selected=True,
+        eq=(PathEqModel(path=MAIN_REF, before=EqModel.from_domain(state.main_eq),
+                        after=EqModel.from_domain(cut(state.main_eq))),),
+    )  # fmt: skip
+    return [eq, level], fader
+
+
+def test_the_port_refuses_a_plan_the_console_moved_away_from(emu, client, transport, tmp_path):
+    packages, fader = _two_packages(client, -3.0)
+    port = _port(client, transport)
+    plan = port.plan_packages(packages)
+    emu.hand_change(f"/mtx/{SUB_MATRIX:02d}/mix/fader", P.fader_to_norm(fader - 12.0))
+    with pytest.raises(UnsafeWrite, match="console changed") as refused:
+        port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
+    assert "mismatches" in refused.value.context
+    assert emu.writes == []
+    assert not (tmp_path / "u.json").exists()
+
+
+def test_the_cli_plans_again_after_the_word(emu, home, run, client, monkeypatch):
+    from churchtune.cli import apply_packages  # noqa: PLC0415
+
+    proposal = write_proposal(home, client, level_db=-3.0)
+    real_ask = apply_packages.ask
+
+    def ask_and_move(prompt):
+        emu.hand_change("/main/st/eq/3/g", P.gain_to_norm(-12.0))  # while the person reads
+        return real_ask(prompt)
+
+    monkeypatch.setattr(apply_packages, "ask", ask_and_move)
+    result = run(["apply-packages", proposal], answers=["применить"])
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert emu.writes == []
+
+
+def test_a_parameter_written_twice_goes_back_to_its_first_value(emu, home, run, client):
+    emu.hand_change("/main/st/eq/5/type", P.EQ_TYPES.index(EqType.HSHV))
+    emu.hand_change("/main/st/eq/5/f", P.freq_to_norm(8000.0))
+    emu.hand_change("/main/st/eq/5/g", P.gain_to_norm(2.0))
+    before = read_console_state(client).main_eq
+    original = before.band(5)
+    after = before.with_band(replace(original, type=EqType.LSHV, freq_hz=60.0, gain_db=-2.0))
+    applied = run(["apply-packages", eq_proposal(home, "system_eq", MAIN_REF, before, after)],
+                  answers=["применить"])  # fmt: skip
+    assert applied.exit_code == EXIT_OK, applied.output
+    assert emu.main_eq().band(5).gain_db == pytest.approx(-2.0, abs=0.13)
+    (undo,) = undo_files(home)
+    back = run(["undo", str(undo)], answers=["вернуть"])
+    assert back.exit_code == EXIT_OK, back.output
+    assert "руками" not in back.output
+    now = emu.main_eq().band(5)
+    assert now.type is EqType.HSHV
+    assert now.gain_db == pytest.approx(2.0, abs=0.13)
+
+
+def test_a_shelf_that_moves_keeps_its_gain(emu, home, run, client):
+    emu.hand_change("/main/st/eq/5/type", P.EQ_TYPES.index(EqType.HSHV))
+    emu.hand_change("/main/st/eq/5/f", P.freq_to_norm(8000.0))
+    emu.hand_change("/main/st/eq/5/g", P.gain_to_norm(2.0))
+    before = read_console_state(client).main_eq
+    after = before.with_band(replace(before.band(5), type=EqType.LSHV, freq_hz=60.0))
+    result = run(["apply-packages", eq_proposal(home, "system_eq", MAIN_REF, before, after)],
+                 answers=["применить"])  # fmt: skip
+    assert result.exit_code == EXIT_OK, result.output
+    band = emu.main_eq().band(5)
+    assert band.type is EqType.LSHV
+    assert band.gain_db == pytest.approx(2.0, abs=0.13)
+
+
+def test_a_package_that_needs_an_advice_package_is_left_out(emu, home, run, client):
+    state = read_console_state(client)
+    align = PackageModel(kind="alignment", suggest_only=False, risk="unverified", selected=True,
+                         delay_side="sub", delay_ms=1.5)  # fmt: skip
+    path_eq = PathEqModel(path=MAIN_REF, before=EqModel.from_domain(state.main_eq),
+                          after=EqModel.from_domain(cut(state.main_eq)))  # fmt: skip
+    eq = PackageModel(kind="system_eq", suggest_only=False, risk="low", selected=True,
+                      requires=("alignment",), eq=(path_eq,))  # fmt: skip
+    stored = PackagesFile(created="2026-10-14T10:00:00", session="s", fc_hz=100.0,
+                          packages=(align, eq))  # fmt: skip
+    files.write_json(home / "proposal.json", stored)
+    result = run(["apply-packages", str(home / "proposal.json")], answers=["применить"])
+    assert result.exit_code == EXIT_OK, result.output
+    assert emu.writes == []
+
+
+def test_a_run_refused_after_an_earlier_run_reports_a_partial_write(
+    emu, client, transport, tmp_path, monkeypatch
+):
+    from churchtune.cli import apply_packages  # noqa: PLC0415
+
+    packages, _ = _two_packages(client, -3.0)
+    port = _port(client, transport)
+    plan = port.plan_packages(packages)
+    real = apply_packages.authorize_typed
+    calls = []
+
+    def refuse_the_second_run(*args, **kwargs):
+        calls.append(args[0])
+        if len(calls) > 1:
+            raise UnsafeWrite("refused")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(apply_packages, "authorize_typed", refuse_the_second_run)
+    outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
+    assert len(calls) == 2
+    assert not outcome.complete
+    assert outcome.sent > 0
+    assert files.read_undo(tmp_path / "u.json").results  # what was written is on record
