@@ -35,7 +35,15 @@ SPEAKERS = ("top_l", "top_r", "sub")
 BLOCK_FRAMES = 1024
 OUTPUT_CHANNELS = 2
 DEFAULT_INPUTS = 32
-ROOM_LENGTH_S = 1.5
+ROOM_LENGTH_S = 2.5
+CROSSOVER_HZ = 1800.0
+TWEETER_OFFSET_MS = 0.12
+TWEETER_LEVEL = 1.1
+DECORRELATION_HZ = 1700.0
+EARLY_PART_S = 0.004
+CAPSULE_STEP_MS = 0.07
+MAX_CAPSULE_MS = 0.3
+UNUSED_INPUT_NOISE_DBFS = -100.0
 SPEED_OF_SOUND_M_S = 343.0
 TOP_HIGHPASS_HZ = 70.0
 SUB_LOWPASS_HZ = 160.0
@@ -96,12 +104,18 @@ class FakeHall:
     name: str = "simulator-hall"
     played: list[Float32Array] = field(default_factory=list)
     positions: dict[int, str] = field(default_factory=dict)
-    stopped_at: int | None = None
-    _scratches: list[_Scratch] = field(default_factory=list)
-    _irs: dict[str, dict[str, FloatArray]] = field(default_factory=dict)
-    _shapes: dict[int, FloatArray] = field(default_factory=dict)
+    stopped_at_frame: int | None = None
+    # Frame of the buffer being played now (block start); lets tests note when a key was pressed.
+    current_frame: int = 0
     # Development rig: the order in which a simulated person scratches the microphones.
     auto_scratch: list[int] = field(default_factory=list)
+    # Per microphone: a capsule offset at the calibration point (0 = elsewhere).
+    variants: dict[int, int] = field(default_factory=dict)
+    _scratches: list[_Scratch] = field(default_factory=list, init=False, repr=False)
+    _irs: dict[tuple[str, int], dict[str, FloatArray]] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _shapes: dict[int, FloatArray] = field(default_factory=dict, init=False, repr=False)
     _rng: np.random.Generator = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -115,11 +129,18 @@ class FakeHall:
     def place(self, usb_input: int, point: str) -> None:
         """Put the microphone on ``usb_input`` at ``point``."""
         self.positions[usb_input] = point
+        self.variants[usb_input] = 0
 
     def place_all(self, point: str) -> None:
-        """Put every microphone at one point (the mic-set calibration position)."""
-        for usb_input in self.mics:
+        """Put every microphone side by side at one point (the mic-set calibration position).
+
+        Capsules are a few centimetres apart: they share the direct sound and the early
+        reflections, arrive up to 0.3 ms apart, and their late reverberation above ~1.7 kHz is
+        independent, like real capsules within 10 cm.
+        """
+        for index, usb_input in enumerate(self.mics, start=1):
             self.positions[usb_input] = point
+            self.variants[usb_input] = index
 
     def scratch_next(self) -> None:
         """Scratch the next microphone of ``auto_scratch`` in the next recording (dev rig)."""
@@ -130,27 +151,68 @@ class FakeHall:
         """Make the next recording contain a scratch on ``usb_input`` at ``at_s`` seconds."""
         self._scratches.append(_Scratch(usb_input, at_s, level_dbfs))
 
-    def point_irs(self, point: str) -> dict[str, FloatArray]:
-        """Impulse response of each speaker at a point (deterministic from the name)."""
-        if point not in self._irs:
-            self._irs[point] = self._build_point(point)
-        return self._irs[point]
+    def point_irs(self, point: str, variant: int = 0) -> dict[str, FloatArray]:
+        """Impulse response of each speaker at a point (deterministic from the name).
+
+        ``variant`` > 0 is a capsule next to the point: the same direct sound and early part,
+        an independent late tail above ``DECORRELATION_HZ`` and a small extra delay.
+        """
+        key = (point, variant)
+        if key not in self._irs:
+            base = self._irs.setdefault((point, 0), self._build_point(point))
+            self._irs[key] = base if variant == 0 else self._capsule(point, base, variant)
+        return self._irs[key]
+
+    def _speaker_filter(self, room: FloatArray, speaker: str) -> FloatArray:
+        """A two-way top (woofer + offset tweeter, LR4 at 1.8 kHz, HP 70 Hz) or a sub (LP 160)."""
+        fs = self.fs_hz
+        if speaker == "sub":
+            sos = signal.butter(4, SUB_LOWPASS_HZ, "lowpass", fs=fs, output="sos")
+            return np.asarray(signal.sosfilt(sos, room), dtype=np.float64)
+        high = signal.butter(2, TOP_HIGHPASS_HZ, "highpass", fs=fs, output="sos")
+        lr_low = signal.butter(2, CROSSOVER_HZ, "lowpass", fs=fs, output="sos")
+        lr_high = signal.butter(2, CROSSOVER_HZ, "highpass", fs=fs, output="sos")
+        x = signal.sosfilt(high, room)
+        woofer = signal.sosfilt(lr_low, signal.sosfilt(lr_low, x))
+        tweeter = signal.sosfilt(lr_high, signal.sosfilt(lr_high, x))
+        tweeter = fractional_delay(tweeter, TWEETER_OFFSET_MS * 1e-3 * fs) * TWEETER_LEVEL
+        return np.asarray(woofer + tweeter, dtype=np.float64)
 
     def _build_point(self, point: str) -> dict[str, FloatArray]:
         code = zlib.crc32(point.encode("utf-8"))
         rng = np.random.default_rng(code)
         distance_m = 4.0 + (code % 1000) / 100.0
         delay_s = DIRECT_DELAY_S + distance_m / SPEED_OF_SOUND_M_S
-        top_sos = signal.butter(2, TOP_HIGHPASS_HZ, "highpass", fs=self.fs_hz, output="sos")
-        sub_sos = signal.butter(4, SUB_LOWPASS_HZ, "lowpass", fs=self.fs_hz, output="sos")
         irs: dict[str, FloatArray] = {}
         for index, speaker in enumerate(SPEAKERS):
             offset_s = 0.0015 * index  # left, right and sub arrive a little apart
             room = synthetic_room(
                 rng, self.fs_hz, length_s=ROOM_LENGTH_S, direct_delay_s=delay_s + offset_s
             )
-            sos = sub_sos if speaker == "sub" else top_sos
-            irs[speaker] = np.asarray(signal.sosfilt(sos, room), dtype=np.float64)
+            irs[speaker] = self._speaker_filter(room, speaker)
+        return irs
+
+    def _capsule(
+        self, point: str, base: dict[str, FloatArray], variant: int
+    ) -> dict[str, FloatArray]:
+        fs = self.fs_hz
+        rng = np.random.default_rng(zlib.crc32(f"{point}/{variant}".encode()))
+        split = signal.butter(4, DECORRELATION_HZ, "highpass", fs=fs, output="sos")
+        offset = (variant * CAPSULE_STEP_MS % MAX_CAPSULE_MS) * 1e-3 * fs
+        irs: dict[str, FloatArray] = {}
+        for speaker, ir in base.items():
+            onset = int(np.argmax(np.abs(ir)))
+            early_end = onset + int(EARLY_PART_S * fs)
+            own = synthetic_room(rng, fs, length_s=ROOM_LENGTH_S)
+            own = self._speaker_filter(own, speaker)
+            late_shared, late_own = ir.copy(), own.copy()
+            late_shared[:early_end] = 0.0
+            late_own[:early_end] = 0.0
+            scale = np.sqrt(np.sum(late_shared**2) / max(np.sum(late_own**2), 1e-30))
+            high_shared = signal.sosfiltfilt(split, late_shared)
+            high_own = signal.sosfiltfilt(split, late_own) * scale
+            capsule = ir - high_shared + high_own  # same lows and early part, own high late tail
+            irs[speaker] = fractional_delay(capsule, offset)
         return irs
 
     def _shape(self, usb_input: int) -> FloatArray | None:
@@ -185,15 +247,17 @@ class FakeHall:
         }
 
     def _noise(self, usb_input: int, n: int) -> FloatArray:
+        """Self-noise of the input; a more sensitive capsule hears the room noise louder too."""
         mic = self.mics.get(usb_input)
-        return self._rng.normal(scale=db_to_lin(mic.noise_dbfs if mic else -100.0), size=n)
+        level = mic.noise_dbfs + mic.sensitivity_db if mic else UNUSED_INPUT_NOISE_DBFS
+        return self._rng.normal(scale=db_to_lin(level), size=n)
 
     def _hear_full(self, usb_input: int, feeds: Mapping[str, FloatArray]) -> FloatArray | None:
         """Full-length response of a microphone to the feeds, delay included; None when silent."""
         mic = self.mics.get(usb_input)
         if mic is None or usb_input not in self.positions:
             return None
-        irs = self.point_irs(self.positions[usb_input])
+        irs = self.point_irs(self.positions[usb_input], self.variants.get(usb_input, 0))
         n = len(next(iter(feeds.values())))
         y = np.zeros(n + max(len(ir) for ir in irs.values()) - 1)
         for speaker, feed in feeds.items():
@@ -204,8 +268,8 @@ class FakeHall:
         if shape is not None:
             y = signal.lfilter(shape, [1.0], y)
             y = np.concatenate([y[SHAPE_TAPS // 2 :], np.zeros(SHAPE_TAPS // 2)])
-        delay = self.latency_samples + round(mic.delay_ms * 1e-3 * self.fs_hz)
-        y = np.concatenate([np.zeros(delay), y])
+        y = fractional_delay(y, mic.delay_ms * 1e-3 * self.fs_hz)
+        y = np.concatenate([np.zeros(self.latency_samples), y])
         return y * db_to_lin(self.gain_db + mic.sensitivity_db) * (-1.0 if mic.inverted else 1.0)
 
     def _hear(self, usb_input: int, feeds: Mapping[str, FloatArray], n: int) -> FloatArray:
@@ -256,12 +320,13 @@ class FakeHall:
         played = np.zeros_like(buffer)
         gains = {speaker: np.ones(len(buffer)) for speaker in SPEAKERS}
         pending = sorted(events or [], key=lambda event: event[0])
-        self.stopped_at = None
+        self.stopped_at_frame = None
         for start in range(0, len(buffer), BLOCK_FRAMES):
+            self.current_frame = start
             while pending and pending[0][0] <= start:
                 pending.pop(0)[1]()
             if stop is not None and stop.is_set():
-                self.stopped_at = start
+                self.stopped_at_frame = start
                 self.played.append(played)
                 raise MeasurementAborted("stopped; the output is silent")
             end = start + BLOCK_FRAMES
@@ -299,6 +364,7 @@ class FakeHall:
         inputs: Sequence[int],
         on_input: Callable[[Float32Array], None],
         stop: StopFlag | None = None,
+        on_tick: Callable[[], None] | None = None,
     ) -> None:
         """Block-wise loop; room tails carry over from block to block (overlap-add)."""
         chosen = check_inputs(inputs, self.input_count)
@@ -326,6 +392,8 @@ class FakeHall:
                 columns.append(full[:n] + self._noise(usb_input, n))
             rec = np.clip(np.stack(columns, axis=1), -1.0, 1.0)
             on_input(rec.astype(np.float32))
+            if on_tick is not None:
+                on_tick()
 
 
 def demo_rig(fs_hz: float) -> FakeHall:
@@ -335,7 +403,19 @@ def demo_rig(fs_hz: float) -> FakeHall:
     calibration puts them together. A mapping finds them in the order 12, 10, 13, 11.
     """
     mics = {10: FakeMic(0.0), 11: FakeMic(1.2), 12: FakeMic(-0.8), 13: FakeMic(0.5, delay_ms=0.05)}
-    hall = FakeHall(fs_hz, mics, gain_db=8.0, auto_scratch=[12, 10, 13, 11])
+    hall = FakeHall(fs_hz, mics, gain_db=-6.0, auto_scratch=[12, 10, 13, 11])
     for number, usb_input in enumerate(mics, start=1):
         hall.place(usb_input, f"p{number}")
     return hall
+
+
+def fractional_delay(x: FloatArray, delay_samples: float) -> FloatArray:
+    """Delay ``x`` by a fractional number of samples (frequency-domain phase shift, zero-padded)."""
+    if delay_samples == 0:
+        return np.asarray(x, dtype=np.float64)
+    whole = int(np.floor(delay_samples))
+    n = len(x) + whole + 64
+    spectrum = np.fft.rfft(x, n)
+    freqs = np.fft.rfftfreq(n)
+    shifted = np.fft.irfft(spectrum * np.exp(-2j * np.pi * freqs * delay_samples), n)
+    return np.asarray(shifted[: len(x)], dtype=np.float64)

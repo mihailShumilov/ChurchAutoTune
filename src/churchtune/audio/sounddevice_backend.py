@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 
 from churchtune.audio.base import (
+    STOP_CHECK_S,
     Float32Array,
     MultiRecording,
     PlaybackEvent,
@@ -29,8 +30,9 @@ from churchtune.platform.devsafe import is_dev_safe
 
 OUTPUT_CHANNELS = 2
 BLOCK_FRAMES = 1024
-PLAYREC_POLL_S = 0.02
-STREAM_POLL_S = 0.05
+# The stop flag is looked at on every poll (ADR 0007: at least every STOP_CHECK_S).
+PLAYREC_POLL_S = STOP_CHECK_S
+STREAM_POLL_S = STOP_CHECK_S
 
 
 def load_sounddevice() -> Any:  # noqa: ANN401 - the sounddevice module has no type stubs
@@ -273,6 +275,7 @@ class SoundDeviceBackend:
 
         def run_due_events() -> None:
             while pending and position[0] >= pending[0][0]:
+                _check_stop(stop)  # a stop between two events wins over the next mute switch
                 pending.pop(0)[1]()
 
         stream = self._stream(callback, max(chosen))
