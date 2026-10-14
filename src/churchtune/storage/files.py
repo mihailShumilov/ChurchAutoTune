@@ -358,10 +358,16 @@ def write_mic_calibration(workspace: Workspace, calibration: MicCalibrationFile)
 def reusable_mic_calibration(
     workspace: Workspace, set_id: str, now: datetime
 ) -> MicCalibrationFile | None:
-    """The stored calibration of this set if it is recent enough to use without asking."""
+    """The stored calibration of this set if it can be used without asking.
+
+    Not when it is older than ``MIC_CALIBRATION_MAX_AGE_DAYS``, dated in the future (a wrong
+    clock), or when any of its microphones was rejected.
+    """
     path = workspace.mic_calibration_file(set_id)
     if not path.exists():
         return None
     stored = MicCalibrationFile.model_validate(_read_json(path, "mic_calibration"))
     age = now - datetime.fromisoformat(stored.created)
-    return stored if age.days < MIC_CALIBRATION_MAX_AGE_DAYS else None
+    if age.total_seconds() < 0 or age.days >= MIC_CALIBRATION_MAX_AGE_DAYS:
+        return None
+    return None if any(m.problems for m in stored.mics) else stored

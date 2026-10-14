@@ -44,8 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   simulated), a stop flag that silences within 50 ms, mic-set calibration (sensitivity, delay,
   polarity, shape; rejection rules of SPEC S9; stored for 30 days), auto-mapping by a scratch, the
   pink-noise level ramp with every stop condition of SPEC S8, the sweep-level search, background
-  noise per octave with hum and rumble hints, the path check (latency, heard or not, speaker
-  polarity), multi-mic rounds and the sub/top junction with restored mutes (ADR 0007).
+  noise per octave with hum and rumble hints, the path check (latency, heard or not), the
+  speaker-by-speaker check (heard, polarity of the tops, side), multi-mic rounds with sweeps aligned
+  before averaging, and the sub/top junction with restored mutes (ADR 0007).
 - `ctune devices`, `ctune mics map`, `ctune mics calibrate`, `ctune noise`, `ctune pathcheck`; a
   four-microphone simulated rig behind `--audio fake`.
 
