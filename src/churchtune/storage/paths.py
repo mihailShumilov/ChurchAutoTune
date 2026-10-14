@@ -12,6 +12,8 @@ from pathlib import Path
 
 from churchtune.domain.changes import WriteScope
 
+WIZARD_FILE = "session.json"  # the wizard state inside a session directory
+
 HOME_VAR = "CTUNE_HOME"
 DEFAULT_HOME = Path("~/ChurchTune")
 TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
@@ -63,6 +65,26 @@ class Workspace:
         """Optional microphone calibration: ``freq dB`` per line."""
         return self.root / "mic_cal.txt"
 
+    def venue_dir(self, slug: str) -> Path:
+        """Directory of one venue (SPEC §6.4)."""
+        if not slug or not all(c.isalnum() or c == "-" for c in slug):
+            raise ValueError(f"a venue slug has letters, digits and dashes, got {slug!r}")
+        return self.root / "venues" / slug
+
+    def session_dir(self, slug: str, now: datetime, kind: str) -> Path:
+        """A new wizard session directory of a venue."""
+        return self.venue_dir(slug) / "sessions" / f"{now.strftime(TIMESTAMP_FORMAT)}-{kind}"
+
+    def sessions_of(self, slug: str) -> list[Path]:
+        """Session directories of a venue, oldest first."""
+        root = self.venue_dir(slug) / "sessions"
+        return sorted(p for p in root.glob("*") if (p / WIZARD_FILE).exists())
+
+    def venues(self) -> list[str]:
+        """Slugs of the known venues."""
+        root = self.root / "venues"
+        return sorted(p.name for p in root.glob("*") if p.is_dir())
+
     def mic_calibration_file(self, set_id: str) -> Path:
         """Calibration of one microphone set (SPEC §6.4)."""
         if not set_id.isalnum():
@@ -74,13 +96,17 @@ class Workspace:
         """Console snapshots. M3 moves them under ``venues/<slug>/console`` (SPEC §6.4)."""
         return self.root / "console"
 
-    def snapshot_path(self, now: datetime) -> Path:
-        """Name of a new snapshot file taken at ``now``; never the name of an existing file."""
+    def snapshot_path(self, now: datetime, venue: str | None = None) -> Path:
+        """Name of a new snapshot file taken at ``now``; never the name of an existing file.
+
+        With a venue the file goes to ``venues/<slug>/console`` (SPEC §6.4).
+        """
+        directory = self.venue_dir(venue) / "console" if venue else self.console_dir
         stamp = now.strftime(TIMESTAMP_FORMAT)
-        path = self.console_dir / f"{stamp}{SNAPSHOT_SUFFIX}"
+        path = directory / f"{stamp}{SNAPSHOT_SUFFIX}"
         number = 2
         while path.exists():
-            path = self.console_dir / f"{stamp}_{number}{SNAPSHOT_SUFFIX}"
+            path = directory / f"{stamp}_{number}{SNAPSHOT_SUFFIX}"
             number += 1
         return path
 

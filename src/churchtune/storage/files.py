@@ -27,8 +27,9 @@ from churchtune.storage.models import (
     SessionFile,
     SnapshotFile,
     UndoFile,
+    WizardStateFile,
 )
-from churchtune.storage.paths import SNAPSHOT_SUFFIX, Workspace
+from churchtune.storage.paths import SNAPSHOT_SUFFIX, WIZARD_FILE, Workspace
 
 SESSION_FILE = "session.json"
 META_FILE = "meta.json"
@@ -170,16 +171,17 @@ def save_point(  # noqa: PLR0913 - one point is these files
     session_dir: Path,
     meta: PointMeta,
     *,
-    recording: FloatArray,
+    recording: FloatArray | None,
     ir: FloatArray,
     fs_hz: float,
     grid_hz: FloatArray,
     response_db: FloatArray,
 ) -> Path:
-    """Store one measured point: recording, impulse response, raw response and quality."""
+    """Store one measured point: recording (when kept), impulse response, raw response, quality."""
     directory = session_dir / meta.point
     directory.mkdir(parents=True, exist_ok=True)
-    write_wav(directory / RECORDING_FILE, recording, fs_hz)
+    if recording is not None:
+        write_wav(directory / RECORDING_FILE, recording, fs_hz)
     write_wav(directory / IR_FILE, ir, fs_hz)
     np.savetxt(
         directory / FR_FILE,
@@ -322,9 +324,11 @@ def session_levels(session_dir: Path) -> Mapping[str, PointMeta]:
 
 
 # ------------------------------------------------------------ console snapshots
-def write_snapshot(workspace: Workspace, snapshot: SnapshotFile, now: datetime) -> Path:
-    """Store a snapshot under a new time-stamped name and return its path."""
-    path = workspace.snapshot_path(now)
+def write_snapshot(
+    workspace: Workspace, snapshot: SnapshotFile, now: datetime, venue: str | None = None
+) -> Path:
+    """Store a snapshot under a new time-stamped name (in the venue when given); return its path."""
+    path = workspace.snapshot_path(now, venue)
     write_json(path, snapshot)
     return path
 
@@ -355,6 +359,32 @@ def write_mic_calibration(workspace: Workspace, calibration: MicCalibrationFile)
     return path
 
 
+def read_mic_calibration(workspace: Workspace, set_id: str) -> MicCalibrationFile | None:
+    """The stored calibration of a microphone set as it is (rejected microphones included)."""
+    path = workspace.mic_calibration_file(set_id)
+    if not path.exists():
+        return None
+    return MicCalibrationFile.model_validate(_read_json(path, "mic_calibration"))
+
+
+SESSION_MIC_CALIBRATION = "mic-calibration.json"
+
+
+def write_session_mic_calibration(session_dir: Path, calibration: MicCalibrationFile) -> Path:
+    """Keep the calibration used by a session inside the session directory."""
+    path = session_dir / SESSION_MIC_CALIBRATION
+    write_json(path, calibration)
+    return path
+
+
+def read_session_mic_calibration(session_dir: Path) -> MicCalibrationFile | None:
+    """The calibration a session was measured with, or None."""
+    path = session_dir / SESSION_MIC_CALIBRATION
+    if not path.exists():
+        return None
+    return MicCalibrationFile.model_validate(_read_json(path, "mic_calibration"))
+
+
 def reusable_mic_calibration(
     workspace: Workspace, set_id: str, now: datetime
 ) -> MicCalibrationFile | None:
@@ -363,11 +393,29 @@ def reusable_mic_calibration(
     Not when it is older than ``MIC_CALIBRATION_MAX_AGE_DAYS``, dated in the future (a wrong
     clock), or when any of its microphones was rejected.
     """
-    path = workspace.mic_calibration_file(set_id)
-    if not path.exists():
+    stored = read_mic_calibration(workspace, set_id)
+    if stored is None:
         return None
-    stored = MicCalibrationFile.model_validate(_read_json(path, "mic_calibration"))
     age = now - datetime.fromisoformat(stored.created)
     if age.total_seconds() < 0 or age.days >= MIC_CALIBRATION_MAX_AGE_DAYS:
         return None
     return None if any(m.problems for m in stored.mics) else stored
+
+
+# ------------------------------------------------------------ wizard sessions
+
+
+def write_wizard_state(session_dir: Path, state: WizardStateFile) -> Path:
+    """Save the wizard state of a session (after every step)."""
+    path = session_dir / WIZARD_FILE
+    write_json(path, state)
+    return path
+
+
+def read_wizard_state(session_dir: Path) -> WizardStateFile:
+    """Read the wizard state of a session.
+
+    Raises:
+        ValueError: The file is not a valid wizard state.
+    """
+    return WizardStateFile.model_validate(_read_json(session_dir / WIZARD_FILE, "wizard"))
