@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea or a change.
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or missing today? Who runs into it (a volunteer at the console, a developer, ...)?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Hall and system
+      description: If it matters, describe the room, the speakers and the console routing.

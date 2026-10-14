@@ -1,0 +1,64 @@
+name: Hardware check result
+description: Report the result of a row from docs/hardware-checklist.md, run at a real X32 or M32.
+title: "[hardware] row <N>: <model> <firmware>"
+labels: ["hardware-check"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only a person at a console can confirm how it behaves, so these reports move features from
+        "suggest only" to "full". Run checks in an **empty hall**, with the system at a safe level,
+        and save a scene first so you can restore everything.
+  - type: input
+    id: row
+    attributes:
+      label: Checklist row number
+      description: The `#` column in docs/hardware-checklist.md.
+      placeholder: "e.g. 1"
+    validations:
+      required: true
+  - type: input
+    id: console
+    attributes:
+      label: Console model and firmware
+      placeholder: "e.g. X32 Producer 4.09, M32R 4.11"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ChurchTune commit
+      placeholder: "git rev-parse --short HEAD"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Matches the expected result
+        - Does not match
+        - Partly matches
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What you saw
+      description: Terminal output and what the console screen showed. Photos of the console screen help.
+    validations:
+      required: true
+  - type: checkboxes
+    id: restored
+    attributes:
+      label: Restore
+      options:
+        - label: The console was restored afterwards (undo file or saved scene).
+          required: true

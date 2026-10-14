@@ -1,0 +1,8 @@
+# The maintainer reviews everything; the safety-critical paths are listed so they are never merged unseen.
+*                                     @mihailShumilov
+/src/churchtune/safety/               @mihailShumilov
+/src/churchtune/mixers/x32/client.py  @mihailShumilov
+/src/churchtune/mixers/x32/writer.py  @mihailShumilov
+/src/churchtune/mixers/x32/transport.py @mihailShumilov
+/src/churchtune/audio/                @mihailShumilov
+/tests/unit/safety/                   @mihailShumilov
