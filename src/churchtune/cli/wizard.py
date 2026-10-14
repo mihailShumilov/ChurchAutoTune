@@ -18,9 +18,9 @@ import typer
 from churchtune.audio.base import MultiChannelBackend
 from churchtune.audio.devices import list_devices, simulator_device
 from churchtune.audio.factory import open_multi_backend
-from churchtune.cli.apply_packages import X32WritePort
 from churchtune.cli.context import EXIT_OK, EXIT_USER, FS_HZ, Console, fail, settings_of
-from churchtune.errors import DevSafeViolation, UnsafeWrite
+from churchtune.cli.package_writes import X32WritePort
+from churchtune.errors import ConsoleUnreachable, DevSafeViolation
 from churchtune.i18n import LANGUAGES, Translator, detect_language
 from churchtune.mixers.base import DiscoveredConsole, MixerDriver
 from churchtune.mixers.x32.client import X32Client
@@ -68,10 +68,10 @@ class X32ConsolePort:
         """The console connected last: the one the wizard works with.
 
         Raises:
-            UnsafeWrite: No console is connected.
+            ConsoleUnreachable: No console is connected.
         """
         if not self.connections:
-            raise UnsafeWrite("no console is connected")
+            raise ConsoleUnreachable("no console is connected")
         return self.connections[-1]
 
     def close(self) -> None:

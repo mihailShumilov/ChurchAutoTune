@@ -11,6 +11,7 @@ driver's job.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 
+from churchtune.domain.changes import WireValue
 from churchtune.domain.console import ConsoleState
 from churchtune.domain.eq import Band, SystemEq
 from churchtune.domain.snapshot import SignalRef, SourceKind
@@ -19,7 +20,13 @@ from churchtune.safety.cut_filters import PathRole, check_cut_changes
 from churchtune.safety.laws import ValueLaws
 from churchtune.safety.order import Chains, Step, StripState, order_steps
 from churchtune.safety.plan import same_step
-from churchtune.storage.models import EqModel, PackageModel, PackagesFile, PathRefModel
+from churchtune.storage.models import (
+    ChangeModel,
+    EqModel,
+    PackageModel,
+    PackagesFile,
+    PathRefModel,
+)
 
 MAIN = SignalRef(SourceKind.MAIN_L)
 CROSSOVER = "crossover"
@@ -179,7 +186,7 @@ def package_target(
     package: PackageModel,
     fresh: Mapping[SignalRef, StripState],
     laws: ValueLaws,
-    roles: Mapping[SignalRef, PathRole] | None = None,
+    roles: Mapping[SignalRef, PathRole],
 ) -> PackageTarget:
     """The fresh and wanted states of the strips one package changes.
 
@@ -201,7 +208,7 @@ def package_target(
         before.setdefault(ref, fresh[ref])
         if not same_eq(laws, fresh[ref].eq, _eq(path_eq.before)):
             mismatches.append(ref.label())
-        role = role_of(ref, roles or {})
+        role = role_of(ref, roles)
         check_eq_change(package.kind, ref.label(), role, current.eq, _eq(path_eq.after), laws)
         after[ref] = replace(current, eq=_eq(path_eq.after))
     for level in package.levels:
@@ -237,16 +244,11 @@ def ordered_steps(
     return order_steps(whole_before, whole_after, speaker_chains(whole_before), fs_hz)
 
 
-def changed_strips(steps: Sequence[Step]) -> set[SignalRef]:
-    """The strips the steps touch."""
-    return {step.strip for step in steps}
-
-
 def combined_target(
     packages: Sequence[PackageModel],
     fresh: Mapping[SignalRef, StripState],
     laws: ValueLaws,
-    roles: Mapping[SignalRef, PathRole] | None = None,
+    roles: Mapping[SignalRef, PathRole],
 ) -> PackageTarget:
     """Where the chosen packages take the console together.
 
@@ -267,3 +269,34 @@ def combined_target(
     before = {ref: fresh[ref] for ref in after}
     kinds = "+".join(p.kind for p in packages)
     return PackageTarget(kinds, before, after, tuple(mismatches))
+
+
+def collapsed_changes(changes: Sequence[ChangeModel]) -> list[ChangeModel]:
+    """One entry per path: the old value of its first write, the new value of its last.
+
+    A never-louder order may write a parameter twice (a gain to 0 dB, then to its value); the
+    console then holds the last value (or, after a stop, an earlier one: see
+    ``written_values``) and the way back is the first old one.
+    """
+    first: dict[str, ChangeModel] = {}
+    last: dict[str, ChangeModel] = {}
+    for change in changes:
+        first.setdefault(change.path, change)
+        last[change.path] = change
+    collapsed = []
+    for path, start in first.items():
+        end = last[path]
+        if end.scope != start.scope:
+            raise UnsafeWrite(f"undo file names {path} in two scopes", path=path)
+        collapsed.append(
+            start.model_copy(update={"new_value": end.new_value, "new_display": end.new_display})
+        )
+    return collapsed
+
+
+def written_values(changes: Sequence[ChangeModel]) -> dict[str, list[WireValue]]:
+    """Every value the plan wrote (or meant to write) per path, in order."""
+    written: dict[str, list[WireValue]] = {}
+    for change in changes:
+        written.setdefault(change.path, []).append(change.new_value)
+    return written

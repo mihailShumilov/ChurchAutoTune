@@ -26,9 +26,9 @@ from churchtune.domain.snapshot import SignalRef
 from churchtune.errors import UnsafeWrite
 
 TOLERANCE_DB = 0.5
-# 1/48 octave, plus the centre frequency of every band of the plan (the peak of a narrow band
+# 1/96 octave, plus the centre frequency of every band of the plan (the peak of a narrow band
 # lies on it and could fall between grid points).
-GRID_HZ: FloatArray = 20.0 * 2 ** (np.arange(0, int(np.log2(20000 / 20) * 48) + 1) / 48)
+GRID_HZ: FloatArray = 20.0 * 2 ** (np.arange(0, int(np.log2(20000 / 20) * 96) + 1) / 96)
 MUTED_DB = -200.0
 # A band's parameters as written one at a time, read through a table.
 BAND_PARAMS: tuple[str, ...] = ("type", "freq_hz", "q", "gain_db")

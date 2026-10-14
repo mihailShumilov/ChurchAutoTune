@@ -12,7 +12,7 @@ from typing import Annotated
 
 import typer
 
-from churchtune.cli import records
+from churchtune.cli import apply_packages, package_writes, records
 from churchtune.cli.context import (
     EXIT_OK,
     EXIT_READBACK,
@@ -24,6 +24,7 @@ from churchtune.cli.context import (
     ask,
     fail,
     reachable_console,
+    refuse_while_mutes_are_pending,
     relative_to_home,
     say,
     settings_of,
@@ -140,17 +141,6 @@ def write_with_undo(
         return EXIT_READBACK, undo_path
     say(f"Готово. Откат: ctune undo {shown}")
     return EXIT_OK, undo_path
-
-
-def refuse_while_mutes_are_pending(settings: Settings) -> None:
-    """Leave with a refusal while a sub measurement has not given the matrix mutes back."""
-    pending = settings.workspace.pending_mutes_file
-    if pending.exists():
-        fail(
-            f"!! Найден {pending.name}: прошлый замер саба не вернул мьюты. Сначала: "
-            "ctune sub restore",
-            EXIT_REFUSED,
-        )
 
 
 def apply_command(
@@ -436,10 +426,8 @@ def undo_command(
         if not is_confirmation(ask(question)):
             say("Отменено — ничего не записано.")
             raise typer.Exit(EXIT_USER)
-    from churchtune.cli import apply_packages  # noqa: PLC0415 - it imports this module
-
     with reachable_console(settings) as console:
-        if apply_packages.is_package_undo(undo):
+        if package_writes.is_package_undo(undo):
             code = apply_packages.undo_packages(settings, console, undo, undo_file, dry_run)
         elif undo.scope is WriteScope.SUB:
             code = _undo_sub(settings, console, undo, undo_file, dry_run, write_unverified)

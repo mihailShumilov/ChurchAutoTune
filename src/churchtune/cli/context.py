@@ -200,3 +200,14 @@ def settings_of(ctx: typer.Context) -> Settings:
 def relative_to_home(path: Path, workspace: Workspace) -> Path:
     """A path as shown to the operator: relative to the home directory when inside it."""
     return path.relative_to(workspace.root) if path.is_relative_to(workspace.root) else path
+
+
+def refuse_while_mutes_are_pending(settings: Settings) -> None:
+    """Leave with a refusal while a sub measurement has not given the matrix mutes back."""
+    pending = settings.workspace.pending_mutes_file
+    if pending.exists():
+        fail(
+            f"!! Найден {pending.name}: прошлый замер саба не вернул мьюты. Сначала: "
+            "ctune sub restore",
+            EXIT_REFUSED,
+        )

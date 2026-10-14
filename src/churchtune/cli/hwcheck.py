@@ -16,7 +16,6 @@ import typer
 from churchtune.cli import records
 from churchtune.cli.apply import (
     LAWS,
-    refuse_while_mutes_are_pending,
     with_fresh_polarity,
     write_with_undo,
 )
@@ -26,6 +25,7 @@ from churchtune.cli.context import (
     Console,
     fail,
     reachable_console,
+    refuse_while_mutes_are_pending,
     say,
     settings_of,
 )
