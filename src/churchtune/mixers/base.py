@@ -13,7 +13,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from churchtune.domain.snapshot import ConsoleIdentity, ConsoleSnapshot, UsbAudioMap
+from churchtune.domain.eq import EqQuantizer
+from churchtune.domain.snapshot import (
+    ConsoleIdentity,
+    ConsoleSnapshot,
+    Headamp,
+    InputRef,
+    UsbAudioMap,
+)
 from churchtune.domain.topology import TopologyGuess
 
 ProgressCb = Callable[[int, int], None]
@@ -148,6 +155,11 @@ class MixerDriver(Protocol):
         """Model, firmware and capabilities of the connected console."""
         ...
 
+    @property
+    def eq_grid(self) -> EqQuantizer:
+        """The console's EQ value grid: every designed value is snapped to it."""
+        ...
+
     def read_snapshot(self, progress: ProgressCb | None = None) -> ConsoleSnapshot:
         """Read everything needed without changing anything."""
         ...
@@ -168,6 +180,10 @@ class MixerDriver(Protocol):
 
     def usb_audio_map(self, snapshot: ConsoleSnapshot) -> UsbAudioMap:
         """Map the USB audio card from a snapshot. Pure."""
+        ...
+
+    def headamp_of(self, snapshot: ConsoleSnapshot, source: InputRef) -> Headamp | None:
+        """The preamp behind a physical input, or None (card, outputs, unknown). Pure."""
         ...
 
     def meters(self, which: MeterSet, duration_s: float) -> Iterator[MeterFrame]:

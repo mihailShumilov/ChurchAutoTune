@@ -8,7 +8,14 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from datetime import datetime
 
-from churchtune.domain.snapshot import ConsoleIdentity, ConsoleSnapshot, UsbAudioMap
+from churchtune.domain.eq import EqQuantizer
+from churchtune.domain.snapshot import (
+    ConsoleIdentity,
+    ConsoleSnapshot,
+    Headamp,
+    InputRef,
+    UsbAudioMap,
+)
 from churchtune.domain.topology import TopologyGuess
 from churchtune.errors import ConsoleUnreachable, UnsupportedConsole
 from churchtune.mixers.base import (
@@ -21,6 +28,8 @@ from churchtune.mixers.base import (
 )
 from churchtune.mixers.x32.client import X32Client
 from churchtune.mixers.x32.models import console_model, identity_from_xinfo
+from churchtune.mixers.x32.params import X32EqGrid
+from churchtune.mixers.x32.routing import headamp_of
 from churchtune.mixers.x32.snapshot import parse_snapshot, read_raw
 from churchtune.mixers.x32.topology import infer_topology
 from churchtune.mixers.x32.transport import X32_PORT, default_broadcasts, discover
@@ -123,6 +132,11 @@ class X32Driver:
         """Rebuild a snapshot from stored raw lines. Pure."""
         return parse_snapshot(identity, raw, taken_at)
 
+    @property
+    def eq_grid(self) -> EqQuantizer:
+        """The X32/M32 EQ value grid."""
+        return X32EqGrid()
+
     def infer_topology(self, snapshot: ConsoleSnapshot) -> TopologyGuess:
         """Guess speaker roles. Pure."""
         return infer_topology(snapshot)
@@ -130,6 +144,10 @@ class X32Driver:
     def usb_audio_map(self, snapshot: ConsoleSnapshot) -> UsbAudioMap:
         """Map the USB card. Pure."""
         return usb_audio_map(snapshot)
+
+    def headamp_of(self, snapshot: ConsoleSnapshot, source: InputRef) -> Headamp | None:
+        """The preamp behind a physical input, or None. Pure."""
+        return headamp_of(snapshot, source)
 
     def meters(self, which: MeterSet, duration_s: float) -> Iterator[MeterFrame]:
         """Stream strip meters for ``duration_s`` seconds."""
