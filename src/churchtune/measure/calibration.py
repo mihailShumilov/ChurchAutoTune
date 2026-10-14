@@ -4,9 +4,10 @@ All microphones stand together (capsules within 10 cm, same height and direction
 same sweeps in one stream. Each one is compared with the set:
 
 * sensitivity: mean level difference to the set median in 200 Hz-2 kHz (long window);
-* shape: the remaining difference in 1/3 octaves, from a short window above 500 Hz so the
-  uncorrelated late reverberation of capsules a few centimetres apart does not enter it; it is
-  faded to zero outside 100 Hz-8 kHz, where it is not checked;
+* shape: the remaining difference in 1/3 octaves, from a short window above 500 Hz (the direct
+  sound and a few milliseconds after it) so the uncorrelated late reverberation of capsules a few
+  centimetres apart does not enter it; it is faded to zero outside 100 Hz-8 kHz, where it is not
+  checked;
 * delay and polarity: band-limited cross-correlation of the direct sound with the set's median
   impulse response, with sub-sample interpolation;
 * noise: room noise against the set median, corrected by the sensitivity.
@@ -34,7 +35,6 @@ from churchtune.measure.multi import MicResult, RoundMeasurement
 MIN_MICS = 2
 PAIR = 2
 SET_ID_CHARS = 12
-SHORT_WINDOW_PRE_S = 0.001
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +47,9 @@ class CalibrationConfig:
         sensitivity_band_hz: Band of the sensitivity average.
         shape_band_hz: Band where the shape is checked and applied.
         short_window_from_hz: Above this the shape uses the short window.
-        short_window_s: Short window, starting 1 ms before the direct sound.
+        short_window_s: Short window from the start of the cut impulse response (which begins
+            ``SweepConfig.ir_pre_ms`` before its peak), so it holds the direct sound and the first
+            few milliseconds after it.
         max_shape_db: Shape deviation that rejects a microphone.
         max_delay_ms: Delay difference that rejects a microphone.
         max_extra_noise_db: Noise above the set (after sensitivity) that rejects a microphone.
@@ -180,12 +182,6 @@ def _curves(
     )
     shape_curves = np.where(centres >= cfg.short_window_from_hz, short, long_curves)
     return centres, long_curves, shape_curves
-
-
-def _from_direct(ir: FloatArray, fs_hz: float) -> FloatArray:
-    """The response from 1 ms before its peak, so the short window measures the direct sound."""
-    start = max(0, int(np.argmax(np.abs(ir))) - int(SHORT_WINDOW_PRE_S * fs_hz))
-    return np.asarray(ir[start:], dtype=np.float64)
 
 
 def _direct(ir: FloatArray, peak: int, fs_hz: float, cfg: CalibrationConfig) -> FloatArray:
