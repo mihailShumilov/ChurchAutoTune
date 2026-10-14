@@ -13,19 +13,9 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from churchtune.domain.text import transliterate
 from churchtune.domain.topology import SpeakerRole
 
-_TRANSLIT = str.maketrans(
-    {
-        "а": "a", "б": "b", "в": "v", "г": "g", "ґ": "g", "д": "d", "е": "e", "є": "ye",
-        "ё": "e", "ж": "zh", "з": "z", "и": "i", "і": "i", "ї": "yi", "й": "y", "к": "k",
-        "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t",
-        "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "",
-        "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
-        "á": "a", "à": "a", "â": "a", "ã": "a", "é": "e", "ê": "e", "í": "i", "ó": "o",
-        "ô": "o", "õ": "o", "ú": "u", "ü": "u", "ç": "c", "ñ": "n",
-    }
-)  # fmt: skip
 _WORD_RE = re.compile(r"[a-z]+|[0-9]+")
 _MIN_GLUED_CHARS = 3
 
@@ -119,7 +109,7 @@ class NameHint:
 
 def normalize(name: str) -> str:
     """Lowercase and transliterate a name: ``"Саб буфер"`` gives ``"sab bufer"``."""
-    return name.strip().lower().translate(_TRANSLIT)
+    return transliterate(name.strip().lower())
 
 
 def _matches(word: str, stem: str) -> bool:
