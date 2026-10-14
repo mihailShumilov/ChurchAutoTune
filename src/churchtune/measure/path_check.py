@@ -1,22 +1,21 @@
 """SPEC S7: does the sound come out of the speakers and reach the microphones?
 
-``check_path`` plays a quiet (−40 dBFS) 1 kHz tone and then band-limited noise, both faded, and
-reads every microphone: was it heard, how far above the room noise, and with which system latency
-(cross-correlation of the noise). ``same_polarity`` compares the direct sound of two impulse
-responses measured at one microphone (left top against right top): a swapped polarity is a finding
-for the report, never an automatic fix.
+``check_path`` plays a quiet (−40 dBFS) 1 kHz tone (for the console meters) and then band-limited
+noise, both faded, and reads every microphone: was the noise heard, how far above the room noise
+(the band level before the test), and with which system latency (cross-correlation of the noise).
+The speaker-by-speaker check lives in ``measure.speakers``.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
 
 import numpy as np
 from scipy import signal
 
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.levels import db_to_lin, rms_dbfs
-from churchtune.domain.recording import Float32Array, MultiRecording, StopFlag
+from churchtune.domain.recording import Float32Array, StopFlag
+from churchtune.measure.backend import MeasureBackend
 from churchtune.measure.stimulus import check_level, half_cos_fade
 
 TONE_HZ = 1000.0
@@ -24,26 +23,9 @@ TEST_LEVEL_DBFS = -40.0
 QUIET_S, TONE_S, NOISE_S = 0.5, 1.0, 1.0
 FADE_S = 0.05
 NOISE_BAND_HZ = (500.0, 4000.0)
-TONE_BAND_HZ = (900.0, 1100.0)
 # Heard: the tone stands this far above the same band during the quiet lead-in.
 MIN_HEARD_DB = 10.0
 MAX_LATENCY_S = 0.5
-POLARITY_BAND_HZ = (300.0, 3000.0)
-DIRECT_PRE_S, DIRECT_POST_S = 0.002, 0.005
-
-
-class PlayRec(Protocol):
-    """The part of a multichannel backend the path check needs."""
-
-    def playrec_multi(
-        self,
-        out: Float32Array,
-        inputs: Sequence[int],
-        events: None = None,
-        stop: StopFlag | None = None,
-    ) -> MultiRecording:
-        """Play and record in one stream."""
-        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +35,7 @@ class MicPath:
     Attributes:
         usb_input: 1-based USB input.
         heard: True when the tone stood out of the room noise.
-        tone_db: Tone level above the quiet lead-in, in its band.
+        tone_db: Level of the test noise above the quiet lead-in, in its band.
         latency_ms: System latency from the noise, when heard.
     """
 
@@ -100,7 +82,7 @@ def _latency_ms(rec: FloatArray, noise: FloatArray, start: int, fs_hz: float) ->
 
 
 def check_path(
-    backend: PlayRec,
+    backend: MeasureBackend,
     inputs: Sequence[int],
     fs_hz: float,
     *,
@@ -115,28 +97,11 @@ def check_path(
     results = []
     for column, usb_input in enumerate(inputs):
         rec = np.asarray(recording.channel(column), dtype=np.float64)
-        lead_in = _band_db(rec[: quiet_end - int(FADE_S * fs_hz)], TONE_BAND_HZ, fs_hz)
-        # Leave the latency margin at the start of the tone part.
-        tone = _band_db(
-            rec[quiet_end + int(MAX_LATENCY_S * fs_hz) // 2 : tone_end], TONE_BAND_HZ, fs_hz
-        )
-        rise = tone - lead_in
+        lead_in = _band_db(rec[: quiet_end - int(FADE_S * fs_hz)], NOISE_BAND_HZ, fs_hz)
+        # The band noise decides "heard": a pure tone can fall into a room null at one seat.
+        noise_part = rec[tone_end + int(MAX_LATENCY_S * fs_hz) // 2 : tone_end + len(noise)]
+        rise = _band_db(noise_part, NOISE_BAND_HZ, fs_hz) - lead_in
         heard = rise >= MIN_HEARD_DB
         latency = _latency_ms(rec, noise, tone_end, fs_hz) if heard else None
         results.append(MicPath(usb_input, heard, round(rise, 1), latency))
     return tuple(results)
-
-
-def _direct_window(ir: FloatArray, fs_hz: float) -> FloatArray:
-    sos = signal.butter(2, POLARITY_BAND_HZ, "bandpass", fs=fs_hz, output="sos")
-    filtered = signal.sosfiltfilt(sos, ir)
-    peak = int(np.argmax(np.abs(filtered)))
-    start = max(0, peak - int(DIRECT_PRE_S * fs_hz))
-    return np.asarray(filtered[start : peak + int(DIRECT_POST_S * fs_hz)])
-
-
-def same_polarity(ir_a: FloatArray, ir_b: FloatArray, fs_hz: float) -> bool:
-    """True when two speakers measured at one microphone have the same polarity."""
-    a, b = _direct_window(ir_a, fs_hz), _direct_window(ir_b, fs_hz)
-    correlation = signal.correlate(a, b, mode="full")
-    return bool(correlation[int(np.argmax(np.abs(correlation)))] > 0)

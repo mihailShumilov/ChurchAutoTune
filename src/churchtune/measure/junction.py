@@ -8,7 +8,6 @@ relative timing of sub and tops is exact.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -16,7 +15,8 @@ import numpy.typing as npt
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.levels import peak_dbfs
-from churchtune.domain.recording import MultiRecording, StopFlag
+from churchtune.domain.recording import StopFlag
+from churchtune.measure.backend import MeasureBackend
 from churchtune.measure.config import SweepConfig
 from churchtune.measure.deconvolution import deconvolve
 from churchtune.measure.stimulus import build_stimulus, make_sweep
@@ -118,6 +118,8 @@ class JunctionBlock(StrEnum):
 # Called with the block whose mutes must be in place; must raise if the console does not confirm.
 MuteSwitch = Callable[[JunctionBlock], None]
 MUTE_SWITCH_AFTER_S = 0.3
+# The switch (write and readback) must be over before the next block's sweep starts.
+MUTE_SWITCH_MARGIN_S = 0.1
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,22 +141,8 @@ class JunctionMic:
     peaks_dbfs: tuple[float, float, float]
 
 
-class JunctionBackend(Protocol):
-    """The part of a multichannel backend the junction round needs."""
-
-    def playrec_multi(
-        self,
-        out: npt.NDArray[np.float32],
-        inputs: Sequence[int],
-        events: Sequence[tuple[int, Callable[[], None]]] | None = None,
-        stop: StopFlag | None = None,
-    ) -> MultiRecording:
-        """Play and record in one stream; events fire between blocks."""
-        ...
-
-
 def measure_junction_round(  # noqa: PLR0913 - explicit configuration instead of globals
-    backend: JunctionBackend,
+    backend: MeasureBackend,
     inputs: Sequence[int],
     switch: MuteSwitch,
     *,
@@ -172,7 +160,13 @@ def measure_junction_round(  # noqa: PLR0913 - explicit configuration instead of
     Raises:
         MeasurementAborted: Stopped; the output is silent and the mutes are restored.
         LevelError: The level is above the hard output limit; nothing is played or muted.
+        ValueError: The inputs repeat or are missing, or the pre-roll is too short for the mute
+            switch; nothing is played or muted.
     """
+    if not inputs or len(set(inputs)) != len(inputs):
+        raise ValueError(f"the junction needs distinct microphone inputs, got {list(inputs)}")
+    if sweep.preroll_s - MUTE_SWITCH_MARGIN_S <= MUTE_SWITCH_AFTER_S:
+        raise ValueError("the mute switch must happen in the silent pre-roll of the next block")
     stimulus = block_stimulus(fs_hz, sweep, level_dbfs)
     switch_after = int(MUTE_SWITCH_AFTER_S * fs_hz)
     events = [
