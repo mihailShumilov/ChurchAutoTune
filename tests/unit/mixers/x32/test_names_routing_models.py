@@ -1,0 +1,211 @@
+"""Name dictionary, routing tables, USB map and model capabilities of the X32 driver."""
+
+import pytest
+
+from churchtune.domain.snapshot import ConsoleFamily, InputKind, InputRef, SignalRef, SourceKind
+from churchtune.domain.topology import SpeakerRole
+from churchtune.errors import UnsupportedConsole
+from churchtune.mixers.base import Feature, Support
+from churchtune.mixers.x32 import routing
+from churchtune.mixers.x32.models import (
+    capabilities,
+    console_model,
+    family_of,
+    identity_from_xinfo,
+)
+from churchtune.mixers.x32.names import Side, is_non_speaker, normalize, role_hint, side_hint
+from churchtune.mixers.x32.usb import usb_audio_map
+from tests.fixtures.topologies import all_fixtures
+
+
+@pytest.mark.parametrize(
+    ("name", "role"),
+    [
+        ("Sub buffer", SpeakerRole.SUB),
+        ("Саб", SpeakerRole.SUB),
+        ("Сабвуфер", SpeakerRole.SUB),
+        ("BASS", SpeakerRole.SUB),
+        ("Main L", SpeakerRole.TOP_MONO),
+        ("Портал лівий", SpeakerRole.TOP_MONO),
+        ("PA", SpeakerRole.TOP_MONO),
+        ("Mono", SpeakerRole.TOP_MONO),
+        ("Front R", SpeakerRole.TOP_MONO),
+        ("Frontfill", SpeakerRole.FILL),
+        ("Balcon L", SpeakerRole.DELAY),
+        ("Балкон", SpeakerRole.DELAY),
+        ("Delay", SpeakerRole.DELAY),
+        ("Monitor", SpeakerRole.MONITOR),
+        ("Mon voc 1", SpeakerRole.MONITOR),
+        ("Мон 2", SpeakerRole.MONITOR),
+        ("Монітор", SpeakerRole.MONITOR),
+        ("main sub", SpeakerRole.SUB),
+        ("", None),
+        ("Piano", None),
+    ],
+)
+def test_role_hint(name, role):
+    assert role_hint(name) == role
+
+
+@pytest.mark.parametrize(
+    ("name", "side"),
+    [
+        ("Main L", Side.LEFT),
+        ("Main R", Side.RIGHT),
+        ("Портал левый", Side.LEFT),
+        ("Портал правий", Side.RIGHT),
+        ("Izquierdo", Side.LEFT),
+        ("Derecho", Side.RIGHT),
+        ("Sub", None),
+    ],
+)
+def test_side_hint(name, side):
+    assert side_hint(name) == side
+
+
+def test_normalize_and_non_speaker_names():
+    assert normalize("  Саб Буфер ") == "sab bufer"
+    assert is_non_speaker("Fx 1")
+    assert is_non_speaker("Stream")
+    assert is_non_speaker("Запис")
+    assert not is_non_speaker("Main L")
+
+
+@pytest.mark.parametrize(
+    ("source_id", "ref"),
+    [
+        (0, SignalRef(SourceKind.OFF)),
+        (1, SignalRef(SourceKind.MAIN_L)),
+        (2, SignalRef(SourceKind.MAIN_R)),
+        (3, SignalRef(SourceKind.MONO)),
+        (4, SignalRef(SourceKind.BUS, 1)),
+        (19, SignalRef(SourceKind.BUS, 16)),
+        (20, SignalRef(SourceKind.MATRIX, 1)),
+        (25, SignalRef(SourceKind.MATRIX, 6)),
+        (26, SignalRef(SourceKind.DIRECT_CHANNEL, 1)),
+        (58, SignalRef(SourceKind.DIRECT_AUX, 1)),
+        (66, SignalRef(SourceKind.DIRECT_FX, 1)),
+        (74, SignalRef(SourceKind.MONITOR, 1)),
+        (75, SignalRef(SourceKind.MONITOR, 2)),
+        (76, SignalRef(SourceKind.TALKBACK)),
+        (99, SignalRef(SourceKind.UNKNOWN, 99)),
+    ],
+)
+def test_output_source_table(source_id, ref):
+    assert routing.output_source(source_id) == ref
+
+
+def test_signal_and_input_labels():
+    assert SignalRef(SourceKind.MATRIX, 3).label() == "matrix 3"
+    assert SignalRef(SourceKind.MONO).label() == "mono"
+    assert InputRef(InputKind.AES50_A, 10).label() == "aes50_a 10"
+    assert InputRef(InputKind.OFF).label() == "off"
+
+
+@pytest.mark.parametrize(
+    ("user_id", "ref"),
+    [
+        (0, InputRef(InputKind.OFF)),
+        (13, InputRef(InputKind.LOCAL, 13)),
+        (42, InputRef(InputKind.AES50_A, 10)),
+        (81, InputRef(InputKind.AES50_B, 1)),
+        (129, InputRef(InputKind.CARD, 1)),
+        (161, InputRef(InputKind.AUX_IN, 1)),
+        (200, InputRef(InputKind.UNKNOWN)),
+    ],
+)
+def test_user_routing_ids(user_id, ref):
+    assert routing.user_input_source(user_id) == ref
+
+
+def test_routing_blocks():
+    assert routing.parse_block("P169-16") == ("P16", 9, 16)
+    assert routing.parse_block("A9-16") == ("A", 9, 16)
+    assert routing.parse_block("??") is None
+    assert routing.block_sources("A9-16")[1] == InputRef(InputKind.AES50_A, 10)
+    assert routing.block_sources("AN1-8")[0] == InputRef(InputKind.LOCAL, 1)
+    assert routing.block_sources("CARD1-8")[7] == InputRef(InputKind.CARD, 8)
+    assert routing.block_sources("UOUT1-8") == (InputRef(InputKind.UNKNOWN),) * 8
+    assert routing.block_sources("weird") == (InputRef(InputKind.UNKNOWN),) * 8
+    users = tuple(range(1, 9))
+    assert routing.block_sources("UIN1-8", users)[4] == InputRef(InputKind.LOCAL, 5)
+    assert routing.block_sources("UIN9-16", users) == (InputRef(InputKind.UNKNOWN),) * 8
+
+
+def test_headamps_and_channel_sources():
+    assert routing.headamp_index(InputRef(InputKind.AES50_A, 10)) == 41
+    assert routing.headamp_index(InputRef(InputKind.LOCAL, 1)) == 0
+    assert routing.headamp_index(InputRef(InputKind.AES50_B, 48)) == 127
+    assert routing.headamp_index(InputRef(InputKind.CARD, 1)) is None
+    assert routing.headamp_index(InputRef(InputKind.AES50_A, 49)) is None
+    assert routing.channel_input(5) == ("input", 5)
+    assert routing.channel_input(33) == ("aux", 1)
+    assert routing.channel_input(0) is None
+    assert routing.channel_input(60) is None
+
+
+def test_usb_map_of_the_reference_hall():
+    hall = next(f for f in all_fixtures() if f.name == "hall-2026-10-02")
+    usb = usb_audio_map(hall.snapshot())
+    mic = usb.input_info(10)
+    assert mic is not None
+    assert mic.source == InputRef(InputKind.AES50_A, 10)
+    assert mic.headamp is not None
+    assert mic.headamp.phantom
+    assert mic.channels == (10,)
+    assert usb.input_info(99) is None
+    playback = {o.usb: o.channels for o in usb.outputs}
+    assert playback[1] == (23,)
+    assert playback[2] == (24,)
+
+
+@pytest.mark.parametrize(
+    ("model", "family"),
+    [
+        ("X32P", ConsoleFamily.X32),
+        ("X32RACK", ConsoleFamily.X32),
+        ("x32c", ConsoleFamily.X32),
+        ("M32R", ConsoleFamily.M32),
+        ("M32", ConsoleFamily.M32),
+    ],
+)
+def test_family_of(model, family):
+    assert family_of(model) is family
+
+
+def test_family_of_rejects_other_consoles():
+    with pytest.raises(UnsupportedConsole):
+        family_of("XR18")
+
+
+def test_identity_from_xinfo():
+    identity = identity_from_xinfo(["192.0.2.80", "Hall", "X32P", "4.09"], "127.0.0.1")
+    assert identity.model == "X32P"
+    assert identity.host == "127.0.0.1"
+    with pytest.raises(UnsupportedConsole):
+        identity_from_xinfo(["only", "three", "items"], "127.0.0.1")
+    with pytest.raises(UnsupportedConsole):
+        identity_from_xinfo(["a", "b", 3, "4.09"], "127.0.0.1")
+
+
+def test_capabilities_by_model_and_firmware():
+    x32 = identity_from_xinfo(["ip", "n", "X32P", "4.09"], "h")
+    caps = capabilities(x32)
+    assert caps.verified_firmware
+    assert caps.can_write(Feature.MAIN_EQ)
+    assert caps.can_write(Feature.MATRIX_FADER)
+    assert caps.of(Feature.OUTPUT_DELAY) is Support.SUGGEST_ONLY
+    assert caps.of(Feature.MATRIX_POLARITY) is Support.SUGGEST_ONLY
+    assert not caps.can_write(Feature.BUS_EQ)
+    assert not caps.can_write(Feature.CHANNEL_MUTE)
+    m32 = capabilities(identity_from_xinfo(["ip", "n", "M32", "4.09"], "h"))
+    assert not any(m32.can_write(f) for f in Feature)
+    old = capabilities(identity_from_xinfo(["ip", "n", "X32", "3.11"], "h"))
+    assert not old.verified_firmware
+    assert not any(old.can_write(f) for f in Feature)
+    assert console_model(x32).identity is x32
+
+
+def test_missing_feature_is_none():
+    caps = capabilities(identity_from_xinfo(["ip", "n", "X32P", "4.09"], "h"))
+    assert type(caps)({}, verified_firmware=True).of(Feature.MAIN_EQ) is Support.NONE
