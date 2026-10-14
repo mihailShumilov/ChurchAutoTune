@@ -246,10 +246,10 @@ def test_noisy_recording_reports_low_pnr_as_unreliable_when_far_below_the_gate()
     assert quality.verdict is Verdict.BAD
 
 
-def test_stream_flags_warn_and_are_listed_once():
+def test_stream_flags_make_the_point_bad_and_are_listed_once():
     quality = _measure(DelayLine(noise_dbfs=-90.0, flags=["input overflow"]), n_avg=2).quality
 
-    assert quality.verdict is Verdict.WARN
+    assert quality.verdict is Verdict.BAD
     assert quality.warnings[-1].code is WarningCode.XRUN
     assert quality.warnings[-1].params == {"flags": "input overflow"}
 

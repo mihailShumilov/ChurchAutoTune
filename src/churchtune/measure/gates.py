@@ -42,6 +42,7 @@ class WarningCode(StrEnum):
     LOW_SNR = "low-snr"  # room too noisy for the sweep level
     LOW_PNR = "low-pnr"  # impulse response too noisy for T30 (or at all)
     XRUN = "xrun"  # the audio stream reported dropouts: repeat the measurement
+    UNSTEADY = "unsteady"  # two sweeps differ: something moved or made noise; repeat
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +160,8 @@ def assess(  # noqa: PLR0913 - the measurement hands over all its raw material
     if flags:
         shown = ", ".join(sorted(set(flags))[:MAX_REPORTED_FLAGS])
         warnings.append(QualityWarning(WarningCode.XRUN, {"flags": shown}))
-        verdict = worse(verdict, Verdict.WARN)
+        # SPEC §8.2: any dropout makes the point bad (the original tool only warned).
+        verdict = worse(verdict, Verdict.BAD)
     return PointQuality(
         peak_dbfs=round(peak, 2),
         clipped_samples=clipped,

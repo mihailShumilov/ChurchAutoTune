@@ -55,6 +55,9 @@ class QualityGates:
         min_pnr_db: Impulse-response peak over its noise needed for T30; below it warn.
         bad_pnr_db: Below this the point is bad (not even T20).
         noise_guard_s: The end of the pre-roll left out of the noise estimate.
+        max_repeat_db: Largest 1/3-octave difference between two sweeps (100 Hz-8 kHz) of a
+            clean point; above it warn.
+        bad_repeat_db: Above this the point is bad (something moved or made noise).
     """
 
     clip_dbfs: float = -0.5
@@ -66,3 +69,5 @@ class QualityGates:
     min_pnr_db: float = 45.0
     bad_pnr_db: float = 35.0
     noise_guard_s: float = 0.05
+    max_repeat_db: float = 1.0
+    bad_repeat_db: float = 2.0
