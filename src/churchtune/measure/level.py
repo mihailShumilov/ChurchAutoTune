@@ -43,6 +43,8 @@ CLIP_PEAK_DBFS = QualityGates().clip_dbfs
 class RampStop(StrEnum):
     """Why the level ramp ended."""
 
+    # The stream ended by itself before any decision (a backend that stopped early).
+    ENDED = "ended"
     TARGET = "target"
     ABOVE_TARGET = "above_target"
     OUTPUT_LIMIT = "output_limit"
@@ -303,9 +305,14 @@ class _RampDriver:
         data = self._take()
         if alarm is not None and not user:
             # Clipping or a jump: stop for that reason, never average it into a "target".
-            history = (*self.ramp.history, (self.ramp.output_dbfs, self.last.mic_rms_dbfs))
+            levels = tuple(rms_dbfs(data[:, c]) for c in range(data.shape[1]))
+            reference = levels[self.reference] if self.reference < len(levels) else SILENCE_DBFS
+            self.last = RampReading(reference, peak_dbfs(data), levels)
+            history = (*self.ramp.history, (self.ramp.output_dbfs, reference))
             self.ramp = replace(self.ramp, history=history, stopped=alarm)
             self.feed.stopping.set()
+            if self.on_step is not None:
+                self.on_step(self.ramp, self.last)
             return
         settle = int(cfg.settle_s * self.fs_hz)
         steady = data[settle:] if len(data) > settle else data
@@ -362,7 +369,7 @@ def run_level_ramp(  # noqa: PLR0913 - every argument is a knob of the step
     final = driver.ramp
     if final.stopped is None:
         user = stop is not None and stop.is_set()
-        final = replace(final, stopped=RampStop.USER if user else feed.alarm or RampStop.USER)
+        final = replace(final, stopped=RampStop.USER if user else feed.alarm or RampStop.ENDED)
     return final, driver.last
 
 
