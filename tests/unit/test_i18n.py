@@ -94,7 +94,7 @@ def used_keys() -> set[str]:
     keys |= {f"effect-{m}" for m in ("junction-score", "rms-deviation")}
     keys |= {f"audio-problem-{p}" for p in ("channels", "sample-rate")}
     keys |= {f"verify-{v}" for v in ("better", "no-change", "worse")}
-    keys |= {"apply-word", "undo-word"}  # typed confirmation words (wizard.steps.apply)
+    keys |= {"apply-word", "undo-word", "apply-word-mismatch", "undo-word-mismatch"}
     keys |= {f"write-{p}" for p in ("eq-on", "fader", "on")}
     keys |= {f"write-band-{p}" for p in ("type", "freq", "gain", "q")}
     keys |= {"step-equipment-model-other"} if "other" in MIC_MODELS else set()

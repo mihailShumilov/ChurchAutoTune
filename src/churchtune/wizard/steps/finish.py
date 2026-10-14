@@ -124,8 +124,16 @@ class Results:
         count = len(analysis.point_names)
         info(ctx.prompter, t("step-results-what", count=count), *findings(analysis))
         propose(ctx, analysis)
-        info(ctx.prompter, t("step-results-next-milestones"))
+        info(ctx.prompter, t("step-results-next-apply"))
         return Outcome.DONE
+
+
+def _short(path: Path) -> str:
+    """A path as short as the shell understands it (``~`` for the home folder)."""
+    try:
+        return "~/" + str(path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,22 +151,20 @@ class Finish:
     def run(self, ctx: WizardContext) -> Outcome:
         """The checklist for the person."""
         state = ctx.box.state
-        written = []
-        if state.applied_undo is not None:
-            written = [
+        # Mutes and sends back first, then the scene: otherwise it is saved with them muted.
+        lines = [t("step-finish-what"), t("step-finish-undo-by-hand"),
+                 t("step-finish-mics", count=len(state.mic_inputs))]  # fmt: skip
+        if state.applied_state == "applied" and state.applied_undo is not None:
+            undo = ctx.services.workspace.root / state.applied_undo
+            lines += [
                 t("step-finish-scene"),
-                t(
-                    "step-finish-undo-later",
-                    command=f"ctune undo {ctx.services.workspace.root / state.applied_undo}",
-                ),
+                t("step-finish-listen"),
+                t("step-finish-undo-later", command=f"ctune undo {_short(undo)}"),
             ]
-        task(
-            ctx.prompter,
-            t("step-finish-what"),
-            *written,
-            t("step-finish-undo-by-hand"),
-            t("step-finish-listen"),
-            t("step-finish-mics", count=len(state.mic_inputs)),
-        )
+        elif state.applied_state == "reverted":
+            lines += [t("step-finish-reverted"), t("step-finish-listen")]
+        else:
+            lines.append(t("step-finish-listen"))
+        task(ctx.prompter, *lines)
         info(ctx.prompter, t("step-finish-saved", path=str(ctx.session_dir)))
         return Outcome.DONE

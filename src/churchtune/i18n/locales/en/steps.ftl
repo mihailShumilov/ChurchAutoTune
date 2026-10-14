@@ -133,7 +133,7 @@ step-points-done = { $count } places measured.
 step-results-title = Results
 step-results-no-points = There are no measured places yet.
 step-results-what = What the measurement at { $count } places shows:
-step-results-next-milestones = Your choices are saved. The next step shows exactly what will change on the console and asks before it writes anything.
+step-results-next-apply = Your choices are saved. The next step shows exactly what will change on the console and asks before it writes anything.
 finding-hump = A hump around { $freq_hz } Hz (+{ $gain_db } dB): voices may sound boomy or boxy.
 finding-rt60-dry = The hall is rather dry (RT60 { $rt60_s } s): good for speech.
 finding-rt60-good = The hall reverberates moderately (RT60 { $rt60_s } s): good for speech and music.
@@ -290,7 +290,6 @@ write-after = Will be
 value-console = { $value }
 write-eq-on = { $path }: EQ on/off
 write-fader = { $path }: fader
-write-on = { $path }: on/mute
 write-band-type = { $path }, band { $band }: type
 write-band-freq = { $path }, band { $band }: frequency
 write-band-gain = { $path }, band { $band }: gain
@@ -302,29 +301,15 @@ apply-what = { $count ->
 apply-undo-first = Before the first write, the old values are saved, so everything can be put back. The order is chosen so the sound never gets louder in between.
 apply-type = To write, type the word “{ $word }” and press Enter. Anything else cancels.
 apply-cancelled = Cancelled: nothing was written to the console.
-apply-done = { $count ->
-    [one] Done: 1 setting was written and checked on the console.
-   *[other] Done: { $count } settings were written and checked on the console.
-}
 apply-scene-not-saved = The scene on the console is NOT saved yet. Save it under a new name once you like the sound.
-apply-stopped = You stopped the writing. { $count } settings had been written before that.
-apply-readback-failed = The console did not confirm { $path }. The program stopped there ({ $count } settings were written before).
 apply-offer-undo = Put back what was written?
 apply-nothing = Nothing to write: no chosen change needs the console.
 apply-proposal-unreadable = The saved change plan cannot be read. Nothing was written. Measure again to make a new plan.
-apply-console-changed = The console has changed since the measurement (someone moved a setting). Nothing was written. Measure again, so the plan fits what the console has now.
-apply-refused = The program refused this plan because it breaks a safety limit. Nothing was written.
-apply-console-lost = The connection to the console was lost. Check the network cable and look at the console. If something was written, the old values are saved and you can put them back with the undo command.
-apply-advice-intro = Set these by hand on the console (the program does not write them yet):
 apply-advice-delay = { $output }: delay { $ms } ms
 apply-advice-polarity = { $path }: flip the polarity
 undo-what = { $count ->
     [one] The program will put back 1 setting.
    *[other] The program will put back { $count } settings.
-}
-undo-changed-by-hand = { $count ->
-    [one] 1 setting was changed by hand since; it stays as it is.
-   *[other] { $count } settings were changed by hand since; they stay as they are.
 }
 undo-type = To put them back, type the word “{ $word }” and press Enter. Anything else cancels.
 undo-nothing = Nothing to put back: the console already has the old values.
@@ -334,23 +319,62 @@ undo-done = The old values are back on the console.
 undo-incomplete = Not everything could be put back. Look at the console and set the rest by hand.
 
 ## S13 Verify
-step-verify-title = Check measurement
 verify-nothing-applied = Nothing was written to the console in this session, so there is nothing to check.
-verify-what = { $count ->
-    [one] Now we measure 1 point again, to see whether the changes helped.
-   *[other] Now we measure { $count } points again, to see whether the changes helped. Among them: the seat that sounded worst and the one in the middle of the hall.
-}
-verify-same-places = Put the microphones exactly where they stood before: same seats, same height.
-verify-no-points = The check measurement has no point to compare with the first one. Nothing was judged.
 verify-better = It got better.
-verify-no-change = No noticeable difference. You may keep the changes or put them back; listen at the next service.
-verify-worse = It got worse. I recommend putting the old values back.
-verify-m = Average distance from the target curve: { $before_db } dB before, { $after_db } dB now (smaller is better).
-verify-worst = The seat that sounded worst ({ $point }): { $delta_db } dB change (minus means better).
-verify-band = Largest change for the worse: { $delta_db } dB at { $freq_hz } Hz in { $point }.
-verify-chart = Picture: row 1 is before, row 2 is now; the taller the block, the further from the target (63 Hz on the left, 8 kHz on the right).
 verify-offer-undo = Put the old values back now?
-step-finish-scene = Save the scene on the console under a new name (for example with today's date), so the new settings survive a restart.
-step-finish-undo-later = To put the old values back later, run: { $command }
 undo-console-changed = The console changed while the list was on the screen. Nothing was put back. Look at the console and start the undo again.
 apply-run-refused = The safety check stopped the writing half-way ({ $count } settings had been written). Nothing more was sent.
+
+## S12-S14 after the UX review
+write-on = { $path }: sound (off = muted)
+value-on = on
+value-off = off
+value-hz = { $hz } Hz
+value-khz = { $khz } kHz
+value-plain = { $value }
+value-fader-down = fader down
+apply-word-mismatch = That is not the word “{ $word }”, so nothing was written. Type it again, or press Enter on an empty line to cancel.
+undo-word-mismatch = That is not the word “{ $word }”, so nothing was put back. Type it again, or press Enter on an empty line to cancel.
+apply-console-changed-now = The console changed while the list was on the screen. Nothing was written. Here is the new list, read from the console just now.
+apply-console-keeps-changing = The console keeps changing while the list is on the screen. Nothing was written. Make sure nobody is using the console, then start again.
+apply-offer-check = The last setting may have been written halfway. Check it and put back the old values?
+apply-console-changed = The console changed after the measurement: { $settings }. Nothing was written. Measure again so the plan fits the console: start the wizard again.
+apply-refused = The program refused this plan because it breaks a safety limit. Nothing was written. The console is unchanged; you can finish here or measure again.
+apply-readback-failed = The console did not confirm “{ $setting }”, so the program stopped. Settings written before: { $count }. Usually this is a network hiccup: check the cable, then put back what was written.
+apply-advice-intro = Now set these by hand on the console (the program does not write them), then press Enter:
+apply-stopped = You stopped writing to the console. Settings written before that: { $count }.
+apply-done = { $count ->
+    [one] Done: 1 setting was written and checked on the console.
+   *[other] Done: { $count } settings were written and checked on the console.
+}
+apply-console-lost = The connection to the console was lost. Check the network cable and look at the console. If something was written, the old values are saved: the last screen shows the command that puts them back.
+undo-changed-by-hand = { $count ->
+    [one] 1 setting was changed by hand since; the program leaves it as it is.
+   *[other] { $count } settings were changed by hand since; the program leaves them as they are.
+}
+step-verify-title = Measure again to check
+verify-what = { $count ->
+    [one] Now we measure 1 place again, to see whether the changes helped.
+   *[other] Now we measure { $count } places again, to see whether the changes helped.
+}
+verify-which = Among them: the seat that sounded worst and the one in the middle of the hall.
+verify-same-places = { $count ->
+    [one] Put the microphone exactly where it stood before: same seat, same height.
+   *[other] Put the microphones exactly where they stood before: same seats, same height.
+}
+verify-no-points = The check measurement has no place to compare with the first one. Nothing was judged.
+verify-no-baseline = There is no first measurement to compare with. Nothing was judged.
+verify-place = place { $number } ({ $place })
+verify-m = Average distance from the target curve (how the sound should be): { $before_db } dB before, { $after_db } dB now; smaller is better.
+verify-worst = The seat that sounded worst, { $place }: { $direction ->
+    [better] better by { $delta_db } dB.
+    [worse] worse by { $delta_db } dB.
+   *[same] no change.
+}
+verify-band = Largest change for the worse: { $delta_db } dB at the frequency { $freq_hz } Hz, { $place }.
+verify-worse = It got worse. Putting the old values back is recommended.
+verify-no-change = No noticeable difference. You may keep the changes and listen at the next service; the last screen shows how to put the old values back.
+verify-chart = Picture: row 1 is before, row 2 is now; the taller the block, the further from the target (63 Hz on the left, 8 kHz on the right).
+step-finish-scene = After you restore the mutes and sends, save the scene on the console under a new name (for example today's date), so the tuning survives switching the console off.
+step-finish-undo-later = If the sound is not right at the service, you can put the old values back: open Terminal and type { $command }
+step-finish-reverted = The console has its old settings again; there is nothing to save.

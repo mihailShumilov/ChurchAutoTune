@@ -507,6 +507,8 @@ class WizardStateFile(FileModel):
     proposal_file: str | None = None
     # Undo file of the packages written in S12 (relative to the home directory).
     applied_undo: str | None = None
+    # How S12 ended: something written, nothing written, or written and put back again.
+    applied_state: Literal["applied", "nothing", "reverted"] | None = None
     # S13: the points measured again, those done so far, and the verdict (SPEC §8.6).
     verify_points: tuple[str, ...] = ()
     verify_measured: dict[str, str] = {}
