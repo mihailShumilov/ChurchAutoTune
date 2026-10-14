@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from churchtune import __version__
-from churchtune.cli import analyze, apply, check, hwcheck, measure, sub
+from churchtune.cli import analyze, apply, check, console, hwcheck, measure, sub
 from churchtune.cli.context import EXIT_REFUSED, Settings, load_venue, parse_console, say
 from churchtune.errors import ChurchTuneError, DevSafeViolation
 from churchtune.storage.paths import workspace_from_env
@@ -46,6 +46,12 @@ def main(
         Path | None,
         typer.Option("--home", help="Data directory (default: CTUNE_HOME or ~/ChurchTune)."),
     ] = None,
+    emulator: Annotated[
+        bool,
+        typer.Option(
+            "--emulator", help="Development: start an X32 emulator in-process and use it."
+        ),
+    ] = False,
     version: Annotated[  # noqa: ARG001 - handled by its eager callback
         bool,
         typer.Option(
@@ -59,6 +65,13 @@ def main(
     if console:
         host, port = parse_console(console)
         venue = replace(venue, console_host=host, console_port=port)
+    if emulator:
+        from churchtune_emulator.x32 import LOOPBACK, X32Emulator  # noqa: PLC0415 - dev only
+
+        emu = X32Emulator().start()
+        ctx.call_on_close(emu.stop)
+        venue = replace(venue, console_host=LOOPBACK, console_port=emu.port)
+        audio = "fake"
     ctx.obj = Settings(workspace, venue, audio or venue.audio_device or "fake")
 
 
@@ -74,6 +87,9 @@ app.command("apply")(apply.apply_command)
 app.command("undo")(apply.undo_command)
 app.command("sub")(sub.sub_command)
 app.command("hwcheck")(hwcheck.hwcheck_command)
+app.command("doctor")(console.doctor_command)
+app.command("snapshot")(console.snapshot_command)
+app.command("emulator")(console.emulator_command)
 
 
 def run() -> None:
