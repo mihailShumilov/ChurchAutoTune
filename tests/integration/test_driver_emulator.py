@@ -103,6 +103,21 @@ def test_snapshot_survives_packet_loss():
         emu.stop()
 
 
+def test_one_late_reply_does_not_shift_the_rest_of_the_snapshot():
+    emu = X32Emulator().start()
+    # Later than both attempts of its own node (2 x 0.15 s): it arrives during later reads.
+    emu.slow_nodes["ch/05/config"] = 0.4
+    try:
+        driver, transport = _driver(emu)
+        with transport:
+            snap = driver.read_snapshot()
+        assert set(snap.unparsed) <= {"ch/05/config"}
+        assert snap.matrices[3].name == "Sub buffer"
+        assert len(snap.raw) >= len(snapshot_nodes()) - 1
+    finally:
+        emu.stop()
+
+
 def test_usb_map_meters_and_link_quality(emulator):
     driver, transport = _driver(emulator)
     with transport:

@@ -50,6 +50,11 @@ REFUSED_NODE_ROOTS = frozenset({"-action", "-snap", "-show", "-usb", "-urec"})
 _METERS_ARG_RE = re.compile(r"/meters/(\d|1[0-6])")
 
 
+def _node_path(line: str) -> str:
+    """Node path of a ``/node`` reply line: ``"/main/st/eq/2 PEQ ..."`` gives ``main/st/eq/2``."""
+    return line.strip().lstrip("/").split(" ")[0]
+
+
 def is_node_path(path: object) -> bool:
     """Return True for a ``/node`` argument that is a plain, allowed node path."""
     return (
@@ -135,6 +140,7 @@ class X32Client:
         *args: OscArg,
         expect: str | None = None,
         timeout_s: float = DEFAULT_TIMEOUT_S,
+        accept: Callable[[list[OscArg]], bool] | None = None,
     ) -> list[OscArg] | None:
         """Send a read message and wait for the reply.
 
@@ -143,6 +149,8 @@ class X32Client:
             *args: OSC arguments.
             expect: Address of the awaited reply; ``address`` when omitted.
             timeout_s: How long to wait for the reply.
+            accept: Extra test of the reply's arguments; a reply that fails it is skipped like a
+                packet for another address (a late answer to an earlier request).
 
         Returns:
             The reply's arguments, or None on timeout. Other packets are skipped.
@@ -158,7 +166,7 @@ class X32Client:
             if reply is None:
                 return None
             reply_address, values = reply
-            if same_addr(reply_address, expected):
+            if same_addr(reply_address, expected) and (accept is None or accept(values)):
                 return values
 
     def ping(self, timeout_s: float = PING_TIMEOUT_S) -> list[OscArg] | None:
@@ -169,18 +177,24 @@ class X32Client:
         """Read one node as text.
 
         ``node("main/st/eq/2")`` gives ``/main/st/eq/2 PEQ 232.3 -1.75 3.9``. The console replies
-        with the address ``node`` (no leading slash); a reply for another path is ignored.
+        with the address ``node`` (no leading slash). A reply for another path (a late answer to
+        an earlier request) is skipped and the wait goes on, so one slow answer never shifts the
+        replies of the following nodes.
 
         Returns:
             The reply line without the trailing newline, or None after one retry.
         """
         path = path.lstrip("/")
+
+        def for_this_path(values: list[OscArg]) -> bool:
+            return bool(values) and isinstance(values[0], str) and _node_path(values[0]) == path
+
         for attempt in range(1, ATTEMPTS + 1):
-            values = self.ask(NODE_ADDRESS, path, expect="node", timeout_s=timeout_s)
-            if values and isinstance(values[0], str):
-                line = values[0].strip()
-                if line.lstrip("/").split(" ")[0] == path:
-                    return line
+            values = self.ask(
+                NODE_ADDRESS, path, expect="node", timeout_s=timeout_s, accept=for_this_path
+            )
+            if values is not None and isinstance(values[0], str):
+                return values[0].strip()
             logger.warning("no reply to /node %s (attempt %d of %d)", path, attempt, ATTEMPTS)
         return None
 

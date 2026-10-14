@@ -198,6 +198,14 @@ class MixStrip:
     invert: bool = False
 
 
+class LinkKind(StrEnum):
+    """Kind of strips that can be stereo-linked in pairs."""
+
+    CHANNEL = "channel"
+    BUS = "bus"
+    MATRIX = "matrix"
+
+
 class OutputKind(StrEnum):
     """Group of physical outputs."""
 
@@ -283,7 +291,8 @@ class ConsoleSnapshot:
         input_sources: For every console input 1..32 (index 0 = input 1), its physical source.
         usb: USB card routing.
         clock: Sample clock.
-        stereo_links: Linked pairs of strips, such as ``("matrix", 1)`` for matrices 1/2.
+        stereo_links: Linked pairs of strips by kind and first number: ``(LinkKind.MATRIX, 1)``
+            is matrices 1/2.
         mono_mode: Main Mono mode as reported (``LR+M``, ``LCR``).
         raw: Original reply lines by node path.
         unparsed: Node paths whose reply was missing or could not be understood.
@@ -301,7 +310,7 @@ class ConsoleSnapshot:
     input_sources: tuple[InputRef, ...]
     usb: UsbRouting
     clock: ClockInfo | None
-    stereo_links: frozenset[tuple[str, int]] = frozenset()
+    stereo_links: frozenset[tuple[LinkKind, int]] = frozenset()
     mono_mode: str = ""
     raw: Mapping[str, str] = field(default_factory=dict)
     unparsed: tuple[str, ...] = ()
