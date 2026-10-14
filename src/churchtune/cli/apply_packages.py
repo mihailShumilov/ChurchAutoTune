@@ -5,6 +5,7 @@ turns refusals into exit codes. Output delay and polarity are advice here: they 
 by ``ctune sub`` with ``--write-unverified``.
 """
 
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
@@ -27,6 +28,7 @@ from churchtune.cli.context import (
     settings_of,
 )
 from churchtune.cli.package_writes import (
+    MuteGuard,
     fresh_inputs,
     has_crossover,
     package_undo_file,
@@ -36,11 +38,14 @@ from churchtune.cli.package_writes import (
     send_runs,
     undo_policy,
 )
-from churchtune.domain.changes import Change
+from churchtune.domain.changes import Change, WriteScope
 from churchtune.domain.console import ConsoleState
-from churchtune.errors import UnsafeWrite
+from churchtune.errors import ChurchTuneError, UnsafeWrite
+from churchtune.mixers.x32 import params
+from churchtune.mixers.x32.plan_writes import PlannedChange
+from churchtune.mixers.x32.snapshot import parse_snapshot
 from churchtune.report.texts import format_changes
-from churchtune.safety.authorize import TypedWord
+from churchtune.safety.authorize import TypedWord, is_confirmation
 from churchtune.safety.policy import WritePolicy
 from churchtune.storage import files
 from churchtune.storage.models import PackageModel, UndoFile
@@ -48,6 +53,7 @@ from churchtune.wizard.applying import chosen_packages, writable_packages
 
 CONFIRMATION_WORD = "применить"
 UNDO_WORD = "вернуть"
+FAR_FROM_FIRST_DB = 12.0  # SPEC §9.2 levels: further from the venue's first snapshot asks first
 ROLES_UNCLEAR = "ОТКАЗ: не понятно, какие матрицы саб и сателлиты"
 
 
@@ -67,6 +73,43 @@ def _fresh(console: Console, *, allow_cut_filters: bool) -> tuple[ConsoleState, 
     except UnsafeWrite as error:
         fail(f"{ROLES_UNCLEAR}: {error}", EXIT_REFUSED)
     return state, policy
+
+
+def first_faders(proposal: Path) -> dict[int, float]:
+    """Matrix faders in the first snapshot of the proposal's venue (empty when there is none).
+
+    A wizard proposal lives in ``venues/<venue>/sessions/<session>/``; the oldest session of the
+    venue with a readable snapshot is its first reading.
+    """
+    sessions = proposal.resolve().parent.parent
+    for session in sorted(p for p in sessions.glob("*") if p.is_dir()):
+        try:
+            path = files.read_wizard_state(session).snapshot_file
+            if path is None:
+                continue
+            home = sessions.parent.parent.parent
+            stored = files.read_snapshot(home / path)
+            snapshot = parse_snapshot(stored.identity(), stored.raw, stored.taken_at)
+        except (ValueError, OSError, ChurchTuneError):
+            continue
+        return {n: m.fader_db for n, m in snapshot.matrices.items()}
+    return {}
+
+
+def far_levels(planned: Sequence[PlannedChange], first: dict[int, float]) -> list[str]:
+    """Faders more than 12 dB away from the venue's first reading, as lines for the person."""
+    lines = []
+    for item in planned:
+        number = item.change.path.split("/")[2] if item.scope is WriteScope.LEVELS else ""
+        if not number.isdecimal():
+            continue
+        before = first.get(int(number))
+        after = params.norm_to_fader(float(item.change.new_value))
+        if before is None or math.isinf(before) or math.isinf(after):
+            continue
+        if abs(after - before) > FAR_FROM_FIRST_DB:
+            lines.append(f"     {item.change.path}: {before:+.1f} -> {after:+.1f} дБ")
+    return lines
 
 
 def _new_undo_path(settings: Settings, *, revert: bool = False) -> Path:
@@ -117,6 +160,21 @@ def apply_packages_command(
         if dry_run:
             say("--dry-run: ничего не записано.")
             raise typer.Exit(EXIT_OK)
+        far = far_levels(planned, first_faders(proposal))
+        if far:
+            say(
+                "!! Фейдер уходит больше чем на 12 дБ от первой настройки этого зала:\n"
+                + "\n".join(far)
+            )
+            if at_the_console:
+                fail(
+                    "ОТКАЗ: такой уровень не пишется без отдельного вопроса; запустите без "
+                    "--yes-i-am-at-the-console",
+                    EXIT_REFUSED,
+                )
+            if not is_confirmation(ask("Всё равно записать такой уровень? [y/N] ")):
+                say("Отменено — ничего не записано.")
+                raise typer.Exit(EXIT_USER)
         if at_the_console:
             say("Подтверждено флагом --yes-i-am-at-the-console.")
             typed = CONFIRMATION_WORD
@@ -143,7 +201,9 @@ def apply_packages_command(
         shown = relative_to_home(undo_path, settings.workspace)
         say(f"undo-файл: {undo_path}")
         try:
-            results, complete = send_runs(console, planned, undo_path, word, policy)
+            guard = MuteGuard(settings.workspace, settings.venue.console_host)
+            sent = send_runs(console, planned, undo_path, word, policy, guard=guard)
+            results, complete = sent.results, sent.complete
         except UnsafeWrite as error:
             fail(f"ОТКАЗ: {error}. Откат: ctune undo {shown}", EXIT_REFUSED)
         except BaseException:
@@ -151,6 +211,11 @@ def apply_packages_command(
             raise
         for result in results:
             say(f"  {'OK ' if result.ok else '!! '} {result.path}  readback {result.readback!r}")
+        if sent.still_muted:
+            say(
+                f"!! матрицы {list(sent.still_muted)} остались выключены (Mute): включите их на "
+                "пульте руками"
+            )
         if not complete:
             say(f"!! не все параметры подтвердились — проверьте пульт; откат: ctune undo {shown}")
             raise typer.Exit(EXIT_READBACK)
@@ -200,7 +265,8 @@ def undo_packages(
     )
     say(f"undo-файл: {revert_path}")
     try:
-        _, complete = send_runs(console, plan.planned, revert_path, word, policy)
+        guard = MuteGuard(settings.workspace, settings.venue.console_host)
+        complete = send_runs(console, plan.planned, revert_path, word, policy, guard=guard).complete
     except UnsafeWrite as error:
         fail(f"ОТКАЗ: {error}", EXIT_REFUSED)
     if not complete:

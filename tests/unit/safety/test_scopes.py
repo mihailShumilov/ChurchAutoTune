@@ -228,3 +228,10 @@ def test_policies_reject_overlapping_or_unknown_sub_and_top_matrices():
         policy(top_matrices=frozenset({1, SUB_MATRIX}))
     with pytest.raises(ValueError, match="not venue"):
         policy(sub_matrices=frozenset({4}))
+
+
+def test_temp_mutes_switch_on_only_a_speaker_matrix():
+    balcony = policy(mute_originals=(("/mtx/05/mix/on", 1),))
+    balcony.validate("/mtx/05/mix/on", 0, TEMP)  # muting it is never louder
+    with pytest.raises(UnsafeWrite, match="speaker matrix"):
+        balcony.validate("/mtx/05/mix/on", 1, TEMP)

@@ -20,12 +20,16 @@ from typing import Literal
 import numpy as np
 
 from churchtune.domain.arrays import FloatArray
-from churchtune.domain.eq import Band, SystemEq
+from churchtune.domain.eq import Band, EqType, SystemEq
 from churchtune.domain.eq_model import eq_response_db
 from churchtune.domain.snapshot import SignalRef
 from churchtune.errors import UnsafeWrite
 
 TOLERANCE_DB = 0.5
+SHELVES = frozenset({EqType.LSHV, EqType.HSHV})
+SHELF_SMOOTH_Q = 0.707  # a shelf with a higher Q overshoots on both sides of its corner
+# Only a peaking cut is never louder anywhere when it is added: a shelf with a high Q is not.
+HOLDING_TYPES = frozenset({EqType.PEQ, EqType.VEQ})
 # 1/96 octave, plus the centre frequency of every band of the plan (the peak of a narrow band
 # lies on it and could fall between grid points).
 GRID_HZ: FloatArray = 20.0 * 2 ** (np.arange(0, int(np.log2(20000 / 20) * 96) + 1) / 96)
@@ -87,15 +91,22 @@ Chains = Mapping[str, tuple[SignalRef, ...]]
 
 
 def plan_grid(*plans: Mapping[SignalRef, StripState]) -> FloatArray:
-    """The fixed grid plus every band centre of the given states (within 20 Hz-20 kHz)."""
-    centres = [
-        band.freq_hz
-        for states in plans
-        for state in states.values()
-        for band in state.eq.bands
-        if GRID_HZ[0] <= band.freq_hz <= GRID_HZ[-1]
-    ]
-    return np.unique(np.concatenate([GRID_HZ, np.asarray(centres, dtype=np.float64)]))
+    """The fixed grid plus every band centre of the given states (within 20 Hz-20 kHz).
+
+    A shelf with Q above 0.707 overshoots away from its corner: around every shelf the grid is
+    made finer (1/384 octave over ±1 octave), so its hump is not missed between points.
+    """
+    extra: list[FloatArray] = []
+    for states in plans:
+        for state in states.values():
+            for band in state.eq.bands:
+                if not GRID_HZ[0] <= band.freq_hz <= GRID_HZ[-1]:
+                    continue
+                extra.append(np.array([band.freq_hz]))
+                if band.type in SHELVES and band.q > SHELF_SMOOTH_Q:
+                    extra.append(band.freq_hz * 2 ** (np.arange(-384, 385) / 384))
+    points = np.concatenate([GRID_HZ, *extra])
+    return np.unique(points[(points >= GRID_HZ[0]) & (points <= GRID_HZ[-1])])
 
 
 def chain_response_db(
@@ -255,14 +266,19 @@ def _hold_a_cut(
 
     Two cuts that swap places (Main 50 -> 80 Hz while the sub goes 80 -> 50 Hz) have no order:
     whichever moves first leaves a frequency uncut. A spare band (flat now and after) takes a
-    copy of the old cut first (adding a cut is never louder); the cut then moves, and the copy
+    copy of the old cut first (adding a peaking cut is never louder; shelves are not held, and
+    the simulation checks the copy anyway); the cut then moves, and the copy
     is removed later like any other change.
 
     Returns:
         The removal of the copy, to be ordered with the rest; None when no cut can be held.
     """
     for ref, old_band, _new in stuck:
-        if (ref, old_band.band) in helped or not old_band.adjustable or old_band.gain_db >= 0:
+        if (
+            (ref, old_band.band) in helped
+            or old_band.type not in HOLDING_TYPES
+            or old_band.gain_db >= 0
+        ):
             continue
         eq = sim.states[ref].eq
         spare = next(
