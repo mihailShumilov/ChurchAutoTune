@@ -2,8 +2,9 @@
 
 from collections.abc import Callable
 
-from churchtune.audio.base import AudioBackend
+from churchtune.audio.base import AudioBackend, MultiChannelBackend
 from churchtune.audio.fake.backend import FakeBackend
+from churchtune.audio.fake.hall import demo_rig
 from churchtune.audio.fake.room import demo_rooms
 from churchtune.domain.eq import SystemEq
 from churchtune.errors import DevSafeViolation
@@ -51,3 +52,22 @@ def open_backend(
     from churchtune.audio.sounddevice_backend import SoundDeviceBackend  # noqa: PLC0415
 
     return SoundDeviceBackend(audio, fs_hz, mic_input)
+
+
+def open_multi_backend(audio: str, *, fs_hz: float) -> MultiChannelBackend:
+    """Open a multichannel backend: the simulated hall rig (``fake``) or a real device by name.
+
+    Raises:
+        DevSafeViolation: Dev-safe mode is on and a real device was requested.
+        AudioDeviceError: The real device cannot be opened.
+    """
+    if audio.strip().lower() == FAKE:
+        return demo_rig(fs_hz)
+    if is_dev_safe():
+        raise DevSafeViolation(
+            f"dev-safe mode refuses the audio device {audio!r}; only 'fake' is allowed",
+            audio=audio,
+        )
+    from churchtune.audio.sounddevice_backend import SoundDeviceBackend  # noqa: PLC0415
+
+    return SoundDeviceBackend(audio, fs_hz, 1)
