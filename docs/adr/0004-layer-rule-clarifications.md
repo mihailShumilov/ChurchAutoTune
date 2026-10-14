@@ -39,4 +39,3 @@ that next touches the module:
 - Names without units in `mixers/x32/params.py` (`norm_to_freq`, `norm_to_gain`, ...), kept from the original.
 - `NewType` identifiers (`MicId`, `PointId`, `OutputId`) arrive with the venue model in M1/M2.
 - `transport.py` reads the clock directly; `client.py` and `writer.py` take it as an argument.
-
