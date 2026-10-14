@@ -55,14 +55,16 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M4. Modules marked (M5+) are in SPEC §5 but not written yet.
+State after M5 (temporary mutes and the junction measurement in the wizard still to come).
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
-  `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`,
+  `check`, `measure`, `analyze`, `apply` (apply/undo), `apply_packages` (`apply-packages`, three-way package undo,
+  `X32WritePort` for the wizard; with `apply` the only places that send a plan), `sub`, `hwcheck`,
   `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
   `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI)
 - `wizard/` UI-agnostic engine (ADR 0008): `protocol` (serializable `Prompt`/`Answer`, `Prompter`), `state`, `engine`,
-  `services` (ports, stop flag), `ui` (prompt helpers), `run` (start/resume), `labels` (console words as texts),
-  `proposals` (plan/packages ↔ files), `steps/` `setup`, `measure`, `proposal` (S11 packages, audit), `finish`
+  `services` (ports incl. `WritePort`, stop flag), `ui` (prompt helpers), `run` (start/resume), `labels` (console
+  words as texts), `proposals` (plan/packages ↔ files), `applying` (proposal → ordered steps from a fresh read),
+  `steps/` `setup`, `measure`, `proposal` (S11 packages, audit), `apply` (S12), `verify` (S13), `finish`
 - `app/` Textual UI: `app` (`WizardApp`, `TuiPrompter` queue bridge, sound keys), `widgets` (header, prompt, meter)
 - `i18n/` `Translator` (Fluent), `locales/{en,ru,uk}/*.ftl`
 - `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`,
@@ -75,7 +77,8 @@ State after M4. Modules marked (M5+) are in SPEC §5 but not written yet.
   `params`, `nodes`, `dump`, `snapshot` (node list, read, tolerant parse), `routing` (source ids, blocks, headamps),
   `names` (multilingual speaker names), `topology` (`infer_topology`; M0 `detect_roles`), `filters`,
   `speaker_paths`, `topology_issues`, `usb`, `models`
-  (model strings, `VERIFIED_CONSOLES`), `driver` (`X32Driver`, `discover_consoles`), `laws`, `writer` (the only writer)
+  (model strings, `VERIFIED_CONSOLES`), `driver` (`X32Driver`, `discover_consoles`), `laws`, `plan_writes` (ordered
+  steps → scoped writes, wire ↔ state for undo), `writer` (the only writer)
 - `churchtune_emulator/` (separate top-level package, loopback only, ADR 0006): `x32` emulator with model variants,
   latency and loss; seeded from the packaged reference dump
 - `audio/` `base` (protocols incl. `MultiChannelBackend`, −6 dBFS limiter), `sounddevice_backend`, `factory`,
@@ -83,12 +86,14 @@ State after M4. Modules marked (M5+) are in SPEC §5 but not written yet.
 - `measure/` `config`, `stimulus`, `deconvolution`, `gates`, `point`, `junction` (also multi-mic with injected mute
   switch), `multi` (rounds, repeatability), `calibration`, `mic_mapping`, `level` (ramp, sweep level), `noise`,
   `path_check`, `rounds`, `plan` (point plan, Halton, hall map)
-- `analysis/` `bands`, `response`, `rt60`, `points` · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
+- `analysis/` `bands`, `response`, `rt60`, `points`, `verdict` (§8.6) · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
   `alignment`, `proposal`, `packages` (S11 packages, ADR 0009), `channel_audit`
-- `safety/` `policy`, `plan`, `sub_plan`, `authorize`, `laws` (protocol; never imports `mixers`)
+- `safety/` `policy` (scopes of §9.2), `plan`, `sub_plan`, `order` (never-louder order by simulation), `authorize`
+  (typed word, undo hash), `laws` (protocol; never imports `mixers`)
 - `storage/` `models`, `migrations`, `paths`, `files` · `report/` `texts`, `markdown`, `plots` · `platform/` `devsafe`
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).
-- Writes never verified on hardware (output delay, polarity) need `--write-unverified` (ADR 0005).
+- Writes never verified on hardware (output delay, polarity) need `--write-unverified` (ADR 0005); in the wizard and
+  `apply-packages` they are advice only (ADR 0010).
 - Tests: `tests/emulator/` (subclass of the packaged emulator), `tests/fixtures/` (anonymized dumps, golden hall data,
   `x32/topologies/*.toml` = dump + overrides + expected roles), `tests/golden/`, `tests/e2e/` (scripted wizard),
   `tests/tui/` (Pilot tests, SVG snapshots in `__snapshots__/`).

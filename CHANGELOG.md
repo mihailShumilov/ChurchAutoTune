@@ -80,6 +80,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dynamic microphones.
 - A simulated hall with known defects and an acceptance test: the proposals fix the junction dip,
   the sub level, the 500 Hz hump and the 50 Hz mode, and leave a narrow positional null alone.
+- Applying (M5): the wizard's step "Apply the changes" writes the chosen packages after a fresh
+  read of the console, shows every setting with its present and new value and asks for a typed
+  word (`apply` / `применить` / `застосувати`). The old values are saved before the first write,
+  the writes come in an order that never makes the sound louder in between, every write is read
+  back, and a write that does not read back stops the plan and offers to put back what was written.
+  A console changed since the measurement refuses the plan (measure again). Output delay and
+  polarity are shown as values to set by hand (ADR 0010).
+- `ctune apply-packages proposal.json`: the same from the terminal; `ctune undo` puts back the
+  values of such a plan where they were not changed by hand since, and lists the ones it leaves.
+- Check measurement (M5): the wizard measures at least four seats again (the worst one and the one
+  in the middle among them) and says "better", "no noticeable difference" or "worse" by the
+  criteria of SPEC §8.6, with a small before/after picture; when it got worse it offers the way
+  back right away. The last screen reminds to save the scene under a new name.
+- Five write scopes (temporary matrix mutes, system EQ, sub level, output delay, polarity) with
+  their limits, an authorization bound to the typed word and to the undo file's content, and a
+  stop between writes. The simulated hall now hears the console's Main LR EQ.
 
 ### Changed (compared with the original tool)
 - The speakers' low roll-off is the start of the pass band; a sub/top cancellation or a room dip
