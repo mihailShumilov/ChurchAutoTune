@@ -11,7 +11,7 @@ arbitrary no-argument messages are refused too. Writing is the job of ``writer.p
 import logging
 import re
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Protocol
 
 from churchtune.errors import ReadOnlyViolation
@@ -198,14 +198,10 @@ class X32Client:
             logger.warning("no reply to %s (attempt %d of %d)", address, attempt, ATTEMPTS)
         return None
 
-    def meters0(self, duration_s: float, on_frame: Callable[[list[float]], None]) -> None:
-        """Receive ``/meters/0`` frames for ``duration_s`` seconds.
+    def iter_meters0(self, duration_s: float) -> Iterator[list[float]]:
+        """Yield ``/meters/0`` frames for ``duration_s`` seconds, renewing the subscription.
 
         The layout is 32 channels, 8 aux, 8 fx returns, 16 buses, 6 matrices (70 linear values).
-
-        Args:
-            duration_s: How long to listen.
-            on_frame: Called with the linear levels of each frame.
         """
         start = last_renew = self._clock()
         self.send(METERS_ADDRESS, METERS_0)
@@ -218,7 +214,17 @@ class X32Client:
                 continue
             address, values = reply
             if same_addr(address, METERS_0) and values and isinstance(values[0], bytes):
-                on_frame(meter_floats(values[0]))
+                yield meter_floats(values[0])
+
+    def meters0(self, duration_s: float, on_frame: Callable[[list[float]], None]) -> None:
+        """Receive ``/meters/0`` frames for ``duration_s`` seconds.
+
+        Args:
+            duration_s: How long to listen.
+            on_frame: Called with the linear levels of each frame.
+        """
+        for frame in self.iter_meters0(duration_s):
+            on_frame(frame)
 
     def close(self) -> None:
         """Close the underlying transport."""
