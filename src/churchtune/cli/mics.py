@@ -25,7 +25,13 @@ from churchtune.cli.context import (
     settings_of,
 )
 from churchtune.errors import DevSafeViolation
-from churchtune.measure.calibration import MicSetCalibration, calibrate, mic_set_id
+from churchtune.measure.calibration import (
+    MIN_MICS,
+    CalibrationError,
+    MicSetCalibration,
+    calibrate,
+    mic_set_id,
+)
 from churchtune.measure.config import QualityGates, SweepConfig
 from churchtune.measure.mic_mapping import MappingOutcome, find_scratch
 from churchtune.measure.multi import measure_round
@@ -171,7 +177,7 @@ def calibrate_command(
     """Calibrate a set of microphones against each other (all of them side by side)."""
     settings = settings_of(ctx)
     chosen = parse_inputs(inputs)
-    if len(chosen) < 2:  # noqa: PLR2004 - a set
+    if len(chosen) < MIN_MICS:
         fail("калибровка нужна только для двух и более микрофонов")
     set_id = mic_set_id([(usb, model) for usb in chosen])
     recent = reusable_mic_calibration(settings.workspace, set_id, settings.now())
@@ -189,7 +195,10 @@ def calibrate_command(
     measurement = measure_round(
         backend, chosen, fs_hz=FS_HZ, sweep=SweepConfig(), gates=QualityGates(), level_dbfs=level
     )
-    result = calibrate(measurement)
+    try:
+        result = calibrate(measurement)
+    except CalibrationError as error:
+        fail(f"✗ замер для калибровки плохой ({error}); проверьте gain и тишину, повторите")
     say("  вход  чувствит.  задержка  форма   итог")
     for mic in result.mics:
         verdict = "✓" if mic.ok else "✗ " + ", ".join(PROBLEM_TEXT[p.value] for p in mic.problems)
@@ -201,6 +210,10 @@ def calibrate_command(
         settings.workspace, _calibration_file(result, set_id, model, settings.now())
     )
     say(f"Сохранено: {relative_to_home(path, settings.workspace)}")
+    if result.polarity_ambiguous:
+        say("! Полярность у половины микрофонов разная — проверьте кабели всех микрофонов.")
+    if result.pair and result.rejected:
+        say("! Микрофона два: один из них отличается, но какой — не понять. Проверьте оба.")
     if result.rejected:
         say("Проверьте кабель или исключите отмеченные микрофоны из замера.")
         raise typer.Exit(EXIT_USER)
