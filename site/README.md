@@ -20,7 +20,8 @@ site/
 ├── en/  uk/  es/         one folder per language, the same pages in each:
 │   ├── index.html        landing page
 │   ├── roadmap/index.html   milestones M0–M7, current stage, "last updated" date
-│   └── guide/index.html     instructions: today's state, equipment, developers, hardware checks,
+│   └── guide/index.html     instructions: today's state, equipment, developers, trying the wizard on the
+│                            emulator, hardware checks,
 │                            the volunteer workflow ("coming later")
 ```
 
@@ -36,7 +37,7 @@ languages (en, uk, es) in the same pull request.** Concretely:
    `is-done` / `is-progress` class on the milestone card, the "In short" list, and the "last updated" date.
 2. `*/index.html`: the status table and banner on the landing page if the overall state changed.
 3. `*/guide/index.html`: add or change instructions. Keep the existing section ids (`today`, `equipment`,
-   `developers`, `install`, `tests`, `emulator`, `full-check`, `hardware-check`, `console-dumps`,
+   `developers`, `install`, `tests`, `emulator`, `full-check`, `try-wizard`, `hardware-check`, `console-dumps`,
    `volunteer-workflow`, `workflow-*`, `get-help`) stable, since other pages and outside links point to them.
    When a "coming later" step becomes real, move it into its own section and drop the "coming later" tag.
 4. The `Last updated` date in every page footer and `<lastmod>` in `sitemap.xml`.

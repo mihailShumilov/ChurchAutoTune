@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Guide — ChurchTune</title>
-<meta name="description" content="How to try ChurchTune today: set up the developer version, run it against the console emulator, check your X32 or M32 and report the result, and what equipment you will need later.">
+<meta name="description" content="How to try ChurchTune today: set up the developer version, try the guided wizard on the console emulator with a simulated hall, check your X32 or M32 and report the result, and what equipment you will need.">
 <link rel="canonical" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/">
 <link rel="alternate" hreflang="en" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/"><link rel="alternate" hreflang="uk" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/guide/"><link rel="alternate" hreflang="es" href="https://mihailshumilov.github.io/ChurchAutoTune/es/guide/"><link rel="alternate" hreflang="x-default" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/">
 <link rel="icon" href="../../assets/logo.svg" type="image/svg+xml">
@@ -15,7 +15,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ChurchTune">
 <meta property="og:title" content="Guide — ChurchTune">
-<meta property="og:description" content="How to try ChurchTune today: set up the developer version, run it against the console emulator, check your X32 or M32 and report the result, and what equipment you will need later.">
+<meta property="og:description" content="How to try ChurchTune today: set up the developer version, try the guided wizard on the console emulator with a simulated hall, check your X32 or M32 and report the result, and what equipment you will need.">
 <meta property="og:url" content="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/">
 <meta property="og:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -25,7 +25,7 @@
 <meta property="og:locale:alternate" content="uk_UA"><meta property="og:locale:alternate" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Guide — ChurchTune">
-<meta name="twitter:description" content="How to try ChurchTune today: set up the developer version, run it against the console emulator, check your X32 or M32 and report the result, and what equipment you will need later.">
+<meta name="twitter:description" content="How to try ChurchTune today: set up the developer version, try the guided wizard on the console emulator with a simulated hall, check your X32 or M32 and report the result, and what equipment you will need.">
 <meta name="twitter:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
 <meta name="twitter:image:alt" content="ChurchTune: free sound system tuning for churches with a Behringer X32 or Midas M32">
 </head>
@@ -46,17 +46,19 @@
 <h1>Using ChurchTune today</h1>
 <p class="lead">An honest guide to what you can do now, and what is coming. It grows with every milestone.</p>
 <p class="updated">Last updated: <time datetime="2026-10-14">14 October 2026</time></p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> There is no app for volunteers yet. What you can try today is for developers and testers. See the <a href="../../en/roadmap/">roadmap</a>.</p></div>
-<nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ol><li><a href="#today">What you can do today</a></li><li><a href="#equipment">Equipment you will need</a></li><li><a href="#developers">For developers and testers</a></li><li><a href="#hardware-check">For console owners: hardware checks</a></li><li><a href="#volunteer-workflow">Coming later: tuning your system</a></li><li><a href="#get-help">Questions and problems</a></li></ol></nav>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> The guided wizard exists, but so far it only reads the console and measures: it does not propose or apply any changes yet. It runs from the source code only. Do not use it on your church's live system yet. See the <a href="../../en/roadmap/">roadmap</a>.</p></div>
+<nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ol><li><a href="#today">What you can do today</a></li><li><a href="#equipment">Equipment you will need</a></li><li><a href="#developers">For developers and testers</a></li><li><a href="#try-wizard">Try the wizard without hardware</a></li><li><a href="#hardware-check">For console owners: hardware checks</a></li><li><a href="#volunteer-workflow">Coming later: tuning your system</a></li><li><a href="#get-help">Questions and problems</a></li></ol></nav>
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>What you can do today <span class="tag tag-now">Now</span></h2>
 <ul>
+<li><strong>Anyone comfortable with a terminal</strong> can try the guided wizard on the built-in console emulator with a
+simulated hall: no console, no speakers, no sound. See <a href="#try-wizard">Try the wizard without hardware</a>.</li>
 <li><strong>Developers and testers</strong> can install the project, run the tests and try the expert command line
-against the built-in console emulator with simulated audio. No real console or speakers are involved.</li>
+against the emulator.</li>
 <li><strong>Console owners</strong> can run a hardware check at a real X32 or M32 and report the result. This is the
 most valuable help right now.</li>
-<li><strong>Volunteers</strong> who want to tune their church system: please wait for the guided wizard. Watch
-releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
+<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard does not propose or apply
+changes yet (milestones M4 and M5). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>Equipment you will need</h2>
 <p>For the real tuning, later. Nothing here is needed to try the developer version.</p>
@@ -67,7 +69,7 @@ X-LIVE in an X32, DN32-USB or DN32-LIVE in an M32. The test sounds are played an
 <li><strong>A USB cable</strong> from the Mac to the console, and a <strong>network connection</strong> (cable or
 Wi-Fi) to the console, which ChurchTune uses to read its settings.</li>
 <li><strong>A measurement microphone</strong>, for example a Behringer ECM8000, with a stand and an XLR cable to a
-console input. Using several microphones at once is planned, with calibration.</li>
+console input. ChurchTune can also use several microphones at once and calibrate them against each other; this has been tested only with simulated microphones so far.</li>
 <li><strong>An empty, quiet hall</strong> and about 1–2 hours.</li>
 </ul></div></section>
 <section class="section section-alt" id="developers"><div class="wrap prose"><h2>For developers and testers</h2>
@@ -84,19 +86,96 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # all tests: console emulator + simulated audio
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # the real hall session of 2026-10-02</code></pre>
 <h3 id="emulator">3. Try the expert command line on the emulator</h3>
-<p>Today the console emulator lives in the test suite (a <code>ctune emulator</code> command is planned for M1). Start
-it in one terminal; it prints its port:</p>
-<pre><code>CTUNE_DEV_SAFE=1 uv run python -c "import time; from tests.emulator.x32_emulator import X32Emulator; e = X32Emulator().start(); print('Emulator port:', e.port, flush=True); time.sleep(3600)"</code></pre>
-<p>In a second terminal, run the read-only check against it with simulated audio (replace <code>PORT</code>):</p>
-<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo check
-CTUNE_DEV_SAFE=1 uv run ctune --help</code></pre>
-<p>The command-line texts are in Russian for now. This command line is a transitional tool for developers; the
-volunteer wizard replaces it in M3.</p>
+<p>Until pull requests #8–#10 are merged, the commands below live on the <code>m3-wizard</code> branch. In your clone:</p>
+<pre><code>git checkout m3-wizard
+uv sync</code></pre>
+<p>The quickest way is the global <code>--emulator</code> option: it starts a console emulator inside the program for
+that one command.</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor     # check the computer and the console, explain the speaker layout
+CTUNE_DEV_SAFE=1 uv run ctune --help                # all commands</code></pre>
+<p>You can also run the emulator on its own in one terminal (it prints its port and runs until Ctrl+C) and point
+commands at it from a second terminal, replacing <code>PORT</code>:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P
+CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo doctor</code></pre>
+<p>The output of most expert commands is still in Russian; the wizard below is translated. The expert command line
+stays as a tool for developers next to the wizard.</p>
 <h3 id="full-check">4. Before a pull request</h3>
 <pre><code>CTUNE_DEV_SAFE=1 uv run ruff format --check . &amp;&amp; uv run ruff check . &amp;&amp; uv run mypy \
   &amp;&amp; CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json &amp;&amp; uv run python scripts/check_coverage.py</code></pre>
 <p>Read the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">contributing guide</a> first, especially the safety rules.</p></div></section>
-<section class="section" id="hardware-check"><div class="wrap prose"><h2>For console owners: hardware checks</h2>
+<section class="section" id="try-wizard"><div class="wrap prose"><h2>Try the wizard without hardware <span class="tag tag-now">Now</span></h2>
+<p>The guided wizard is what volunteers will use. You can explore it today on the built-in console emulator and a
+simulated hall. Nothing leaves your computer: no console is touched and no sound is played.</p>
+<h3 id="try-wizard-start">Start it</h3>
+<p>From a clone with uv installed, on the <code>m3-wizard</code> branch (see <a href="#install">Install</a> and
+<a href="#emulator">step 3</a>):</p>
+<pre><code>uv sync
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # full-screen wizard
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo wizard --plain --lang uk         # line interface, in Ukrainian
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo resume                           # continue the saved session</code></pre>
+<p><code>--emulator</code> uses the built-in console emulator, <code>--audio fake</code> the simulated hall, and
+<code>--home</code> keeps the demo files apart from real ones (without it they go to <code>~/ChurchTune</code>).
+<code>--lang</code> takes <code>en</code>, <code>ru</code> or <code>uk</code>. The line interface (<code>--plain</code>)
+works with screen readers and in scripts.</p>
+<h3 id="try-wizard-keys">Keys</h3>
+<ul>
+<li><kbd>Ctrl</kbd>+<kbd>C</kbd> or <kbd>Space</kbd>: stop the sound at once, on every screen.</li>
+<li><kbd>Esc</kbd>: go back one step, where the screen allows it.</li>
+<li><kbd>Ctrl</kbd>+<kbd>Q</kbd>: save and quit. Continue later with <code>ctune resume</code>.</li>
+<li>In the line interface: <kbd>Enter</kbd> takes the recommended answer, <kbd>B</kbd> goes back, <kbd>Q</kbd> saves and
+quits, and <kbd>Ctrl</kbd>+<kbd>C</kbd> stops the sound, saves and quits.</li>
+</ul>
+<h3 id="try-wizard-steps">What the wizard does today</h3>
+<p>13 steps, or 12 with one microphone. The progress is saved after every step.</p>
+<ol>
+<li><strong>Start:</strong> the name of the hall and what you want to do today.</li>
+<li><strong>Mac check:</strong> the computer and the console's USB audio card.</li>
+<li><strong>Console:</strong> finds the console on the network, asks you to confirm it and checks the connection.</li>
+<li><strong>Reading the console:</strong> reads all its settings without changing anything, then asks you to save a
+scene on the console.</li>
+<li><strong>Speakers:</strong> shows which output feeds the main speakers, the subwoofer, the monitors and so on, and asks
+you to confirm the outputs it is not sure about.</li>
+<li><strong>Equipment:</strong> a few questions the console cannot answer: active or passive speakers, size of the
+listening area, how many measurement microphones and which model.</li>
+<li><strong>Microphones:</strong> you scratch each microphone and it finds which input it is on. It tells you what to do
+on the console, for example switch on +48V or mute that channel.</li>
+<li><strong>Playback path:</strong> checks that the computer's sound goes to the hall speakers, not to the monitors or the
+stream.</li>
+<li><strong>Level:</strong> sets a safe measuring level.</li>
+<li><strong>Microphone calibration:</strong> only with several microphones; compares them against each other.</li>
+<li><strong>Measurement rounds:</strong> test sweeps at the spots in the room.</li>
+<li><strong>Results:</strong> what was measured, in plain words.</li>
+<li><strong>What next:</strong> what to do after this session.</li>
+</ol>
+<h3 id="try-wizard-safety">Safety before any sound</h3>
+<ul>
+<li>The wizard never mutes or unmutes anything itself. On a real console <strong>you mute the measurement microphone
+channels by hand</strong>, and it tells you which ones.</li>
+<li>Before the first sound it reads the console again. While a channel that listens to a measurement microphone is
+unmuted and can reach the speakers, it <strong>refuses to make any sound</strong>, because that could cause
+feedback.</li>
+<li>This check sees channels. A microphone routed straight to an output, bypassing a channel, is not checked yet, so
+check your routing yourself.</li>
+<li>Every sound has a warning screen first (“Play the test sound” or “Not yet”), and measurement rounds count down
+3 seconds.</li>
+</ul>
+<h3 id="try-wizard-demo">What you will see in the demo</h3>
+<p>In the emulator the measurement microphone's channel (channel 12) starts unmuted, and the emulator cannot be muted by
+hand yet. So the demo stops at the <strong>Playback path</strong> step with the message “Channel 12 still sends a
+measurement microphone to the speakers. Mute it on the console, then press Enter.” Pressing Enter again only repeats the
+check. This is the safety rule at work, not a fault. Explore the first steps, then save and quit
+(<kbd>Ctrl</kbd>+<kbd>Q</kbd>, or <kbd>Q</kbd> in the line interface).</p>
+<h3 id="try-wizard-not-yet">What it does not do yet</h3>
+<ul>
+<li>It does not propose any changes: crossover, subwoofer level and timing, system EQ (milestone M4).</li>
+<li>It does not write anything to the console, and there is no apply, undo or verify yet (M5).</li>
+<li>The speaker-by-speaker check and the separate subwoofer and main-speaker measurement need temporary mutes, so they
+come into the wizard with M5. They exist today only as expert commands.</li>
+<li>No report file yet (M6).</li>
+<li>It has not been run at a real console yet. That is part of the pilot (M7).</li>
+</ul>
+</div></section>
+<section class="section section-alt" id="hardware-check"><div class="wrap prose"><h2>For console owners: hardware checks</h2>
 <p>Some console behaviour can only be confirmed by a person at a real console. Each check is one row of the
 <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a>. Your report moves a feature from “advice only” to “ChurchTune may write
 this” for that model and firmware.</p>
@@ -123,8 +202,8 @@ firmware, the ChurchTune commit (<code>git rev-parse --short HEAD</code>) and wh
 <p>Read-only dumps of other models, firmware versions and routings help the console driver (M1) recognise more
 systems. Remove names and anything personal first; the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">contributing guide</a> explains
 how.</p></div></section>
-<section class="section section-alt" id="volunteer-workflow"><div class="wrap prose"><h2>Coming later: tuning your system <span class="tag">Coming later</span></h2>
-<p>This is how the guided wizard is planned to work once milestones M3–M6 are done. It does not exist yet.</p>
+<section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Coming later: tuning your system <span class="tag">Coming later</span></h2>
+<p>This is how the complete wizard is planned to work once milestones M4–M6 are done. The first two steps, reading the console and measuring, are already in the wizard (see <a href="#try-wizard">above</a>); the rest is still being built.</p>
 <ol>
 <li id="workflow-read"><strong>Read the console.</strong> ChurchTune finds the console and shows what it found, for
 example “X32 Producer, main speakers on Matrix 1/2, subwoofer on Matrix 3. Correct?”. It asks only what it cannot
@@ -141,7 +220,7 @@ and each value is read back.</li>
 <li id="workflow-verify"><strong>Verify and report.</strong> It measures again, shows before and after, offers to undo
 if it is not better, saves a report and reminds you to save a scene on the console.</li>
 </ol></div></section>
-<section class="section" id="get-help"><div class="wrap prose"><h2>Questions and problems</h2>
+<section class="section section-alt" id="get-help"><div class="wrap prose"><h2>Questions and problems</h2>
 <ul>
 <li>Questions and ideas: <a href="https://github.com/mihailShumilov/ChurchAutoTune/discussions">GitHub Discussions</a>.</li>
 <li>Bugs and feature requests: <a href="https://github.com/mihailShumilov/ChurchAutoTune/issues/new/choose">issue forms</a>.</li>

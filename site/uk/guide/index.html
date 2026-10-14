@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Інструкція — ChurchTune</title>
-<meta name="description" content="Як спробувати ChurchTune вже сьогодні: встановити версію для розробників, запустити на емуляторі пульта, перевірити свій X32 чи M32 і повідомити результат, а також яке обладнання знадобиться.">
+<meta name="description" content="Як спробувати ChurchTune вже сьогодні: встановити версію для розробників, пройти покроковий майстер на емуляторі пульта з імітованим залом, перевірити свій X32 чи M32 і повідомити результат, а також яке обладнання знадобиться.">
 <link rel="canonical" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/guide/">
 <link rel="alternate" hreflang="en" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/"><link rel="alternate" hreflang="uk" href="https://mihailshumilov.github.io/ChurchAutoTune/uk/guide/"><link rel="alternate" hreflang="es" href="https://mihailshumilov.github.io/ChurchAutoTune/es/guide/"><link rel="alternate" hreflang="x-default" href="https://mihailshumilov.github.io/ChurchAutoTune/en/guide/">
 <link rel="icon" href="../../assets/logo.svg" type="image/svg+xml">
@@ -15,7 +15,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ChurchTune">
 <meta property="og:title" content="Інструкція — ChurchTune">
-<meta property="og:description" content="Як спробувати ChurchTune вже сьогодні: встановити версію для розробників, запустити на емуляторі пульта, перевірити свій X32 чи M32 і повідомити результат, а також яке обладнання знадобиться.">
+<meta property="og:description" content="Як спробувати ChurchTune вже сьогодні: встановити версію для розробників, пройти покроковий майстер на емуляторі пульта з імітованим залом, перевірити свій X32 чи M32 і повідомити результат, а також яке обладнання знадобиться.">
 <meta property="og:url" content="https://mihailshumilov.github.io/ChurchAutoTune/uk/guide/">
 <meta property="og:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -25,7 +25,7 @@
 <meta property="og:locale:alternate" content="en_US"><meta property="og:locale:alternate" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Інструкція — ChurchTune">
-<meta name="twitter:description" content="Як спробувати ChurchTune вже сьогодні: встановити версію для розробників, запустити на емуляторі пульта, перевірити свій X32 чи M32 і повідомити результат, а також яке обладнання знадобиться.">
+<meta name="twitter:description" content="Як спробувати ChurchTune вже сьогодні: встановити версію для розробників, пройти покроковий майстер на емуляторі пульта з імітованим залом, перевірити свій X32 чи M32 і повідомити результат, а також яке обладнання знадобиться.">
 <meta name="twitter:image" content="https://mihailshumilov.github.io/ChurchAutoTune/assets/og.png">
 <meta name="twitter:image:alt" content="ChurchTune: безкоштовне налаштування звуку для церков з Behringer X32 або Midas M32">
 </head>
@@ -46,17 +46,19 @@
 <h1>ChurchTune сьогодні</h1>
 <p class="lead">Чесна інструкція: що можна зробити вже зараз і що буде далі. Вона доповнюватиметься з кожним етапом.</p>
 <p class="updated">Оновлено: <time datetime="2026-10-14">14 жовтня 2026</time></p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> Програми для волонтерів ще немає. Те, що можна спробувати сьогодні, — для розробників і тестувальників. Дивіться <a href="../../uk/roadmap/">план</a>.</p></div>
-<nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">На цій сторінці</h2><ol><li><a href="#today">Що можна зробити сьогодні</a></li><li><a href="#equipment">Яке обладнання знадобиться</a></li><li><a href="#developers">Для розробників і тестувальників</a></li><li><a href="#hardware-check">Для власників пультів: перевірка обладнання</a></li><li><a href="#volunteer-workflow">Згодом: налаштування вашої системи</a></li><li><a href="#get-help">Питання й проблеми</a></li></ol></nav>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> Покроковий майстер уже є, але поки лише читає пульт і вимірює: він ще не пропонує й не застосовує жодних змін. Запускається лише з вихідного коду. Поки не використовуйте його на живій системі своєї церкви. Дивіться <a href="../../uk/roadmap/">план</a>.</p></div>
+<nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">На цій сторінці</h2><ol><li><a href="#today">Що можна зробити сьогодні</a></li><li><a href="#equipment">Яке обладнання знадобиться</a></li><li><a href="#developers">Для розробників і тестувальників</a></li><li><a href="#try-wizard">Спробувати майстер без обладнання</a></li><li><a href="#hardware-check">Для власників пультів: перевірка обладнання</a></li><li><a href="#volunteer-workflow">Згодом: налаштування вашої системи</a></li><li><a href="#get-help">Питання й проблеми</a></li></ol></nav>
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>Що можна зробити сьогодні <span class="tag tag-now">Зараз</span></h2>
 <ul>
+<li><strong>Кожен, хто вміє користуватися терміналом</strong>, може пройти покроковий майстер на вбудованому емуляторі
+пульта з імітованим залом: без пульта, без колонок, без звуку. Дивіться <a href="#try-wizard">Спробувати майстер без обладнання</a>.</li>
 <li><strong>Розробники й тестувальники</strong> можуть установити проєкт, запустити тести й спробувати експертний
-командний рядок на вбудованому емуляторі пульта з імітованим звуком. Справжній пульт і колонки не задіяні.</li>
+командний рядок на емуляторі.</li>
 <li><strong>Власники пультів</strong> можуть пройти перевірку на справжньому X32 чи M32 і повідомити результат.
 Зараз це найцінніша допомога.</li>
-<li><strong>Волонтерам</strong>, які хочуть налаштувати систему своєї церкви: будь ласка, дочекайтеся покрокового
-майстра. Стежте за випусками на <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a>, щоб дізнатися, коли він буде готовий.</li>
+<li><strong>Волонтерам</strong>, які хочуть налаштувати систему своєї церкви: будь ласка, зачекайте. Майстер ще не
+пропонує й не застосовує змін (етапи M4 і M5). Стежте за випусками на <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a>, щоб дізнатися, коли він буде готовий.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>Яке обладнання знадобиться</h2>
 <p>Для справжнього налаштування — згодом. Для версії для розробників нічого з цього не потрібно.</p>
@@ -67,7 +69,7 @@
 <li><strong>USB-кабель</strong> від Mac до пульта та <strong>мережеве підключення</strong> до пульта (кабель або
 Wi-Fi): через нього ChurchTune читає налаштування.</li>
 <li><strong>Вимірювальний мікрофон</strong>, наприклад Behringer ECM8000, зі стійкою та XLR-кабелем до входу пульта.
-Заплановано й роботу з кількома мікрофонами одночасно, з калібруванням.</li>
+ChurchTune може працювати й із кількома мікрофонами одночасно та калібрувати їх один відносно одного; поки це перевірено лише на імітованих мікрофонах.</li>
 <li><strong>Порожній тихий зал</strong> і приблизно 1–2 години.</li>
 </ul></div></section>
 <section class="section section-alt" id="developers"><div class="wrap prose"><h2>Для розробників і тестувальників</h2>
@@ -84,19 +86,94 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # усі тести: емулятор пульта + імітований звук
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # реальна сесія в залі 2026-10-02</code></pre>
 <h3 id="emulator">3. Експертний командний рядок на емуляторі</h3>
-<p>Поки що емулятор пульта живе в тестах (команду <code>ctune emulator</code> заплановано на M1). Запустіть його в
-одному терміналі — він виведе свій порт:</p>
-<pre><code>CTUNE_DEV_SAFE=1 uv run python -c "import time; from tests.emulator.x32_emulator import X32Emulator; e = X32Emulator().start(); print('Emulator port:', e.port, flush=True); time.sleep(3600)"</code></pre>
-<p>У другому терміналі запустіть перевірку (лише читання) з імітованим звуком, замінивши <code>PORT</code>:</p>
-<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo check
-CTUNE_DEV_SAFE=1 uv run ctune --help</code></pre>
-<p>Тексти командного рядка поки що російською. Це тимчасовий інструмент для розробників; на етапі M3 його замінить
-майстер для волонтерів.</p>
+<p>Доки pull request #8–#10 не злиті, наведені нижче команди є в гілці <code>m3-wizard</code>. У вашій копії:</p>
+<pre><code>git checkout m3-wizard
+uv sync</code></pre>
+<p>Найпростіше — глобальний параметр <code>--emulator</code>: він запускає емулятор пульта всередині програми на час
+однієї команди.</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor     # перевірити комп'ютер і пульт, пояснити схему колонок
+CTUNE_DEV_SAFE=1 uv run ctune --help                # усі команди</code></pre>
+<p>Можна також запустити емулятор окремо в одному терміналі (він виводить свій порт і працює до Ctrl+C) і звертатися
+до нього з другого терміналу, замінивши <code>PORT</code>:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P
+CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/ctune-demo doctor</code></pre>
+<p>Вивід більшості експертних команд поки що російською; майстер нижче перекладено. Експертний командний рядок
+залишається інструментом для розробників поряд із майстром.</p>
 <h3 id="full-check">4. Перед pull request</h3>
 <pre><code>CTUNE_DEV_SAFE=1 uv run ruff format --check . &amp;&amp; uv run ruff check . &amp;&amp; uv run mypy \
   &amp;&amp; CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json &amp;&amp; uv run python scripts/check_coverage.py</code></pre>
 <p>Спершу прочитайте <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">посібник для учасників</a> (англ.), особливо правила безпеки.</p></div></section>
-<section class="section" id="hardware-check"><div class="wrap prose"><h2>Для власників пультів: перевірка обладнання</h2>
+<section class="section" id="try-wizard"><div class="wrap prose"><h2>Спробувати майстер без обладнання <span class="tag tag-now">Зараз</span></h2>
+<p>Покроковий майстер — це те, чим користуватимуться волонтери. Уже сьогодні його можна пройти на вбудованому емуляторі
+пульта з імітованим залом. Нічого не виходить за межі вашого комп'ютера: пульт не задіяний, звук не відтворюється.</p>
+<h3 id="try-wizard-start">Запуск</h3>
+<p>З копії репозиторію з установленим uv, у гілці <code>m3-wizard</code> (дивіться <a href="#install">Встановлення</a> і
+<a href="#emulator">крок 3</a>):</p>
+<pre><code>uv sync
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # повноекранний майстер
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo wizard --plain --lang uk         # рядковий інтерфейс українською
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo resume                           # продовжити збережену сесію</code></pre>
+<p><code>--emulator</code> вмикає вбудований емулятор пульта, <code>--audio fake</code> — імітований зал, а
+<code>--home</code> тримає файли демонстрації окремо від справжніх (без нього вони потрапляють у <code>~/ChurchTune</code>).
+<code>--lang</code> приймає <code>en</code>, <code>ru</code> або <code>uk</code>. Рядковий інтерфейс (<code>--plain</code>)
+працює з програмами екранного доступу й у скриптах.</p>
+<h3 id="try-wizard-keys">Клавіші</h3>
+<ul>
+<li><kbd>Ctrl</kbd>+<kbd>C</kbd> або <kbd>пробіл</kbd>: негайно зупинити звук, на будь-якому екрані.</li>
+<li><kbd>Esc</kbd>: на крок назад, де екран це дозволяє.</li>
+<li><kbd>Ctrl</kbd>+<kbd>Q</kbd>: зберегти й вийти. Продовжити пізніше — <code>ctune resume</code>.</li>
+<li>У рядковому інтерфейсі: <kbd>Enter</kbd> вибирає рекомендовану відповідь, <kbd>B</kbd> — назад, <kbd>Q</kbd> — зберегти
+й вийти, а <kbd>Ctrl</kbd>+<kbd>C</kbd> зупиняє звук, зберігає й виходить.</li>
+</ul>
+<h3 id="try-wizard-steps">Що майстер робить сьогодні</h3>
+<p>13 кроків, або 12 з одним мікрофоном. Прогрес зберігається після кожного кроку.</p>
+<ol>
+<li><strong>Початок:</strong> назва зали й що ви хочете зробити сьогодні.</li>
+<li><strong>Перевірка Mac:</strong> комп'ютер і USB-аудіокарта пульта.</li>
+<li><strong>Пульт:</strong> знаходить пульт у мережі, просить підтвердити його й перевіряє з'єднання.</li>
+<li><strong>Читання пульта:</strong> читає всі налаштування, нічого не змінюючи, і просить зберегти сцену на пульті.</li>
+<li><strong>Колонки:</strong> показує, який вихід живить основні колонки, сабвуфер, монітори тощо, і просить підтвердити
+виходи, у яких він не впевнений.</li>
+<li><strong>Обладнання:</strong> кілька питань, на які пульт не відповість: активні чи пасивні колонки, розмір зони
+слухачів, скільки вимірювальних мікрофонів і якої моделі.</li>
+<li><strong>Мікрофони:</strong> ви шкрябаєте кожен мікрофон, і майстер знаходить його вхід. Він підказує, що зробити на
+пульті, наприклад увімкнути +48V чи вимкнути (mute) цей канал.</li>
+<li><strong>Шлях відтворення:</strong> перевіряє, що звук із комп'ютера йде в колонки залу, а не в монітори чи
+трансляцію.</li>
+<li><strong>Рівень:</strong> підбирає безпечний рівень вимірювання.</li>
+<li><strong>Калібрування мікрофонів:</strong> лише з кількома мікрофонами; порівнює їх між собою.</li>
+<li><strong>Раунди вимірювань:</strong> тестові свіпи в точках залу.</li>
+<li><strong>Результати:</strong> що виміряно, простими словами.</li>
+<li><strong>Що далі:</strong> що робити після цієї сесії.</li>
+</ol>
+<h3 id="try-wizard-safety">Безпека перед будь-яким звуком</h3>
+<ul>
+<li>Майстер ніколи сам нічого не вимикає й не вмикає. На справжньому пульті <strong>канали вимірювальних мікрофонів ви
+вимикаєте (mute) вручну</strong>, а він підказує, які саме.</li>
+<li>Перед першим звуком він ще раз читає пульт. Доки канал, що слухає вимірювальний мікрофон, не вимкнено й він може
+потрапити в колонки, майстер <strong>відмовляється відтворювати будь-який звук</strong>, бо це може дати заводку.</li>
+<li>Ця перевірка бачить канали. Мікрофон, скерований прямо на вихід в обхід каналу, поки не перевіряється, тож
+перевірте маршрутизацію самі.</li>
+<li>Перед кожним звуком спершу є екран-попередження («Відтворити тестовий звук» або «Ще ні»), а раунди вимірювань
+відраховують 3 секунди.</li>
+</ul>
+<h3 id="try-wizard-demo">Що ви побачите в демонстрації</h3>
+<p>В емуляторі канал вимірювального мікрофона (канал 12) спочатку не вимкнено, а вимкнути його вручну в емуляторі поки
+не можна. Тому демонстрація зупиняється на кроці <strong>Шлях відтворення</strong> з повідомленням, що канал 12 досі
+подає вимірювальний мікрофон у колонки і його треба вимкнути на пульті. Повторне Enter лише повторює перевірку. Це
+спрацьовує правило безпеки, а не помилка. Пройдіть перші кроки, а потім збережіть і вийдіть (<kbd>Ctrl</kbd>+<kbd>Q</kbd>
+або <kbd>Q</kbd> у рядковому інтерфейсі).</p>
+<h3 id="try-wizard-not-yet">Чого він поки не робить</h3>
+<ul>
+<li>Не пропонує змін: кросовер, рівень і затримка сабвуфера, еквалайзер системи (етап M4).</li>
+<li>Нічого не записує в пульт; застосування, скасування й перевірки ще немає (M5).</li>
+<li>Перевірка колонок по одній і окремий замір сабвуфера й основних колонок потребують тимчасового mute, тож вони
+з'являться в майстрі разом з M5. Зараз вони є лише як експертні команди.</li>
+<li>Файлу звіту ще немає (M6).</li>
+<li>На справжньому пульті майстер ще не запускали. Це частина пілоту (M7).</li>
+</ul>
+</div></section>
+<section class="section section-alt" id="hardware-check"><div class="wrap prose"><h2>Для власників пультів: перевірка обладнання</h2>
 <p>Деяку поведінку пульта може підтвердити лише людина за справжнім пультом. Кожна перевірка — це один рядок
 <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">чек-листа обладнання</a> (англ.). Ваш звіт переводить функцію з режиму «лише порада» в режим
 «ChurchTune може це записувати» для цієї моделі й прошивки.</p>
@@ -124,8 +201,8 @@ CTUNE_DEV_SAFE=1 uv run ctune --help</code></pre>
 <p>Дампи (лише читання) інших моделей, прошивок і маршрутизацій допомагають драйверу пульта (M1) розпізнавати більше
 систем. Спершу приберіть назви й усе особисте; як це зробити, пояснює <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">посібник для
 учасників</a>.</p></div></section>
-<section class="section section-alt" id="volunteer-workflow"><div class="wrap prose"><h2>Згодом: налаштування вашої системи <span class="tag">Згодом</span></h2>
-<p>Так планується робота покрокового майстра після завершення етапів M3–M6. Поки що його немає.</p>
+<section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Згодом: налаштування вашої системи <span class="tag">Згодом</span></h2>
+<p>Так планується робота повного майстра після завершення етапів M4–M6. Перші два кроки, читання пульта й вимірювання, уже є в майстрі (дивіться <a href="#try-wizard">вище</a>); решта ще в розробці.</p>
 <ol>
 <li id="workflow-read"><strong>Прочитати пульт.</strong> ChurchTune знаходить пульт і показує, що знайшов, наприклад:
 «X32 Producer, основні колонки на Matrix 1/2, сабвуфер на Matrix 3. Правильно?». Питає лише те, чого не може
@@ -141,7 +218,7 @@ CTUNE_DEV_SAFE=1 uv run ctune --help</code></pre>
 <li id="workflow-verify"><strong>Перевірити й звітувати.</strong> Вимірює ще раз, показує «до» і «після», пропонує
 скасувати, якщо не стало краще, зберігає звіт і нагадує зберегти сцену на пульті.</li>
 </ol></div></section>
-<section class="section" id="get-help"><div class="wrap prose"><h2>Питання й проблеми</h2>
+<section class="section section-alt" id="get-help"><div class="wrap prose"><h2>Питання й проблеми</h2>
 <ul>
 <li>Питання й ідеї: <a href="https://github.com/mihailShumilov/ChurchAutoTune/discussions">GitHub Discussions</a>.</li>
 <li>Помилки й побажання: <a href="https://github.com/mihailShumilov/ChurchAutoTune/issues/new/choose">форми issue</a>.</li>
