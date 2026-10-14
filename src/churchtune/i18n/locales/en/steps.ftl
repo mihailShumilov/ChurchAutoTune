@@ -133,7 +133,7 @@ step-points-done = { $count } places measured.
 step-results-title = Results
 step-results-no-points = There are no measured places yet.
 step-results-what = What the measurement at { $count } places shows:
-step-results-next-milestones = Proposals for changes (crossover, subwoofer alignment, system EQ) and applying them come in the next version. Your measurement is saved for them.
+step-results-next-milestones = Your choices are saved. Writing them to the console, undo and the check measurement come in the next version; until then nothing on the console has changed.
 finding-hump = A hump around { $freq_hz } Hz (+{ $gain_db } dB): voices may sound boomy or boxy.
 finding-rt60-dry = The hall is rather dry (RT60 { $rt60_s } s): good for speech.
 finding-rt60-good = The hall reverberates moderately (RT60 { $rt60_s } s): good for speech and music.
@@ -178,9 +178,105 @@ point-middle-right = middle, right
 point-back-left = back rows, left
 point-back-centre = back rows, centre
 point-back-right = back rows, right
-point-number = seat { $number }
 step-finish-undo-by-hand = Put back what you changed by hand today (mutes, sends).
 step-points-put = { $count ->
     [one] Put the microphone here:
    *[other] Put the microphones at these places:
 }
+step-points-map = Plan of the hall: the stage is the solid bar at the top, the numbers are the places. Left and right as you face the stage.
+point-middle-centre = middle, centre
+proposal-what = { $count ->
+    [one] The measurement suggests { $count } package of changes. It shows what changes, why, and what to expect; add it to the plan or leave it out.
+   *[other] The measurement suggests { $count } packages of changes. Each shows what changes, why, and what to expect; add it to the plan or leave it out.
+}
+proposal-nothing = Nothing to change: the system is already close to the target.
+package-crossover = Crossover between the subwoofer and the main speakers
+package-crossover-why = The low notes go only to the subwoofer and the rest only to the main speakers, so they stop cancelling each other where they overlap.
+package-alignment = Subwoofer alignment
+package-alignment-why = A small delay (and maybe a polarity flip) makes the subwoofer and the main speakers arrive together, so they add up instead of cancelling.
+package-sub-level = Subwoofer level
+package-sub-level-why = The subwoofer and the main speakers should be about equally loud where they meet. Many people like the subwoofer 2–4 dB louder for music: adjust by ear afterwards.
+package-system-eq = System EQ
+package-system-eq-why = Gentle corrections for what the hall does to the sound in most seats. Narrow dips in single seats are left alone: EQ cannot fix them.
+package-suggest-only = This one is advice only: the program will show the values and you set them by hand.
+package-question = Add “{ $package }” to the change plan?
+package-keep = Add to plan
+package-keep-advice = Add to plan as advice
+package-skip = Leave it out
+risk-low = Risk: low. Small changes, easy to undo.
+risk-medium = Risk: medium. The balance of the system changes audibly; listen afterwards.
+risk-unverified = Risk: this setting has not been checked on a real console yet, so the program never writes it itself.
+change-what = Where
+change-before = Now
+change-after = Proposed
+eq-path-band = { $path }, band { $band }
+eq-band-filter = cutoff { $freq_hz } Hz ({ $type })
+eq-band-flat = off (0 dB)
+eq-band-peq = { $type } { $freq_hz } Hz, { $gain_db } dB, Q { $q }
+delay-of = Delay of { $output }
+fader-of = Fader of { $path }
+polarity-of = Polarity of { $path }
+polarity-normal = normal
+polarity-inverted = inverted
+value-ms = { $ms } ms
+value-db = { $db } dB
+effect-junction-score = Expected: the bass where the subwoofer and the main speakers meet gets fuller — { $after_db } dB instead of { $before_db } dB (higher is better).
+effect-rms-deviation = Expected: the sound gets a little more even — off the target curve by { $after_db } dB instead of { $before_db } dB (lower is better). The check measurement will show the real result.
+note-crossover-more-lows-to-tops = { $path }: the new cutoff lets a little more bass into the main speakers at { $at_hz } Hz ({ $old_db } → { $new_db } dB).
+note-crossover-tops-on-main = The main speakers hang directly on Main LR, which also feeds the subwoofer, so the crossover cannot be set on the console. Set a { $fc_hz } Hz high-pass in the speakers' own processor, or move the main speakers to their own matrices.
+note-crossover-sub-not-on-matrix = The subwoofer is not on a matrix, so the crossover cannot be set by the program. Set a { $fc_hz } Hz low-pass for the subwoofer and a { $fc_hz } Hz high-pass for the main speakers by hand.
+note-alignment-delay-sub = Delay the subwoofer by { $delay_ms } ms.
+note-alignment-delay-tops = Delay the main speakers (and the other speakers with the same programme) by { $delay_ms } ms.
+note-alignment-polarity = Flip the subwoofer's polarity.
+note-alignment-not-needed = Subwoofer alignment: no change needed (it would gain only { $gain_db } dB).
+note-sub-level = Change the subwoofer fader by { $change_db } dB.
+note-sub-level-above-zero = The fader would end at { $after_db } dB, above 0 dB: turn up the subwoofer's amplifier or processor instead.
+note-system-eq-on = The EQ goes on { $path }.
+note-system-eq-above-fc = The subwoofer has its own path, so this EQ stays above { $fc_hz } Hz.
+note-system-eq-predicted-junction = It is designed for how the system will sound after the packages before it.
+note-junction-not-measured = The subwoofer and the main speakers were not measured separately yet, so crossover, alignment and subwoofer level are not proposed this time: set blind, a crossover can leave a gap in the bass. They come in a later version.
+audit-what = Advice on the input channels (nothing will be changed; decide by ear, one channel at a time):
+audit-by-ear = Change one setting at a time during a rehearsal and listen.
+audit-voice-no-hpf = { $count ->
+    [one] Channel { $channels } is a voice without a low cut (HPF): switch it on at about 100 Hz.
+   *[other] Channels { $channels } are voices without a low cut (HPF): switch it on at about 100 Hz.
+}
+audit-voice-hpf-high = { $count ->
+    [one] Voice channel { $channels } cuts the lows very high ({ $freq_hz } Hz). If the voice sounds thin, lower it 20–30 Hz at a time; for speech not below about 120 Hz.
+   *[other] Voice channels { $channels } cut the lows very high (up to { $freq_hz } Hz). If a voice sounds thin, lower it 20–30 Hz at a time; for speech not below about 120 Hz.
+}
+audit-shared-cut = Channels { $channels } all cut around { $freq_hz } Hz (about { $gain_db } dB). A common habit; check by ear whether they are still needed, 3 dB at a time.
+audit-deep-cut = { $count ->
+    [one] Channel { $channels } has a very deep cut (down to { $gain_db } dB). Check whether it is still needed, 3 dB at a time.
+   *[other] Channels { $channels } have very deep cuts (down to { $gain_db } dB). Check whether they are still needed, 3 dB at a time.
+}
+audit-big-boost = { $count ->
+    [one] Channel { $channels } has a strong boost (up to +{ $gain_db } dB). It can cause feedback.
+   *[other] Channels { $channels } have strong boosts (up to +{ $gain_db } dB). They can cause feedback.
+}
+audit-phantom-on-dynamic = { $count ->
+    [one] Channel { $channels } looks like a dynamic microphone with +48V on: it is not needed there. Switch it off only while the channel is muted, or it clicks.
+   *[other] Channels { $channels } look like dynamic microphones with +48V on: it is not needed there. Switch it off only while the channel is muted, or it clicks.
+}
+effect-sub-louder = Now the subwoofer is { $db } dB louder than the main speakers where they meet; afterwards about equal.
+effect-sub-quieter = Now the subwoofer is { $db } dB quieter than the main speakers where they meet; afterwards about equal.
+note-crossover-filters = Cutoff at { $fc_hz } Hz ({ $slope }) for the subwoofer and the main speakers.
+note-crossover-reset = { $count ->
+    [one] { $path }: { $count } old correction goes back to 0 dB (the crossover does its job now).
+   *[other] { $path }: { $count } old corrections go back to 0 dB (the crossover does their job now).
+}
+note-crossover-shared-path = One path feeds both the subwoofer and other speakers, so a crossover cannot be set on it. Give the subwoofer its own matrix, or set a { $fc_hz } Hz cutoff in the speakers' processors.
+note-crossover-check-speakers = Check that the main speakers have no low cut or “with subwoofer” mode of their own and the subwoofer no own high cut: filters in both places add up and move the crossover.
+note-alignment-delay-by-hand = Some of these speakers are not on the console's own outputs: set the { $delay_ms } ms delay in their processor.
+note-sub-level-by-ear = After the check measurement, adjust the subwoofer by ear for the music you play.
+note-system-eq-also-other-outputs = Main LR also feeds other outputs (stream, recording, another room): they get this EQ too.
+point-where = { $area }, about { $from_stage_m } m from the stage, { $from_centre_m } m { $side }
+point-left-of-aisle = left of the centre aisle
+point-right-of-aisle = right of the centre aisle
+step-points-map-round = On the plan only this round's places are numbered.
+step-points-template = The hall size was not given: this plan is for a typical 12 × 18 m hall, place the microphones roughly.
+audit-possible-feedback-notch = { $count ->
+    [one] Channel { $channels } has a narrow cut (down to { $gain_db } dB), probably protection against feedback. Make it at most half as deep, during a rehearsal, with the monitors on.
+   *[other] Channels { $channels } have narrow cuts (down to { $gain_db } dB), probably protection against feedback. Make them at most half as deep, during a rehearsal, with the monitors on.
+}
+audit-shared-cut-room = Channels { $channels } all cut around { $freq_hz } Hz (about { $gain_db } dB), where the system EQ now cuts too. After the tuning, make these cuts shallower, 3 dB at a time, one channel after another.

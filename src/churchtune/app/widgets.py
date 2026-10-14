@@ -7,7 +7,7 @@ from rich.text import Text as RichText
 from textual.widgets import Static
 
 from churchtune.i18n import Translator
-from churchtune.wizard.protocol import Prompt, StepHeader, Text, render_text
+from churchtune.wizard.protocol import Prompt, StepHeader, Text, render_text, split_question
 
 METER_FLOOR_DBFS = -60.0
 METER_WIDTH = 30
@@ -36,7 +36,8 @@ class PromptView(Static):
     def show(self, translate: Translator, prompt: Prompt) -> None:
         """Show a prompt's text."""
         parts: list[RichText | RichTable] = []
-        for index, paragraph in enumerate(prompt.body):
+        before, question = split_question(prompt)
+        for index, paragraph in enumerate(before):
             style = "italic" if index == 0 and len(prompt.body) > 1 else ""
             parts.append(RichText(render(translate, paragraph) + "\n", style=style))
         if prompt.table is not None:
@@ -46,6 +47,7 @@ class PromptView(Static):
             parts.append(table)
         if prompt.picture:
             parts.append(RichText(prompt.picture))
+        parts.extend(RichText("\n" + render(translate, q), style="bold") for q in question)
         self.update(_stack(parts))
 
 

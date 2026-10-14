@@ -155,6 +155,17 @@ class Prompter(Protocol):
         ...
 
 
+def split_question(prompt: Prompt) -> tuple[tuple[Text, ...], tuple[Text, ...]]:
+    """The paragraphs before the table and after it.
+
+    When a choice carries a table, its last paragraph is the question: the UI shows it after
+    the table, right above the options.
+    """
+    if prompt.options and prompt.table is not None and len(prompt.body) > 1:
+        return prompt.body[:-1], prompt.body[-1:]
+    return prompt.body, ()
+
+
 def to_dict(message: Prompt | Answer | StepHeader | Text) -> dict[str, Any]:
     """A message as plain JSON-ready data."""
     return asdict(message)

@@ -75,3 +75,4 @@ output-main = выход { $number }
 output-aux = aux-выход { $number }
 alignment-delay = { $where }: задержка { $ms } мс
 alignment-polarity = { $where }: перевёрнута полярность
+signal-main-lr = Main LR

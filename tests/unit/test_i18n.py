@@ -8,6 +8,9 @@ from fluent.syntax import FluentParser, FluentSerializer, ast
 
 from churchtune import errors
 from churchtune.cli.wizard import PLAIN_TEXTS
+from churchtune.design.channel_audit import AuditCode
+from churchtune.design.packages import NoteCode as PackageNoteCode
+from churchtune.design.packages import PackageKind, Risk
 from churchtune.domain.snapshot import OutputKind, SourceKind
 from churchtune.domain.topology import SpeakerRole, Variant
 from churchtune.i18n import LANGUAGES, Translator, catalogue_files, detect_language
@@ -15,8 +18,8 @@ from churchtune.measure.gates import WarningCode
 from churchtune.measure.level import RampStop, SweepStop
 from churchtune.measure.mic_mapping import MappingOutcome
 from churchtune.measure.noise import NoiseHint
+from churchtune.measure.plan import ROWS, SIDES
 from churchtune.wizard.protocol import Kind
-from churchtune.wizard.steps.measure import DEFAULT_PLACES
 from churchtune.wizard.steps.setup import MIC_MODELS
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "churchtune"
@@ -82,7 +85,13 @@ def used_keys() -> set[str]:
     keys |= {f"signal-{kebab(k.value)}" for k in SourceKind}
     keys |= {f"output-{k.value}" for k in OutputKind}
     keys |= set(PLAIN_TEXTS.values())
-    keys |= {f"point-{p}" for p in DEFAULT_PLACES}
+    keys |= {f"point-{r}-{s}" for r in ROWS for s in SIDES}
+    keys |= {f"package-{kebab(k.value)}" for k in PackageKind}
+    keys |= {f"package-{kebab(k.value)}-why" for k in PackageKind}
+    keys |= {f"risk-{r.value}" for r in Risk}
+    keys |= {f"audit-{a.value}" for a in AuditCode}
+    keys |= {f"note-{c.value}" for c in PackageNoteCode}
+    keys |= {f"effect-{m}" for m in ("junction-score", "rms-deviation")}
     keys |= {f"audio-problem-{p}" for p in ("channels", "sample-rate")}
     keys |= {"step-equipment-model-other"} if "other" in MIC_MODELS else set()
     keys |= {

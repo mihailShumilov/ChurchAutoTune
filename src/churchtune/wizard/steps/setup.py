@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from churchtune.domain.snapshot import ConsoleSnapshot
 from churchtune.domain.text import slugify
-from churchtune.domain.topology import TopologyGuess
+from churchtune.domain.topology import TopologyGuess, output_key
 from churchtune.errors import ChurchTuneError
 from churchtune.mixers.base import MixerDriver
 from churchtune.storage.files import read_snapshot, read_wizard_state, write_snapshot
@@ -73,11 +73,6 @@ def venue_name(ctx: WizardContext, slug: str) -> str:
         if name:
             return name
     return slug
-
-
-def output_key(kind: str, number: int) -> str:
-    """Key of an output in ``WizardStateFile.roles``: ``"main 8"``."""
-    return f"{kind} {number}"
 
 
 # ------------------------------------------------------------------ S0

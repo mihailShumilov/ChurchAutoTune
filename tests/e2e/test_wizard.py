@@ -8,7 +8,13 @@ import pytest
 from churchtune.audio.fake.hall import FakeHall, FakeMic
 from churchtune.cli.wizard import X32ConsolePort
 from churchtune.measure.config import SweepConfig
-from churchtune.storage.files import load_points, read_session_mic_calibration, read_wizard_state
+from churchtune.storage.files import (
+    load_points,
+    read_packages,
+    read_plan,
+    read_session_mic_calibration,
+    read_wizard_state,
+)
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.protocol import Answer
 from churchtune.wizard.run import latest_session, resume, run_wizard, start
@@ -241,3 +247,58 @@ def test_the_session_keeps_its_own_calibration(rig):
     session = latest_session(services)
     assert session is not None
     assert read_session_mic_calibration(session) is not None
+
+
+def test_the_results_step_proposes_packages_and_saves_the_choice(rig):
+    emulator, hall, services = rig
+    volunteer = _volunteer(emulator, hall, **{"package-question": "skip"})
+    result = start(volunteer, services, "en")
+    assert result.finished
+    assert result.state.proposal_file is not None
+    stored = read_packages(services.workspace.root / result.state.proposal_file)
+    assert stored.packages
+    assert not any(p.selected for p in stored.packages)  # the volunteer skipped every one
+    kinds = [p.kind for p in stored.packages]
+    assert "system_eq" in kinds
+    assert "crossover" not in kinds  # never set blind: the wizard does not measure sub/tops yet
+    assert [n.code for n in stored.notes] == ["junction-not-measured"]
+    assert read_plan(services.workspace, result.state.venue) is not None
+    assert len(result.state.junction_points) == 4
+    keys = volunteer.shown_keys()
+    assert "proposal-what" in keys or "proposal-nothing" in keys
+    assert emulator.writes == []  # proposals are never written in M4
+
+
+def test_kept_packages_are_marked_selected(rig):
+    emulator, hall, services = rig
+    result = start(_volunteer(emulator, hall), services, "en")
+    stored = read_packages(services.workspace.root / result.state.proposal_file)
+    assert all(p.selected for p in stored.packages)
+
+
+def test_leaving_the_crossover_out_redesigns_the_eq_without_it(rig):
+    emulator, hall, services = rig
+
+    def leave_out_the_crossover(prompt):
+        keys = [text.key for text in prompt.body]
+        return Answer("skip" if "package-crossover" in keys else "keep")
+
+    volunteer = _volunteer(emulator, hall, **{"package-question": leave_out_the_crossover})
+    result = start(volunteer, services, "en")
+    stored = read_packages(services.workspace.root / result.state.proposal_file)
+    for package in stored.packages:
+        assert package.kind != "crossover"
+        assert "crossover" not in package.requires
+
+
+def test_a_plan_without_a_hall_size_keeps_the_stored_plan(rig):
+    emulator, hall, services = rig
+    first = _volunteer(emulator, hall, **{"step-equipment-hall": "14 x 22"})
+    start(first, services, "en")
+    stored = read_plan(services.workspace, "test-church")
+    assert stored is not None
+    assert (stored.width_m, stored.depth_m) == (14.0, 22.0)
+    second = _volunteer(emulator, hall, **{"step-welcome-venue": "test-church"})
+    start(second, services, "en")
+    again = read_plan(services.workspace, "test-church")
+    assert again == stored

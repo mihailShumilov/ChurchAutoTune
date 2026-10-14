@@ -33,11 +33,14 @@ from churchtune.measure.mic_mapping import MappingOutcome, ScratchResult, find_s
 from churchtune.measure.multi import RoundMeasurement, measure_round
 from churchtune.measure.noise import measure_background
 from churchtune.measure.path_check import check_path
+from churchtune.measure.plan import PointPlan, ascii_map, plan_points
 from churchtune.measure.rounds import Round, plan_rounds
 from churchtune.storage.files import (
+    read_plan,
     reusable_mic_calibration,
     save_point,
     write_mic_calibration,
+    write_plan,
     write_session_mic_calibration,
 )
 from churchtune.storage.models import (
@@ -47,30 +50,18 @@ from churchtune.storage.models import (
     PointMeta,
     WizardStateFile,
 )
+from churchtune.wizard.proposals import plan_file, plan_from_file
 from churchtune.wizard.protocol import Option, Table, Text
-from churchtune.wizard.services import WizardContext
+from churchtune.wizard.services import FS_HZ, WizardContext
 from churchtune.wizard.state import Navigate, Outcome
 from churchtune.wizard.steps.setup import ensure_driver, load_snapshot, measuring
 from churchtune.wizard.ui import choose, info, kebab, t, task
 
-FS_HZ = 48000.0
 # The scratch search listens in short takes, up to 15 s, and stops at the first clear answer.
 LISTEN_TAKE_S = 3.0
 LISTEN_TAKES = 5
 COUNTDOWN_S = 3
 MIN_RUN = 3  # three or more numbers in a row are written as a range
-MIN_POINTS = 8
-# Where the eight points of the default plan are (the hall-shaped plan of SPEC §8.3: M4).
-DEFAULT_PLACES = (
-    "front-left",
-    "front-centre",
-    "front-right",
-    "middle-left",
-    "middle-right",
-    "back-left",
-    "back-centre",
-    "back-right",
-)
 RETRY, SKIP, ACCEPT, PLAY, LATER = "retry", "skip", "accept", "play", "later"
 GATES = QualityGates()
 RAMP_FOUND = (RampStop.TARGET, RampStop.ABOVE_TARGET)
@@ -503,17 +494,40 @@ class Calibration:
 
 
 # ------------------------------------------------------------------ S10
-def default_points(count: int = MIN_POINTS) -> tuple[str, ...]:
-    """Point ids of the default plan (the hall-shaped plan of SPEC §8.3 arrives with M4)."""
-    return tuple(f"p{n}" for n in range(1, count + 1))
+def venue_plan(ctx: WizardContext) -> PointPlan:
+    """The venue's point plan, made from the hall size the first time and kept for verify.
+
+    Without a hall size this session, any stored plan is used as it is; a stored plan for
+    another hall size is replaced.
+    """
+    state = ctx.box.state
+    workspace = ctx.services.workspace
+    hall = state.hall
+    width, depth = (hall.width_m, hall.depth_m) if hall else (None, None)
+    stored = read_plan(workspace, state.venue)
+    if stored is not None:
+        plan = plan_from_file(stored)
+        if hall is None or (plan.width_m, plan.depth_m) == (width, depth):
+            return plan
+    plan = plan_points(width, depth)
+    write_plan(workspace, state.venue, plan_file(plan))
+    return plan
 
 
-def place_text(points: tuple[str, ...], point: str) -> Text:
-    """Where a point of the default plan is, in words ("front rows, left")."""
-    index = points.index(point)
-    if len(points) == len(DEFAULT_PLACES):
-        return t(f"point-{DEFAULT_PLACES[index]}")
-    return t("point-number", number=index + 1)
+def place_text(plan: PointPlan, point: str) -> Text:
+    """Where a point is, in words.
+
+    "front rows, left, about 4 m from the stage, 2 m left of the centre aisle".
+    """
+    where = plan.point(point)
+    side = plan.from_centre_m(point)
+    return t(
+        "point-where",
+        area=t(f"point-{where.row}-{where.side}"),
+        from_stage_m=round(plan.from_stage_m(point)),
+        from_centre_m=abs(side),
+        side=t("point-right-of-aisle") if side > 0 else t("point-left-of-aisle"),
+    )
 
 
 def _save_round(ctx: WizardContext, measurement: RoundMeasurement, points: dict[int, str]) -> None:
@@ -566,38 +580,59 @@ class MeasurePoints:
         return measuring(state)
 
     @staticmethod
-    def _place(ctx: WizardContext, plan: Round, points: tuple[str, ...]) -> None:
+    def _place(ctx: WizardContext, rounds: Round, plan: PointPlan) -> None:
         state = ctx.box.state
+        points = plan.ids
         lines = [
             t(
                 "step-points-place",
                 point=points.index(p.point) + 1,
                 total=len(points),
                 mic=mic_text(state, p.usb_input),
-                place=place_text(points, p.point),
+                place=place_text(plan, p.point),
             )
-            for p in plan.placements
+            for p in rounds.placements
         ]
         put = t("step-points-put", count=len(lines))
-        task(ctx.prompter, put, *lines, t("step-points-height"))
+        here = {p.point for p in rounds.placements}
+        task(
+            ctx.prompter,
+            put,
+            *lines,
+            t("step-points-height"),
+            t("step-points-map-round"),
+            picture=ascii_map(plan, here),
+        )
 
     def run(self, ctx: WizardContext) -> Outcome:
         """Plan, then for each round: place, warn, count down, sweep, check the quality."""
         state = ctx.box.state
-        points = state.points or default_points()
-        ctx.box.update(points=points)
+        plan = venue_plan(ctx)
+        if state.points:  # a resumed session keeps its own points
+            points, junction = state.points, state.junction_points or plan.junction_ids
+        else:
+            points, junction = plan.ids, plan.junction_ids
+        ctx.box.update(points=points, junction_points=junction)
         # The rounds may start long after the first sound: read the console again before them.
         ctx.mics_checked = False
-        info(ctx.prompter, t("step-points-what"), t("step-points-plan", count=len(points)))
+        about = [t("step-points-template")] if plan.from_template else []
+        info(
+            ctx.prompter,
+            t("step-points-what"),
+            t("step-points-plan", count=len(points)),
+            *about,
+            t("step-points-map"),
+            picture=ascii_map(plan),
+        )
         todo = [p for p in points if p not in state.measured]
-        for plan in plan_rounds(todo, list(state.mic_inputs)):
-            placement = {p.usb_input: p.point for p in plan.placements}
-            self._place(ctx, plan, points)
+        for one in plan_rounds(todo, list(state.mic_inputs)):
+            placement = {p.usb_input: p.point for p in one.placements}
+            self._place(ctx, one, plan)
             while True:
                 warn_before_sound(ctx, t("step-points-sweeps"), countdown=True)
                 measurement = measure_round(
                     ensure_backend(ctx),
-                    list(plan.inputs),
+                    list(one.inputs),
                     fs_hz=FS_HZ,
                     sweep=ctx.services.sweep,
                     gates=GATES,
