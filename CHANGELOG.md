@@ -64,8 +64,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounds count down three seconds, and a failed check repeats the step instead of going back.
 - Interface texts in English, Russian and Ukrainian (Fluent), with plural forms and a decimal comma
   in ru/uk; a test keeps the catalogues complete and in sync with the code.
+- Proposals (M4): after the measurement the wizard proposes packages of changes — the system EQ
+  now; crossover, sub alignment and sub level once the wizard measures sub and tops separately
+  (M5), because a crossover set blind can open a hole in the bass — each with a before/after
+  table, the reason, the expected effect and the risk. The person adds each one to the plan or leaves it out (the later packages are then
+  designed again without it) and the plan is saved in `proposal.json`. Nothing is written to the
+  console yet (ADR 0009).
+- A measurement point plan for the hall (at least eight seats in the middle of the room, off the
+  centre line, irregular spacing, four junction points), named by row and side, drawn as a map and
+  kept for the venue.
+- Channel advice: voices without a low cut or with a very high one, narrow cuts that probably
+  protect against feedback, cuts shared by many channels, deep cuts, big boosts, phantom power on
+  dynamic microphones.
+- A simulated hall with known defects and an acceptance test: the proposals fix the junction dip,
+  the sub level, the 500 Hz hump and the 50 Hz mode, and leave a narrow positional null alone.
 
 ### Changed (compared with the original tool)
+- The speakers' low roll-off is the start of the pass band; a sub/top cancellation or a room dip
+  above it no longer stops the system EQ from correcting lower frequencies.
+- The system-EQ optimiser judges whether a feature is common to the seats where its band acts,
+  so a narrow resonance shared by every seat is cut.
 - A stream dropout (xrun) makes a point BAD (SPEC §8.2); two sweeps must agree within 1 dB.
 - Output delay and matrix polarity are written only with `--write-unverified`; by default `sub align` prints
   them as advice and `undo` refuses a file that holds them (ADR 0005).

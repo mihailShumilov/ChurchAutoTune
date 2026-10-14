@@ -55,19 +55,22 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M3. Modules marked (M4+) are in SPEC §5 but not written yet.
+State after M4. Modules marked (M5+) are in SPEC §5 but not written yet.
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
   `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`,
   `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
   `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI)
 - `wizard/` UI-agnostic engine (ADR 0008): `protocol` (serializable `Prompt`/`Answer`, `Prompter`), `state`, `engine`,
-  `services` (ports, stop flag), `ui` (prompt helpers), `run` (start/resume), `steps/` `setup`, `measure`, `finish`
+  `services` (ports, stop flag), `ui` (prompt helpers), `run` (start/resume), `labels` (console words as texts),
+  `proposals` (plan/packages ↔ files), `steps/` `setup`, `measure`, `proposal` (S11 packages, audit), `finish`
 - `app/` Textual UI: `app` (`WizardApp`, `TuiPrompter` queue bridge, sound keys), `widgets` (header, prompt, meter)
 - `i18n/` `Translator` (Fluent), `locales/{en,ru,uk}/*.ftl`
 - `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`,
-  `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants),
+  `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants, `with_roles`),
+  `console_paths` (snapshot → `ConsoleState`/`Roles` for the design code),
   `recording` (`MultiRecording`, `StopFlag`, ADR 0007)
-- `mixers/base.py` driver contract (`MixerDriver`, `Capabilities`/`Feature`/`Support`, meters, discovery result)
+- `mixers/base.py` driver contract (`MixerDriver` incl. `eq_grid`, `headamp_of`; `Capabilities`/`Feature`/`Support`,
+  meters, discovery result)
 - `mixers/x32/` `transport` (the only socket; also `/xinfo`-only discovery), `codec`, `client` (read-only allowlist),
   `params`, `nodes`, `dump`, `snapshot` (node list, read, tolerant parse), `routing` (source ids, blocks, headamps),
   `names` (multilingual speaker names), `topology` (`infer_topology`; M0 `detect_roles`), `filters`,
@@ -76,12 +79,12 @@ State after M3. Modules marked (M4+) are in SPEC §5 but not written yet.
 - `churchtune_emulator/` (separate top-level package, loopback only, ADR 0006): `x32` emulator with model variants,
   latency and loss; seeded from the packaged reference dump
 - `audio/` `base` (protocols incl. `MultiChannelBackend`, −6 dBFS limiter), `sounddevice_backend`, `factory`,
-  `devices` (card ranking), `fake/` (`backend` rooms, `hall` multi-mic simulator and dev rig)
+  `devices` (card ranking), `fake/` (`backend` rooms, `hall` multi-mic simulator and dev rig, `defects` M4 hall)
 - `measure/` `config`, `stimulus`, `deconvolution`, `gates`, `point`, `junction` (also multi-mic with injected mute
   switch), `multi` (rounds, repeatability), `calibration`, `mic_mapping`, `level` (ramp, sweep level), `noise`,
-  `path_check`, `rounds`
+  `path_check`, `rounds`, `plan` (point plan, Halton, hall map)
 - `analysis/` `bands`, `response`, `rt60`, `points` · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
-  `alignment`, `proposal`
+  `alignment`, `proposal`, `packages` (S11 packages, ADR 0009), `channel_audit`
 - `safety/` `policy`, `plan`, `sub_plan`, `authorize`, `laws` (protocol; never imports `mixers`)
 - `storage/` `models`, `migrations`, `paths`, `files` · `report/` `texts`, `markdown`, `plots` · `platform/` `devsafe`
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).
