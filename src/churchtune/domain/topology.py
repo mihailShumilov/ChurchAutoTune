@@ -20,6 +20,8 @@ class SpeakerRole(StrEnum):
     SUB = "sub"
     FILL = "fill"
     DELAY = "delay"
+    # Speakers in another room (foyer, nursery, overflow): not tuned, but people there hear sweeps.
+    ZONE = "zone"
     MONITOR = "monitor"
     UNUSED = "unused"
 
@@ -34,11 +36,13 @@ class Variant(StrEnum):
 
     # Tops on matrices or buses, sub on its own matrix or bus.
     A = "a_tops_and_sub_on_own_paths"
-    # Tops straight from Main LR, sub on a matrix, a bus or Main Mono.
+    # The tops come straight from Main LR, or the sub hangs on Main Mono: one of the crossover
+    # filters has no separate path, so that part is suggest-only.
     B = "b_tops_on_main_sub_separate"
-    # Tops without a sub.
+    # Tops without a sub path. The wizard asks whether a sub exists anyway (then SUB_ON_MAIN).
     C = "c_tops_only"
-    # The sub shares Main LR with the tops: no crossover possible.
+    # The sub shares Main LR with the tops (set from the operator's answer, never guessed): no
+    # crossover possible.
     SUB_ON_MAIN = "sub_shares_main"
     # No tops found at all.
     UNKNOWN = "unknown"
@@ -101,17 +105,24 @@ class TopologyGuess:
         outputs: Every physical output that carries a speaker path, in output order.
         variant: The system layout.
         tops: Paths of the top speakers.
-        sub: Path of the subwoofer, or None.
-        others: Other speaker paths (fills, delays/balcony).
+        subs: Paths of the subwoofers (a stereo pair counts as one sub group).
+        others: Other speaker paths in the hall (fills, delays/balcony).
+        zones: Speaker paths in other rooms (foyer, nursery).
         issues: Things to explain to the operator.
     """
 
     outputs: tuple[OutputGuess, ...]
     variant: Variant
     tops: tuple[SignalRef, ...]
-    sub: SignalRef | None
+    subs: tuple[SignalRef, ...]
     others: tuple[SignalRef, ...]
+    zones: tuple[SignalRef, ...] = ()
     issues: tuple[Issue, ...] = ()
+
+    @property
+    def sub(self) -> SignalRef | None:
+        """The one sub path, or None when there is none or several."""
+        return self.subs[0] if len(self.subs) == 1 else None
 
     def role_of(self, kind: OutputKind, number: int) -> SpeakerRole | None:
         """Role of one output, or None when the output carries no speaker path."""

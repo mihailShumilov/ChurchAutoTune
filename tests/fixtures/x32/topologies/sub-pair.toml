@@ -1,0 +1,22 @@
+# Synthetic: one sub under each portal, on linked matrices 3/4 ("Sub L" / "Sub R"); one sub group.
+description = "Stereo sub pair on linked matrices 3/4"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"mtx/03/config" = '/mtx/03/config "Sub L" 25 RD'
+"mtx/04/config" = '/mtx/04/config "Sub R" 25 RD'
+"mtx/04/eq/6" = "/mtx/04/eq/6 LR24 100.0 +0.00 2.0"
+"outputs/main/05" = "/outputs/main/05 23 POST OFF"
+"config/mtxlink" = "/config/mtxlink ON ON ON"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+subs = ["matrix 3", "matrix 4"]
+tops = ["matrix 1", "matrix 2"]
+issues = ["sub_pair"]
+
+[expected.outputs]
+"main 6" = "sub"
+"main 5" = "sub"
+"main 8" = "top_l"

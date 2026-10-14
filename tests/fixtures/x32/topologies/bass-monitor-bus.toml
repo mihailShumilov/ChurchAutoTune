@@ -1,0 +1,19 @@
+# Synthetic: bus 3 named "Bass" on output 9 is the bass player's monitor, not a subwoofer; a
+# "Submix" bus is a group, not a sub.
+description = "Bus named Bass is a monitor; Submix is a group"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"bus/03/config" = '/bus/03/config "Bass" 64 YE'
+"bus/04/config" = '/bus/04/config "Submix" 64 YE'
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+subs = ["matrix 3"]
+tops = ["matrix 1", "matrix 2"]
+
+[expected.outputs]
+"main 9" = "monitor"
+"main 10" = "unused"
+"main 6" = "sub"

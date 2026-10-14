@@ -5,7 +5,8 @@ import pytest
 from churchtune.domain.eq import Band, EqType
 from churchtune.domain.snapshot import OutputKind
 from churchtune.domain.topology import SpeakerRole, Variant
-from churchtune.mixers.x32.topology import has_hpf, has_lpf, infer_topology
+from churchtune.mixers.x32.filters import has_hpf, has_lpf
+from churchtune.mixers.x32.topology import infer_topology
 from tests.fixtures.topologies import all_fixtures
 
 FIXTURES = all_fixtures()
@@ -24,8 +25,7 @@ def test_topology_matches_the_expected_roles(fixture):
     guess = infer_topology(fixture.snapshot())
     expected = fixture.expected
     assert guess.variant == Variant(expected["variant"])
-    sub = expected.get("sub")
-    assert (guess.sub.label() if guess.sub else None) == sub
+    assert sorted(s.label() for s in guess.subs) == sorted(expected.get("subs", []))
     assert sorted(t.label() for t in guess.tops) == sorted(expected["tops"])
     if "others" in expected:
         assert sorted(o.label() for o in guess.others) == sorted(expected["others"])

@@ -1,0 +1,20 @@
+# Synthetic: after the service someone muted the unnamed sub matrix. Its low-pass still says
+# "sub"; it must be asked about, not dropped as unused.
+description = "Muted unnamed sub matrix is kept and asked about"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"mtx/03/config" = '/mtx/03/config "" 25 RD'
+"mtx/03/mix" = "/mtx/03/mix OFF -37.5"
+"outputs/main/04" = "/outputs/main/04 0 POST OFF"
+"outputs/main/03" = "/outputs/main/03 0 POST OFF"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+subs = ["matrix 3"]
+tops = ["matrix 1", "matrix 2"]
+issues = ["confirm_roles"]
+
+[expected.outputs]
+"main 6" = "sub"

@@ -13,7 +13,14 @@ from churchtune.mixers.x32.models import (
     family_of,
     identity_from_xinfo,
 )
-from churchtune.mixers.x32.names import Side, is_non_speaker, normalize, role_hint, side_hint
+from churchtune.mixers.x32.names import (
+    Side,
+    is_non_speaker,
+    name_hint,
+    normalize,
+    role_hint,
+    side_hint,
+)
 from churchtune.mixers.x32.usb import usb_audio_map
 from tests.fixtures.topologies import all_fixtures
 
@@ -41,6 +48,35 @@ from tests.fixtures.topologies import all_fixtures
         ("main sub", SpeakerRole.SUB),
         ("", None),
         ("Piano", None),
+        # Spanish / Portuguese church usage
+        ("Platea", SpeakerRole.TOP_MONO),
+        ("Plateia", SpeakerRole.TOP_MONO),
+        ("Altavoces", SpeakerRole.TOP_MONO),
+        ("Graves", SpeakerRole.SUB),
+        ("Retorno 1", SpeakerRole.MONITOR),
+        ("Coro", SpeakerRole.MONITOR),
+        ("Recepción", SpeakerRole.ZONE),
+        # stage words win over sub / fill
+        ("Bass Mon", SpeakerRole.MONITOR),
+        ("Bass IEM", SpeakerRole.MONITOR),
+        ("Drum fill", SpeakerRole.MONITOR),
+        ("Side fill", SpeakerRole.MONITOR),
+        # other rooms, delays, clusters
+        ("Lobby", SpeakerRole.ZONE),
+        ("Foyer", SpeakerRole.ZONE),
+        ("Overflow", SpeakerRole.ZONE),
+        ("Kids", SpeakerRole.ZONE),
+        ("Dly 1", SpeakerRole.DELAY),
+        ("UB", SpeakerRole.DELAY),
+        ("Cluster", SpeakerRole.TOP_MONO),
+        # glued names
+        ("Mon1", SpeakerRole.MONITOR),
+        ("MainL", SpeakerRole.TOP_MONO),
+        ("SubR", SpeakerRole.SUB),
+        # groups are not subs
+        ("Submix", None),
+        ("Субгруппа", None),
+        ("Transept", None),
     ],
 )
 def test_role_hint(name, role):
@@ -57,6 +93,20 @@ def test_role_hint(name, role):
         ("Izquierdo", Side.LEFT),
         ("Derecho", Side.RIGHT),
         ("Sub", None),
+        ("MainL", Side.LEFT),
+        ("SubR", Side.RIGHT),
+        ("ПорталЛ", Side.LEFT),
+        ("Портал П", Side.RIGHT),
+        ("Справа", Side.RIGHT),
+        ("Слева", Side.LEFT),
+        ("Esquerda", Side.LEFT),
+        ("Direita", Side.RIGHT),
+        ("L/R", None),
+        ("LR", None),
+        ("Live", None),
+        ("Level", None),
+        ("Derek", None),
+        ("P", None),
     ],
 )
 def test_side_hint(name, side):
@@ -68,7 +118,18 @@ def test_normalize_and_non_speaker_names():
     assert is_non_speaker("Fx 1")
     assert is_non_speaker("Stream")
     assert is_non_speaker("Запис")
+    assert is_non_speaker("Submix")
+    assert is_non_speaker("Record")
     assert not is_non_speaker("Main L")
+    assert not is_non_speaker("Platea")
+    assert not is_non_speaker("Recital hall")
+
+
+def test_bass_alone_is_ambiguous_but_other_sub_words_are_not():
+
+    assert name_hint("Bass").ambiguous
+    assert not name_hint("Sub").ambiguous
+    assert not name_hint("Bass sub").ambiguous
 
 
 @pytest.mark.parametrize(
@@ -122,6 +183,7 @@ def test_routing_blocks():
     assert routing.parse_block("P169-16") == ("P16", 9, 16)
     assert routing.parse_block("A9-16") == ("A", 9, 16)
     assert routing.parse_block("??") is None
+    assert routing.parse_block("A1-4") is None  # blocks carry eight channels
     assert routing.block_sources("A9-16")[1] == InputRef(InputKind.AES50_A, 10)
     assert routing.block_sources("AN1-8")[0] == InputRef(InputKind.LOCAL, 1)
     assert routing.block_sources("CARD1-8")[7] == InputRef(InputKind.CARD, 8)
@@ -140,8 +202,8 @@ def test_headamps_and_channel_sources():
     assert routing.headamp_index(InputRef(InputKind.AES50_A, 49)) is None
     assert routing.channel_input(5) == ("input", 5)
     assert routing.channel_input(33) == ("aux", 1)
-    assert routing.channel_input(0) is None
-    assert routing.channel_input(60) is None
+    assert routing.channel_input(0) == ("off", 0)
+    assert routing.channel_input(60) == ("unknown", 60)
 
 
 def test_usb_map_of_the_reference_hall():
@@ -203,6 +265,14 @@ def test_capabilities_by_model_and_firmware():
     old = capabilities(identity_from_xinfo(["ip", "n", "X32", "3.11"], "h"))
     assert not old.verified_firmware
     assert not any(old.can_write(f) for f in Feature)
+    # Same family and firmware line, but never checked on hardware: suggest-only.
+    for model, firmware in (("X32RACK", "4.06"), ("X32", "4.09"), ("X32P", "4.06")):
+        caps = capabilities(identity_from_xinfo(["ip", "n", model, firmware], "h"))
+        assert caps.verified_firmware
+        assert not any(caps.can_write(f) for f in Feature), (model, firmware)
+    assert capabilities(identity_from_xinfo(["ip", "n", "x32p ", "4.09"], "h")).can_write(
+        Feature.MAIN_EQ
+    )
     assert console_model(x32).identity is x32
 
 

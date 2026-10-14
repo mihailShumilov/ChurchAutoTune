@@ -1,0 +1,26 @@
+# Synthetic: Spanish / Portuguese scribble strips. "Platea" is the main hall (not a reverb
+# plate), "Retorno" a stage monitor, "Graves" the subwoofer, "Recepción" another room.
+description = "Spanish and Portuguese names, a foyer zone"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"mtx/01/config" = '/mtx/01/config "Platea Izq" 66 MG'
+"mtx/02/config" = '/mtx/02/config "Platea Der" 66 MG'
+"mtx/03/config" = '/mtx/03/config "Graves" 25 RD'
+"mtx/05/config" = '/mtx/05/config "Recepción" 66 MG'
+"outputs/main/03" = "/outputs/main/03 0 POST OFF"
+"bus/03/config" = '/bus/03/config "Retorno 1" 64 YE'
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+subs = ["matrix 3"]
+tops = ["matrix 1", "matrix 2"]
+issues = ["zone_will_hear_sweep"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"
+"main 6" = "sub"
+"main 4" = "zone"
+"main 9" = "monitor"

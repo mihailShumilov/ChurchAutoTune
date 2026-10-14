@@ -1,0 +1,21 @@
+# Synthetic: Main L/R also go straight to aux outputs 1/2 (a recorder or the foyer), while the
+# speakers hang on matrices fed from Main LR. The matrices are the tops; the operator confirms.
+# UNVERIFIED: output source ids 1/2 (Main L/R) are from documentation (docs/hardware-checklist.md #15).
+description = "Main L/R on aux outputs next to matrix tops"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"outputs/aux/01" = "/outputs/aux/01 1 POST OFF"
+"outputs/aux/02" = "/outputs/aux/02 2 POST OFF"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+subs = ["matrix 3"]
+tops = ["matrix 1", "matrix 2"]
+issues = ["main_and_matrix_tops", "confirm_roles"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"
+"aux 1" = "top_l"
