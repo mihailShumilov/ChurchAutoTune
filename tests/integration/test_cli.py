@@ -489,7 +489,7 @@ def test_failed_restore_leaves_pending_and_blocks(emu, home, console_audio, run,
     blocked = run(["sub", "align"])
     assert blocked.exit_code == EXIT_REFUSED  # refuses until restored
     assert "sub restore" in blocked.output
-    assert run(["sub", "restore"], answers=["y"]).exit_code == EXIT_OK
+    assert run(["sub", "restore"], answers=["вернуть", "y"]).exit_code == EXIT_OK
     assert mix_on(emu) == original_mutes
     assert not pending.exists()
 
@@ -532,7 +532,7 @@ def test_restore_dry_run_keeps_pending(emu, home, run):
     assert run(["sub", "restore", "--dry-run"]).exit_code == EXIT_OK
     assert workspace.pending_mutes_file.exists()
     assert emu.mtx[1]["on"] == 0
-    assert run(["sub", "restore"], answers=["y"]).exit_code == EXIT_OK
+    assert run(["sub", "restore"], answers=["вернуть", "y"]).exit_code == EXIT_OK
     assert emu.mtx[1]["on"] == 1
     assert not workspace.pending_mutes_file.exists()
     assert run(["sub", "restore"]).exit_code == EXIT_OK  # nothing left to restore
@@ -821,7 +821,7 @@ def test_restore_interrupted_mid_send_keeps_the_pending_file(emu, home, run, mon
 
     monkeypatch.setattr(cli_apply, "send_plan", broken)
 
-    assert run(["sub", "restore"], answers=["y"]).exit_code == EXIT_INTERRUPTED
+    assert run(["sub", "restore"], answers=["вернуть", "y"]).exit_code == EXIT_INTERRUPTED
     assert workspace.pending_mutes_file.exists()
 
 
@@ -1152,3 +1152,24 @@ def test_entry_point_refuses_a_lan_console_with_exit_code_3(home, monkeypatch, c
 
     assert exit_info.value.code == EXIT_REFUSED
     assert "dev-safe" in capsys.readouterr().out
+
+
+def test_restore_refuses_the_mutes_of_another_console(emu, home, run):
+    workspace = Workspace(home)
+    files.write_pending_mutes(
+        workspace,
+        files.PendingMutes(created="t", mtx_on={5: True}, ip="other-console.invalid"),
+    )
+    emu.mtx[5]["on"] = 0
+    result = run(["sub", "restore"], answers=["вернуть", "y"])
+    assert result.exit_code == EXIT_REFUSED
+    assert emu.mtx[5]["on"] == 0
+    assert workspace.pending_mutes_file.exists()
+
+
+def test_restore_needs_the_typed_word(emu, home, run):
+    workspace = Workspace(home)
+    files.write_pending_mutes(workspace, files.PendingMutes(created="t", mtx_on={1: True}))
+    emu.mtx[1]["on"] = 0
+    assert run(["sub", "restore"], answers=["y"]).exit_code == EXIT_USER
+    assert emu.mtx[1]["on"] == 0

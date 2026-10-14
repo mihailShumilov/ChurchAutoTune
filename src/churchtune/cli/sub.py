@@ -46,7 +46,7 @@ from churchtune.mixers.x32.topology import detect_roles
 from churchtune.report import plots
 from churchtune.report.markdown import alignment_summary
 from churchtune.report.texts import crossover_note_text
-from churchtune.safety.authorize import is_confirmation
+from churchtune.safety.authorize import TypedWord, is_confirmation
 from churchtune.safety.policy import WritePolicy
 from churchtune.safety.sub_plan import INVERTED_POLARITY, alignment_changes, crossover_changes
 from churchtune.storage import files
@@ -65,6 +65,7 @@ MUTE_SWITCH_AFTER_S = 0.1
 QUIET_BLOCK_DBFS = -45.0
 CLIP_DBFS = -0.5
 MISMATCH_WARNING_DB = 3.0
+RESTORE_WORD = "вернуть"
 MIN_ALIGNMENT_GAIN_DB = 1.0
 
 
@@ -141,6 +142,13 @@ def _restore(settings: Settings, console: Console, state: ConsoleState, dry_run:
     if pending is None:
         say("Нечего восстанавливать.")
         return EXIT_OK
+    host = settings.venue.console_host
+    if pending.ip and host and pending.ip != host:
+        fail(f"ОТКАЗ: эти мьюты записаны для пульта {pending.ip}, а подключён {host}. "
+             "Верните их на том пульте.", EXIT_REFUSED)  # fmt: skip
+    missing = sorted(n for n in pending.mtx_on if n not in state.matrices)
+    if missing:
+        fail(f"ОТКАЗ: на этом пульте нет матриц {missing}", EXIT_REFUSED)
     changes = [
         Change(
             f"/mtx/{n:02d}/mix/on",
@@ -152,6 +160,11 @@ def _restore(settings: Settings, console: Console, state: ConsoleState, dry_run:
         for n, on in pending.mtx_on.items()
         if state.matrices[n].on != on
     ]
+    if changes and not dry_run:
+        typed = ask(f"Чтобы включить матрицы обратно, введите «{RESTORE_WORD}»: ")
+        if not TypedWord(typed, RESTORE_WORD).matches():
+            say("Отменено — ничего не записано.")
+            return EXIT_USER
     policy = WritePolicy(LAWS, frozenset(pending.mtx_on))
     code = _write(
         settings, console, changes, policy, title="Вернуть мьюты матриц", what="restore",

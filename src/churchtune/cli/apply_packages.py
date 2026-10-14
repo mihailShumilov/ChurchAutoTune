@@ -266,7 +266,13 @@ def undo_packages(
     say(f"undo-файл: {revert_path}")
     try:
         guard = MuteGuard(settings.workspace, settings.venue.console_host)
-        complete = send_runs(console, plan.planned, revert_path, word, policy, guard=guard).complete
+        sent = send_runs(console, plan.planned, revert_path, word, policy, guard=guard)
+        complete = sent.complete
+        if sent.still_muted:
+            say(
+                f"!! матрицы {list(sent.still_muted)} остались выключены (Mute): включите их на "
+                "пульте руками"
+            )
     except UnsafeWrite as error:
         fail(f"ОТКАЗ: {error}", EXIT_REFUSED)
     if not complete:
