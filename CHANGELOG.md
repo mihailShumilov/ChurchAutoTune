@@ -50,6 +50,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ctune devices`, `ctune mics map`, `ctune mics calibrate`, `ctune noise`, `ctune pathcheck`; a
   four-microphone simulated rig behind `--audio fake`.
 
+- Guided wizard (M3): plain `ctune` (or `ctune wizard`) walks a volunteer through 13 steps — venue
+  and goal, Mac and audio card, console discovery and read, speaker roles, equipment, microphone
+  mapping, playback path, level, mic calibration, measurement rounds, results in plain words and
+  what to do next. The state is saved after every step and `ctune resume` continues; Back never
+  crosses a step that changed the console (ADR 0008).
+- Full-screen Textual interface with a step header, tables, live level meters with a colour-free
+  target mark and translated key hints; Ctrl+C and Space stop the sound on every screen, Esc goes
+  back, Ctrl+Q saves and quits. `ctune wizard --plain` (and any non-terminal) gives a line
+  interface for pipes and screen readers.
+- Before the first sound the wizard reads the console again and plays nothing while a channel of
+  a measurement microphone can reach the speakers; every sound has a warning screen, the sweep
+  rounds count down three seconds, and a failed check repeats the step instead of going back.
+- Interface texts in English, Russian and Ukrainian (Fluent), with plural forms and a decimal comma
+  in ru/uk; a test keeps the catalogues complete and in sync with the code.
+
 ### Changed (compared with the original tool)
 - A stream dropout (xrun) makes a point BAD (SPEC §8.2); two sweeps must agree within 1 dB.
 - Output delay and matrix polarity are written only with `--write-unverified`; by default `sub align` prints

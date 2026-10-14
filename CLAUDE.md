@@ -55,12 +55,15 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M2. Modules marked (M3+) are in SPEC §5 but not written yet.
+State after M3. Modules marked (M4+) are in SPEC §5 but not written yet.
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
   `check`, `measure`, `analyze`, `apply` (apply/undo, the only place that sends a plan), `sub`, `hwcheck`,
   `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
-  `noise`, `pathcheck`)
-- `app/` Textual UI (M3) · `wizard/` UI-agnostic step engine (M3) · `i18n/` catalogues (M3)
+  `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI)
+- `wizard/` UI-agnostic engine (ADR 0008): `protocol` (serializable `Prompt`/`Answer`, `Prompter`), `state`, `engine`,
+  `services` (ports, stop flag), `ui` (prompt helpers), `run` (start/resume), `steps/` `setup`, `measure`, `finish`
+- `app/` Textual UI: `app` (`WizardApp`, `TuiPrompter` queue bridge, sound keys), `widgets` (header, prompt, meter)
+- `i18n/` `Translator` (Fluent), `locales/{en,ru,uk}/*.ftl`
 - `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`,
   `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants),
   `recording` (`MultiRecording`, `StopFlag`, ADR 0007)
@@ -84,7 +87,8 @@ State after M2. Modules marked (M3+) are in SPEC §5 but not written yet.
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).
 - Writes never verified on hardware (output delay, polarity) need `--write-unverified` (ADR 0005).
 - Tests: `tests/emulator/` (subclass of the packaged emulator), `tests/fixtures/` (anonymized dumps, golden hall data,
-  `x32/topologies/*.toml` = dump + overrides + expected roles), `tests/golden/`.
+  `x32/topologies/*.toml` = dump + overrides + expected roles), `tests/golden/`, `tests/e2e/` (scripted wizard),
+  `tests/tui/` (Pilot tests, SVG snapshots in `__snapshots__/`).
 
 ## Commands
 ```bash
@@ -93,9 +97,12 @@ CTUNE_DEV_SAFE=1 uv run pytest -q               # all tests (emulator + fake aud
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q  # the hall session of 2026-10-02
 CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json && uv run python scripts/check_coverage.py   # coverage gates
 CTUNE_DEV_SAFE=1 uv run ctune --help            # expert CLI; --console HOST[:PORT] --audio fake --home DIR
-# Emulator and doctor (M1); TUI snapshots arrive in M3:
+# Emulator and doctor (M1); wizard and TUI (M3):
 CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P   # prints port
 CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor              # doctor against an in-process emulator
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake        # the wizard (TUI) on the emulator + simulated hall
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake wizard --plain --lang ru   # line interface
+CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake resume # continue the newest session
 CTUNE_DEV_SAFE=1 uv run pytest tests/tui --snapshot-update   # only after reviewing visual diffs
 ```
 
