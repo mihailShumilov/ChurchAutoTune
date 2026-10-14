@@ -92,6 +92,8 @@ State after M4. Modules marked (M5+) are in SPEC §5 but not written yet.
 - Tests: `tests/emulator/` (subclass of the packaged emulator), `tests/fixtures/` (anonymized dumps, golden hall data,
   `x32/topologies/*.toml` = dump + overrides + expected roles), `tests/golden/`, `tests/e2e/` (scripted wizard),
   `tests/tui/` (Pilot tests, SVG snapshots in `__snapshots__/`).
+- `site/` static project website (GitHub Pages, en/uk/es). When a milestone or user-visible feature lands, update
+  its roadmap and guide pages in all three languages (`site/README.md`).
 
 ## Commands
 ```bash
