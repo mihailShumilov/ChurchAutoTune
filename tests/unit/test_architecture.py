@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from churchtune_emulator.x32 import X32Emulator
+
 SRC = Path(__file__).resolve().parents[2] / "src" / "churchtune"
 ROOT_PACKAGE = "churchtune"
 EVERYWHERE = "errors"
@@ -192,3 +194,75 @@ def test_checker_accepts_allowed_import(tmp_path, rel, source):
     _write(tmp_path, rel, source)
 
     assert violations(tmp_path) == []
+
+
+# ------------------------------------------------------------------ the emulator package (ADR 0006)
+EMULATOR_PACKAGE = "churchtune_emulator"
+EMULATOR_SRC = SRC.parent / EMULATOR_PACKAGE
+# Only these development entry points may load the emulator, and only inside a function.
+EMULATOR_IMPORTERS = {"cli/main.py", "cli/console.py"}
+
+
+def emulator_import_violations(src: Path) -> list[str]:
+    """Imports of the emulator package from ``churchtune`` outside the two lazy entry points."""
+    problems: list[str] = []
+    for path in sorted(src.rglob("*.py")):
+        rel = path.relative_to(src).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        top_level = set(tree.body)
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            if not any(n.split(".")[0] == EMULATOR_PACKAGE for n in names):
+                continue
+            if rel not in EMULATOR_IMPORTERS:
+                problems.append(f"{rel}: imports {EMULATOR_PACKAGE}")
+            elif node in top_level:
+                problems.append(f"{rel}: imports {EMULATOR_PACKAGE} at module level")
+    return problems
+
+
+def test_churchtune_loads_the_emulator_only_lazily_from_the_dev_entry_points():
+    assert emulator_import_violations(SRC) == []
+
+
+@pytest.mark.parametrize(
+    ("rel", "source"),
+    [
+        ("cli/main.py", "from churchtune_emulator.x32 import X32Emulator\n"),
+        ("mixers/x32/driver.py", "def f():\n    import churchtune_emulator\n"),
+    ],
+)
+def test_emulator_checker_reports_bad_imports(tmp_path, rel, source):
+    _write(tmp_path, rel, source)
+
+    assert len(emulator_import_violations(tmp_path)) == 1
+
+
+def test_emulator_binds_only_to_the_loopback_constant():
+    tree = ast.parse((EMULATOR_SRC / "x32.py").read_text(encoding="utf-8"))
+    binds = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "bind"
+    ]
+    assert binds
+    for call in binds:
+        address = call.args[0]
+        assert isinstance(address, ast.Tuple)
+        assert isinstance(address.elts[0], ast.Name)
+        assert address.elts[0].id == "LOOPBACK"
+    assert 'LOOPBACK = "127.0.0.1"' in (EMULATOR_SRC / "x32.py").read_text(encoding="utf-8")
+
+
+def test_emulator_socket_is_on_loopback():
+    emulator = X32Emulator()
+    try:
+        assert emulator.sock.getsockname()[0] == "127.0.0.1"
+    finally:
+        emulator.sock.close()

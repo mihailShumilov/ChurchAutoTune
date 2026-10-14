@@ -131,3 +131,12 @@ def test_listening_stops_at_the_deadline_even_while_packets_arrive(outside, monk
     monkeypatch.setattr(transport_module.time, "monotonic", lambda: next(ticks))
     outside.datagrams = [(encode("/other"), ("127.0.0.1", 10023))]
     assert transport_module.discover([("255.255.255.255", 10023)], 0.5) == []
+
+
+def test_discover_in_dev_safe_never_enables_broadcast(monkeypatch):
+    sock = DiscoverySocket()
+    monkeypatch.setattr(transport_module.socket, "socket", lambda *a, **k: sock)
+    transport_module.discover([("127.0.0.1", 10023)], 0.01)
+    assert sock.options == []
+    assert sock.bound == ("127.0.0.1", 0)
+    assert [address for _, address in sock.sent] == [("127.0.0.1", 10023)]

@@ -132,7 +132,7 @@ xfail_strict = true
 
 # --------------------------------------------------------------------------- coverage
 [tool.coverage.run]
-source = ["churchtune"]
+source = ["churchtune", "churchtune_emulator"]
 branch = true
 # Three-line `python -m churchtune` shim; the CLI itself is tested through churchtune.cli.app.
 omit = ["*/churchtune/__main__.py"]
