@@ -1,7 +1,7 @@
 """Steps S11 and S14 (SPEC §7): what the measurement says, and what to do next.
 
-S11 explains the analysis in plain words. Change proposals (crossover, alignment, system EQ) and
-applying them arrive with M4 and M5; until then the wizard says so honestly and keeps the data.
+S11 explains the analysis in plain words and offers the change packages; S14 is the checklist
+for the person, which depends on whether something was written, put back, or nothing at all.
 """
 
 from collections.abc import Collection

@@ -128,6 +128,9 @@ def undo_applied(ctx: WizardContext, undo_path: Path) -> bool:  # noqa: PLR0911 
     except UnsafeWrite:
         info(ctx.prompter, t("undo-refused"))
         return False
+    except ConsoleUnreachable:
+        info(ctx.prompter, t("apply-console-lost"))
+        return False
     notes: list[Text] = []
     if plan.changed_by_hand:
         notes.append(t("undo-changed-by-hand", count=len(plan.changed_by_hand)))

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 
 from churchtune.audio.fake.hall import FakeHall, FakeMic
-from churchtune.cli.apply_packages import X32WritePort
+from churchtune.cli.package_writes import X32WritePort
 from churchtune.cli.wizard import X32ConsolePort
 from churchtune.i18n import Translator
 from churchtune.measure.config import SweepConfig

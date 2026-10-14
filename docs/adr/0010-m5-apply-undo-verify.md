@@ -19,7 +19,10 @@ package's "before", the default is to cancel and measure again.
    `allow_cut_filters`; an EQ is never switched off by a plan), `levels` (only the sub path's
    fader, ≤ 0 dB, ≤ ±10 dB from the fresh read), `delay` and `polarity` (behind the unverified
    opt-in of ADR 0005). The validators live in `safety/policy.py`; the sub and top matrices come
-   from a fresh read of the console (`detect_roles`), never from the proposal file.
+   from a fresh read of the console (`detect_roles`), never from the proposal file. In M5 only
+   `system_eq` and `levels` have a production caller; `temp_mutes`, `delay` and `polarity` are
+   defined and tested for the wizard's temporary mutes and for when the hardware checklist
+   confirms the delay and polarity writes.
 2. **One ordering rule, by simulation** (`safety/order.py`). A plan is a set of strip states
    before and after. Faders down and mutes go first; each changed band is tried in every order of
    its parameters and with "neutralise first"; boosts, faders up, EQ switches and unmutes go last.
@@ -70,7 +73,7 @@ package's "before", the default is to cancel and measure again.
    cut-filter change (crossover and undo alike) off Main LR, on band 1 of a top path or band 6 of
    the sub path, with the corner in 40–250 Hz; only an undo may remove a cut. An undo never
    writes an EQ switch and recognises every value its plan wrote (a stop half-way leaves a
-   neutralised band that still goes back). The order is simulated on a 1/48-octave grid plus
+   neutralised band that still goes back). The order is simulated on a 1/96-octave grid plus
    every band centre of the plan. The verdict aligns each "after" curve to "before" by the
    median band difference (a cut near 500 Hz moves the 500–2000 Hz normalisation), takes the
    deviation from the target without the overall level, and uses third-octave band means; the

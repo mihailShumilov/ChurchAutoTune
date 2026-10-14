@@ -140,15 +140,8 @@ def common_points(before: Analysis, after: Analysis) -> tuple[str, ...]:
     return tuple(p for p in before.point_names if p in after.norm_db)
 
 
-def _deviations(
-    analysis: Analysis, target_db: FloatArray, points: Sequence[str], centres: FloatArray
-) -> dict[str, FloatArray]:
-    return {p: band_values(analysis.norm_db[p] - target_db, centres, analysis.grid_hz)
-            for p in points}  # fmt: skip
-
-
 def worst_point(analysis: Analysis, target_db: FloatArray, points: Sequence[str]) -> str:
-    """The point with the largest ``W`` (RMS band deviation over 80 Hz-8 kHz).
+    """The point with the largest ``W``: RMS band deviation over 80 Hz-8 kHz, without its level.
 
     Raises:
         ValueError: No point given.
@@ -156,8 +149,10 @@ def worst_point(analysis: Analysis, target_db: FloatArray, points: Sequence[str]
     if not points:
         raise ValueError("no point to choose from")
     centres = _centres(*W_RANGE_HZ, analysis.f_low_hz)
-    deviations = _deviations(analysis, target_db, points, centres)
-    return max(points, key=lambda p: _rms(deviations[p]))
+    curves = analysis.norm_db
+    grid = analysis.grid_hz
+    return max(points, key=lambda p: _rms(level_free(curves[p], curves[p], target_db, centres,
+                                                     grid)[0]))  # fmt: skip
 
 
 def judge(
@@ -250,7 +245,7 @@ def verify(
     pairs = {p: level_free(was[p], now[p], target_db, w_centres, grid) for p in points}
     d_before = {p: pair[0] for p, pair in pairs.items()}
     d_after = {p: pair[1] for p, pair in pairs.items()}
-    worst = max(points, key=lambda p: _rms(d_before[p]))
+    worst = worst_point(before, target_db, points)
     worst_delta = _rms(d_after[worst]) - _rms(d_before[worst])
 
     band_delta, band_point, band_hz = -np.inf, points[0], float(w_centres[0])

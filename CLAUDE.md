@@ -57,8 +57,9 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 ## Code map
 State after M5 (temporary mutes and the junction measurement in the wizard still to come).
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
-  `check`, `measure`, `analyze`, `apply` (apply/undo), `apply_packages` (`apply-packages`, three-way package undo,
-  `X32WritePort` for the wizard; with `apply` the only places that send a plan), `sub`, `hwcheck`,
+  `check`, `measure`, `analyze`, `apply` (apply/undo), `apply_packages` (`apply-packages` and the package undo, terminal side), `package_writes`
+  (plan, check, re-plan and send package plans; `X32WritePort` for the wizard; with `apply` the only places
+  that send a plan), `sub`, `hwcheck`,
   `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
   `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI)
 - `wizard/` UI-agnostic engine (ADR 0008): `protocol` (serializable `Prompt`/`Answer`, `Prompter`), `state`, `engine`,
@@ -88,7 +89,8 @@ State after M5 (temporary mutes and the junction measurement in the wizard still
   `path_check`, `rounds`, `plan` (point plan, Halton, hall map)
 - `analysis/` `bands`, `response`, `rt60`, `points`, `verdict` (§8.6) · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
   `alignment`, `proposal`, `packages` (S11 packages, ADR 0009), `channel_audit`
-- `safety/` `policy` (scopes of §9.2), `plan`, `sub_plan`, `order` (never-louder order by simulation), `authorize`
+- `safety/` `policy` (scopes of §9.2), `plan`, `sub_plan`, `order` (never-louder order by simulation), `cut_filters`
+  (where a crossover or undo may touch a cut filter), `authorize`
   (typed word, undo hash), `laws` (protocol; never imports `mixers`)
 - `storage/` `models`, `migrations`, `paths`, `files` · `report/` `texts`, `markdown`, `plots` · `platform/` `devsafe`
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).

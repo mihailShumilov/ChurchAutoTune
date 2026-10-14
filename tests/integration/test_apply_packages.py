@@ -3,6 +3,7 @@
 Never weaken, skip or xfail these tests: they are part of the safety suite.
 """
 
+import dataclasses
 import json
 from dataclasses import replace
 from datetime import datetime
@@ -250,8 +251,8 @@ def test_only_the_crossover_package_touches_a_cut_filter(emu, home, run, client,
 
 
 def _port(client, transport):
-    from churchtune.cli.apply_packages import X32WritePort  # noqa: PLC0415
     from churchtune.cli.context import Console  # noqa: PLC0415
+    from churchtune.cli.package_writes import X32WritePort  # noqa: PLC0415
 
     return X32WritePort(lambda: (LOOPBACK, Console(transport, client)), datetime.now)
 
@@ -272,7 +273,9 @@ def _two_packages(client, sub_step_db):
     return [eq, level], fader
 
 
-def test_the_port_refuses_a_plan_the_console_moved_away_from(emu, client, transport, tmp_path):
+def test_the_port_refuses_a_package_whose_before_no_longer_matches(
+    emu, client, transport, tmp_path
+):
     packages, fader = _two_packages(client, -3.0)
     port = _port(client, transport)
     plan = port.plan_packages(packages)
@@ -284,7 +287,9 @@ def test_the_port_refuses_a_plan_the_console_moved_away_from(emu, client, transp
     assert not (tmp_path / "u.json").exists()
 
 
-def test_the_cli_plans_again_after_the_word(emu, home, run, client, monkeypatch):
+def test_the_cli_refuses_a_console_changed_while_the_word_was_typed(
+    emu, home, run, client, monkeypatch
+):
     from churchtune.cli import apply_packages  # noqa: PLC0415
 
     proposal = write_proposal(home, client, level_db=-3.0)
@@ -353,12 +358,12 @@ def test_a_package_that_needs_an_advice_package_is_left_out(emu, home, run, clie
 def test_a_run_refused_after_an_earlier_run_reports_a_partial_write(
     emu, client, transport, tmp_path, monkeypatch
 ):
-    from churchtune.cli import apply_packages  # noqa: PLC0415
+    from churchtune.cli import package_writes  # noqa: PLC0415
 
     packages, _ = _two_packages(client, -3.0)
     port = _port(client, transport)
     plan = port.plan_packages(packages)
-    real = apply_packages.authorize_typed
+    real = package_writes.authorize_typed
     calls = []
 
     def refuse_the_second_run(*args, **kwargs):
@@ -367,7 +372,7 @@ def test_a_run_refused_after_an_earlier_run_reports_a_partial_write(
             raise UnsafeWrite("refused")
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(apply_packages, "authorize_typed", refuse_the_second_run)
+    monkeypatch.setattr(package_writes, "authorize_typed", refuse_the_second_run)
     outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
     assert len(calls) == 2
     assert not outcome.complete
@@ -419,8 +424,7 @@ def test_even_the_crossover_package_keeps_the_cut_filters_in_their_place(
 ):
     state = read_console_state(client)
     before = state.main_eq if number == 0 else state.matrices[number].eq
-    if before.band(band).adjustable:
-        pytest.skip("the reference hall has no cut filter here")  # never for these cases
+    assert not before.band(band).adjustable, "the fixture must have a cut filter here"
     after = before.with_band(replace(before.band(band), **change))
     ref = MAIN_REF if number == 0 else PathRefModel(kind="matrix", number=number)
     result = run(["apply-packages", eq_proposal(home, "crossover", ref, before, after)],
@@ -455,3 +459,21 @@ def test_an_undo_after_a_stop_puts_back_a_neutralised_band(emu, home, client, tr
     port.apply(back, "вернуть", "вернуть", tmp_path / "r.json", lambda: False,
                reverts=tmp_path / "u.json")  # fmt: skip
     assert emu.main_eq().band(5).gain_db == pytest.approx(-6.0, abs=0.13)
+
+
+def test_the_port_sends_only_the_plan_that_was_shown(emu, client, transport, tmp_path):
+    from churchtune.cli.package_writes import _PortPlan  # noqa: PLC0415
+
+    packages, _ = _two_packages(client, -3.0)
+    port = _port(client, transport)
+    shown = port.plan_packages(packages)
+    token = shown.token
+    assert isinstance(token, _PortPlan)
+    # A fresh plan that differs although every package still matches its "before".
+    other = _PortPlan(lambda state, policy: token.recipe(state, policy)[:-1], token.planned,
+                      token.allow_cut_filters)  # fmt: skip
+    tampered = dataclasses.replace(shown, token=other)
+    with pytest.raises(UnsafeWrite, match="changed while the plan was shown"):
+        port.apply(tampered, "применить", "применить", tmp_path / "u.json", lambda: False)
+    assert emu.writes == []
+    assert not (tmp_path / "u.json").exists()
