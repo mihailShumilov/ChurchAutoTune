@@ -82,7 +82,13 @@ class X32ConsolePort:
 
 @dataclass(slots=True)
 class DeviceAudioPort:
-    """The measurement audio device (the simulated hall in development)."""
+    """The measurement audio device (the simulated hall in development).
+
+    Attributes:
+        link: Development: connects the simulated hall to the in-process emulator.
+    """
+
+    link: Callable[[object], None] | None = None
 
     def devices(self) -> list[AudioDeviceInfo]:
         """Candidate devices, the console card first."""
@@ -94,7 +100,10 @@ class DeviceAudioPort:
 
     def open(self, name: str) -> MultiChannelBackend:
         """Open a device by name."""
-        return open_multi_backend(name, fs_hz=FS_HZ)
+        backend = open_multi_backend(name, fs_hz=FS_HZ)
+        if self.link is not None:
+            self.link(backend)
+        return backend
 
 
 METER_EVERY_S = 1.0
@@ -218,7 +227,7 @@ def build_services(ctx: typer.Context) -> tuple[Services, X32ConsolePort]:
     known = ((venue.console_host, venue.console_port or X32_PORT),) if venue.console_host else ()
     services = Services(
         console=console,
-        audio=DeviceAudioPort(),
+        audio=DeviceAudioPort(settings.hall_link),
         workspace=settings.workspace,
         now=settings.now,
         stop=threading.Event(),

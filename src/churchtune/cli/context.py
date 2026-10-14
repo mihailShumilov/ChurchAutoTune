@@ -71,12 +71,14 @@ class Settings:
         venue: The hall's values from ``venue.toml`` and the options.
         audio: ``fake`` or part of an audio device name.
         now: Clock, injectable for tests.
+        hall_link: Development: connects the simulated hall to the in-process emulator.
     """
 
     workspace: Workspace
     venue: Venue
     audio: str
     now: Callable[[], datetime] = datetime.now
+    hall_link: Callable[[object], None] | None = None
 
     @property
     def console_label(self) -> str:
