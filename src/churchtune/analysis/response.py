@@ -22,6 +22,8 @@ DEFAULT_SMOOTHING_FRACTION = 6
 NORM_BAND_HZ: tuple[float, float] = (500.0, 2000.0)
 LOW_CUTOFF_SEARCH_HZ: tuple[float, float] = (25.0, 200.0)
 DEFAULT_LOW_CUTOFF_DROP_DB = -10.0
+# The pass band starts where the response stays above the drop for this long.
+PASS_BAND_MIN_OCT = 1 / 3
 _POWER_FLOOR = 1e-30
 _MIN_BAND_WIDTH_HZ = 1e-9
 
@@ -159,14 +161,18 @@ def low_cutoff_hz(
     grid_hz: FloatArray = GRID_HZ,
     drop_db: float = DEFAULT_LOW_CUTOFF_DROP_DB,
 ) -> float:
-    """Lowest frequency above which the averaged response stays within ``drop_db`` of 0 dB.
+    """Where the speakers' own roll-off ends: the start of the pass band, 25..200 Hz.
 
-    Searched between 25 and 200 Hz. Below the result the system is not corrected: that is the
-    speakers' own roll-off, not the room.
+    Scanning up from 25 Hz, the first frequency above which the averaged response stays within
+    ``drop_db`` of 0 dB for at least a third of an octave. A dip above that point (a sub/top
+    cancellation, a room null) is not a roll-off: it is the junction's or the room's, and the
+    design rules decide what to do with it. Below the result the system is not corrected.
     """
     search = (grid_hz >= LOW_CUTOFF_SEARCH_HZ[0]) & (grid_hz <= LOW_CUTOFF_SEARCH_HZ[1])
     freqs, levels = grid_hz[search], avg_db[search]
-    below = np.nonzero(levels < drop_db)[0]
-    if len(below) == 0:
-        return float(freqs[0])
-    return float(freqs[min(below[-1] + 1, len(freqs) - 1)])
+    steady = max(1, round(len(freqs) / np.log2(freqs[-1] / freqs[0]) * PASS_BAND_MIN_OCT))
+    inside = levels >= drop_db
+    for start in range(len(freqs) - steady + 1):  # a full third of an octave each time
+        if inside[start : start + steady].all():
+            return float(freqs[start])
+    return float(freqs[-1])

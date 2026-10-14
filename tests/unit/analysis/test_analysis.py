@@ -216,6 +216,24 @@ def test_low_cutoff_without_a_roll_off_is_the_start_of_the_search_band():
     assert low_cutoff_hz(np.zeros_like(GRID_HZ)) == pytest.approx(25.0, rel=0.02)
 
 
+def test_low_cutoff_ignores_a_junction_dip_inside_the_pass_band():
+    avg = np.where(GRID_HZ < 40.0, -20.0, 0.0)
+    avg = np.where((GRID_HZ > 150) & (GRID_HZ < 190), -14.0, avg)  # sub/top cancellation
+
+    assert 40.0 <= low_cutoff_hz(avg) < 40.0 * 2 ** (1 / 48)
+
+
+def test_low_cutoff_skips_a_short_bump_inside_the_roll_off():
+    avg = np.where(GRID_HZ < 60.0, -20.0, 0.0)
+    avg = np.where((GRID_HZ > 30) & (GRID_HZ < 32), 0.0, avg)  # a mode peak below the speakers
+
+    assert 60.0 <= low_cutoff_hz(avg) < 60.0 * 2 ** (1 / 48)
+
+
+def test_low_cutoff_without_a_pass_band_is_the_top_of_the_search():
+    assert low_cutoff_hz(np.full_like(GRID_HZ, -30.0)) == pytest.approx(200.0, rel=0.02)
+
+
 def test_low_cutoff_ignores_dips_above_200_hz():
     avg = np.where((GRID_HZ > 300) & (GRID_HZ < 400), -30.0, 0.0)
 
