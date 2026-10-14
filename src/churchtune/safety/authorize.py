@@ -61,6 +61,11 @@ def _seal(
             tuple(sorted(policy.matrices)),
             repr(policy.limits),
             policy.allow_unverified_writes,
+            tuple(sorted(policy.sub_matrices)),
+            tuple(sorted(policy.top_matrices)),
+            policy.mute_originals,
+            policy.level_baselines,
+            policy.allow_cut_filters,
         )
     )
     return hmac.new(_SEAL_KEY, content.encode(), hashlib.sha256).hexdigest()
