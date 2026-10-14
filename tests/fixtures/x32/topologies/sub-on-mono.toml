@@ -1,0 +1,20 @@
+# Synthetic: the sub hangs on Main Mono (LR+M), tops on matrices 1/2. Main Mono addresses are
+# UNVERIFIED, so the sub path is suggest-only.
+description = "Tops on matrices 1/2, sub on Main Mono"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"outputs/main/06" = "/outputs/main/06 3 POST OFF"
+"main/m/config" = '/main/m/config "Sub" 67 RD'
+"main/m/mix" = "/main/m/mix ON -12.0"
+
+[expected]
+variant = "b_tops_on_main_sub_separate"
+sub = "mono"
+tops = ["matrix 1", "matrix 2"]
+issues = ["sub_on_mono_suggest_only"]
+
+[expected.outputs]
+"main 6" = "sub"
+"main 8" = "top_l"

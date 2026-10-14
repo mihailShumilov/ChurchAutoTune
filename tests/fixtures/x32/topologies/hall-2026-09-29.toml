@@ -1,0 +1,14 @@
+# The same hall three days earlier, Main LR EQ still set by ear (real dump, no overrides).
+description = "Reference hall before the session"
+base = "x32_dump_2026-09-29.txt"
+model = "X32P"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+sub = "matrix 3"
+tops = ["matrix 1", "matrix 2"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"
+"main 6" = "sub"

@@ -1,0 +1,24 @@
+# Synthetic: the sub is fed from mix bus 9 (assigned to Main LR is not needed; the bus is fed by
+# sends), matrix 3 no longer has an output. Bus EQ writes are UNVERIFIED, so the sub is
+# suggest-only.
+description = "Tops on matrices 1/2, sub on bus 9"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"outputs/main/06" = "/outputs/main/06 12 POST OFF"
+"bus/09/config" = '/bus/09/config "SUB" 25 RD'
+"bus/09/mix" = "/bus/09/mix ON -10.0 OFF +0 OFF   -oo"
+"bus/09/eq" = "/bus/09/eq ON"
+"bus/09/eq/6" = "/bus/09/eq/6 LR24 100.0 +0.00 2.0"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+sub = "bus 9"
+tops = ["matrix 1", "matrix 2"]
+issues = ["sub_on_bus_suggest_only"]
+
+[expected.outputs]
+"main 6" = "sub"
+"main 8" = "top_l"
+"main 7" = "top_r"

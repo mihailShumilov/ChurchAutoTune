@@ -1,0 +1,16 @@
+# Synthetic: no subwoofer; output 6 is switched off and matrix 3 is renamed.
+description = "Tops on matrices 1/2, no sub"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"outputs/main/06" = "/outputs/main/06 0 POST OFF"
+"mtx/03/config" = '/mtx/03/config "" 25 RD'
+
+[expected]
+variant = "c_tops_only"
+tops = ["matrix 1", "matrix 2"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"

@@ -1,0 +1,23 @@
+# Synthetic: nobody named the matrices. Roles come from the filters (low cut on 1/2, a deep high
+# shelf on 3) and the stereo link of matrices 1/2; confidence is lower and the wizard must ask.
+description = "Unnamed matrices: roles from filters and stereo link"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"mtx/01/config" = '/mtx/01/config "" 66 MG'
+"mtx/02/config" = '/mtx/02/config "" 66 MG'
+"mtx/03/config" = '/mtx/03/config "" 25 RD'
+"outputs/main/04" = "/outputs/main/04 0 POST OFF"
+"outputs/main/03" = "/outputs/main/03 0 POST OFF"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+sub = "matrix 3"
+tops = ["matrix 1", "matrix 2"]
+issues = ["confirm_roles"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"
+"main 6" = "sub"

@@ -1,0 +1,24 @@
+# Synthetic: a Midas M32 with Ukrainian scribble strips. Every write is suggest-only on M32 until a
+# human verifies it on hardware.
+description = "M32, Ukrainian names: portals on matrices 1/2, subwoofer on matrix 3"
+base = "x32_dump_2026-10-02.txt"
+model = "M32"
+
+[overrides]
+"mtx/01/config" = '/mtx/01/config "Портал лівий" 66 MG'
+"mtx/02/config" = '/mtx/02/config "Портал правий" 66 MG'
+"mtx/03/config" = '/mtx/03/config "Сабвуфер" 25 RD'
+"mtx/05/config" = '/mtx/05/config "" 66 MG'
+"mtx/06/config" = '/mtx/06/config "" 66 MG'
+"outputs/main/04" = "/outputs/main/04 0 POST OFF"
+"outputs/main/03" = "/outputs/main/03 0 POST OFF"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+sub = "matrix 3"
+tops = ["matrix 1", "matrix 2"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"
+"main 6" = "sub"
