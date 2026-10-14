@@ -1,0 +1,23 @@
+# Synthetic: an unnamed sub matrix with only a 40 Hz subsonic low cut (the low-pass lives in the
+# sub's own DSP). A 40 Hz cut is not a crossover high-pass: the matrix is a weak "sub" to confirm.
+description = "Unnamed sub matrix with a subsonic filter only"
+base = "x32_dump_2026-10-02.txt"
+model = "X32P"
+
+[overrides]
+"mtx/03/config" = '/mtx/03/config "" 25 RD'
+"mtx/03/eq/1" = "/mtx/03/eq/1 BU18 40.0 +0.00 2.0"
+"mtx/03/eq/6" = "/mtx/03/eq/6 HShv 10k74 +0.00 2.0"
+"outputs/main/04" = "/outputs/main/04 0 POST OFF"
+"outputs/main/03" = "/outputs/main/03 0 POST OFF"
+
+[expected]
+variant = "a_tops_and_sub_on_own_paths"
+subs = ["matrix 3"]
+tops = ["matrix 1", "matrix 2"]
+issues = ["confirm_roles"]
+
+[expected.outputs]
+"main 8" = "top_l"
+"main 7" = "top_r"
+"main 6" = "sub"

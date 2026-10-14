@@ -5,7 +5,7 @@ model = "X32P"
 
 [expected]
 variant = "a_tops_and_sub_on_own_paths"
-sub = "matrix 3"
+subs = ["matrix 3"]
 tops = ["matrix 1", "matrix 2"]
 others = ["matrix 5", "matrix 6"]
 issues = ["other_speakers_audible", "monitors_on_outputs"]

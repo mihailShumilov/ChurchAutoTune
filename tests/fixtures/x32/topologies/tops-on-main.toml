@@ -1,3 +1,5 @@
+# UNVERIFIED: output source ids 1/2 (Main L/R) are from documentation (docs/hardware-checklist.md #15);
+# replace this synthetic case with a real dump once a console with that routing is read.
 # Synthetic: the tops are fed straight from Main L / Main R, the sub stays on matrix 3. The
 # crossover high-pass has no place on the tops' own path, so it is suggest-only.
 description = "Tops on Main L/R, sub on matrix 3"
@@ -10,7 +12,7 @@ model = "X32P"
 
 [expected]
 variant = "b_tops_on_main_sub_separate"
-sub = "matrix 3"
+subs = ["matrix 3"]
 tops = ["main_l", "main_r"]
 issues = ["crossover_hpf_suggest_only"]
 

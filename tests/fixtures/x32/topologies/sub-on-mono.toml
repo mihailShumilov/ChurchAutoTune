@@ -1,3 +1,5 @@
+# UNVERIFIED: output source ids 3 (Main Mono) are from documentation (docs/hardware-checklist.md #15);
+# replace this synthetic case with a real dump once a console with that routing is read.
 # Synthetic: the sub hangs on Main Mono (LR+M), tops on matrices 1/2. Main Mono addresses are
 # UNVERIFIED, so the sub path is suggest-only.
 description = "Tops on matrices 1/2, sub on Main Mono"
@@ -11,7 +13,7 @@ model = "X32P"
 
 [expected]
 variant = "b_tops_on_main_sub_separate"
-sub = "mono"
+subs = ["mono"]
 tops = ["matrix 1", "matrix 2"]
 issues = ["sub_on_mono_suggest_only"]
 

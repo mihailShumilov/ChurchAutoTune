@@ -8,8 +8,10 @@ model = "X32P"
 "mtx/03/config" = '/mtx/03/config "" 25 RD'
 
 [expected]
+subs = []
 variant = "c_tops_only"
 tops = ["matrix 1", "matrix 2"]
+issues = ["no_sub_path_ask"]
 
 [expected.outputs]
 "main 8" = "top_l"
