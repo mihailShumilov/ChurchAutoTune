@@ -100,13 +100,17 @@ def _stat(values: list[float]) -> DecayStat:
 
 
 def analyze_points(
-    points: Mapping[str, PointResponse], mic_cal_db: FloatArray | None = None
+    points: Mapping[str, PointResponse],
+    mic_cal_db: FloatArray | None = None,
+    point_cal_db: Mapping[str, FloatArray] | None = None,
 ) -> Analysis:
     """Analyse the impulse responses of a session.
 
     Args:
         points: Measured points by name.
         mic_cal_db: Microphone response on the analysis grid, subtracted from every point.
+        point_cal_db: Per point, the response of the microphone that measured it (mic-set
+            calibration), subtracted as well.
 
     Returns:
         The analysis.
@@ -123,6 +127,8 @@ def analyze_points(
         curve = magnitude_db(point.ir, point.fs_hz)
         if mic_cal_db is not None:
             curve = curve - mic_cal_db
+        if point_cal_db is not None and name in point_cal_db:
+            curve = curve - point_cal_db[name]
         raw[name] = curve
         norm[name] = curve - band_mean_db(curve, *NORM_BAND_HZ)
         decays[name] = rt60_octaves(point.ir, point.fs_hz)
