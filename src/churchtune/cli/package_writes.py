@@ -235,10 +235,13 @@ def _switch_back(
     for _ in range(SWITCH_BACK_TRIES):
         try:
             state = read_console_state(console.client)
-            left = {n for n in left if not state.matrices[n].on}
+            left = {n for n in left if n not in state.matrices or not state.matrices[n].on}
+            missing = {n for n in left if n not in state.matrices}
+            if left == missing and missing:
+                return tuple(sorted(missing))  # not on this console: nothing can be switched
             if not left:
                 return ()
-            changes = [Change(mute_path(n), 0, 1, "OFF", "ON") for n in sorted(left)]
+            changes = [Change(mute_path(n), 0, 1, "OFF", "ON") for n in sorted(left - missing)]
             auth = authorize_typed(
                 WriteScope.TEMP_MUTES,
                 changes,
@@ -303,32 +306,41 @@ def send_runs(
         files.write_pending_mutes(guard.workspace, record)
     results: list[records.WriteResultLike] = []
     window: set[int] = set()
-    for scope, changes in runs_by_scope(planned):
-        try:
-            auth = authorize_typed(
-                scope, changes, undo_path, word, policy, undo_sha256=files.sha256_of(undo_path)
-            )
-        except UnsafeWrite:
-            if not results:
-                if recorded and guard is not None:
-                    files.clear_pending_mutes(guard.workspace)
-                raise
-            return _stopped(console, results, window, undo_path, word, policy, guard)
-        stop = None if window else should_stop  # never stopped with a speaker matrix muted
-        sent = list(ScopedWriter(console.transport, console.client, auth).apply(stop))
-        results.extend(sent)
-        for result in sent:
-            matrix = _matrix_of_switch(result.path)
-            if matrix is not None and result.ok:
-                if result.wanted == 0:
+    # Matrices the plan may have muted: switched back on whenever the plan does not finish.
+    could_be_muted = {n for n, on in muting.items() if on}
+    try:
+        for scope, changes in runs_by_scope(planned):
+            try:
+                auth = authorize_typed(
+                    scope, changes, undo_path, word, policy, undo_sha256=files.sha256_of(undo_path)
+                )
+                stop = None if window else should_stop  # never stopped with a matrix muted
+                sent = list(ScopedWriter(console.transport, console.client, auth).apply(stop))
+            except UnsafeWrite:
+                if not results:
+                    if recorded and guard is not None:
+                        files.clear_pending_mutes(guard.workspace)
+                    raise
+                return _stopped(console, results, could_be_muted, undo_path, word, policy, guard)
+            results.extend(sent)
+            for result in sent:
+                matrix = _matrix_of_switch(result.path)
+                if matrix is None:
+                    continue
+                if result.wanted == 0 and result.sent:  # muted, even if the readback was lost
                     window.add(matrix)
-                else:
+                elif result.ok:
                     window.discard(matrix)
-        undo = files.read_undo(undo_path)
-        update = {"results": records.result_models(results)}
-        files.write_json(undo_path, undo.model_copy(update=update))
-        if len(sent) != len(changes) or not all(r.ok for r in sent):
-            return _stopped(console, results, window, undo_path, word, policy, guard)
+            undo = files.read_undo(undo_path)
+            update = {"results": records.result_models(results)}
+            files.write_json(undo_path, undo.model_copy(update=update))
+            if len(sent) != len(changes) or not all(r.ok for r in sent):
+                return _stopped(console, results, could_be_muted, undo_path, word, policy, guard)
+    except BaseException:
+        # Ctrl+C or a lost connection inside the plan: switch the speakers back on right away.
+        if window:
+            _switch_back(console, could_be_muted, undo_path, word, policy)
+        raise
     if recorded and guard is not None:
         files.clear_pending_mutes(guard.workspace)
     return SendResult(results, True)
@@ -337,14 +349,17 @@ def send_runs(
 def _stopped(
     console: Console,
     results: list[records.WriteResultLike],
-    window: set[int],
+    could_be_muted: set[int],
     undo_path: Path,
     word: TypedWord,
     policy: WritePolicy,
     guard: MuteGuard | None,
 ) -> SendResult:
-    """A plan that stopped: switch back on what it muted; its record goes only if that worked."""
-    still = _switch_back(console, window, undo_path, word, policy) if window else ()
+    """A stopped plan: switch back on what it may have muted, judged by a fresh read.
+
+    The record goes only when a fresh read shows every such matrix on again.
+    """
+    still = _switch_back(console, could_be_muted, undo_path, word, policy) if could_be_muted else ()
     if not still and guard is not None:
         pending = files.read_pending_mutes(guard.workspace)
         if pending is not None and pending.created == PLAN_RECORD:

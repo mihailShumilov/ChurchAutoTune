@@ -553,3 +553,37 @@ def test_a_sub_that_will_not_come_back_is_named_and_recorded(emu, client, transp
     outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
     assert outcome.still_muted == (SUB_MATRIX,)
     assert files.read_pending_mutes(port.workspace) is not None  # the wizard will not finish
+
+
+def test_a_mute_whose_readback_was_lost_still_comes_back(emu, client, transport, tmp_path):
+    port = _port(client, transport)
+    plan = port.plan_packages([_sub_crossover(client)])
+    emu.silent.add(f"/mtx/{SUB_MATRIX:02d}/mix/on")  # the console mutes but does not answer
+    outcome = port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
+    emu.silent.clear()
+    assert not outcome.complete
+    assert emu.mtx[SUB_MATRIX]["on"]  # switched back on, judged by a fresh read
+    assert files.read_pending_mutes(port.workspace) is None
+
+
+def test_ctrl_c_inside_the_mute_window_switches_the_sub_back_on(
+    emu, client, transport, tmp_path, monkeypatch
+):
+    from churchtune.mixers.x32 import writer  # noqa: PLC0415
+
+    port = _port(client, transport)
+    plan = port.plan_packages([_sub_crossover(client)])
+    real_apply = writer.ScopedWriter.apply
+    calls = []
+
+    def interrupted(self, should_stop=None):
+        calls.append(1)
+        if len(calls) == 2:  # the run after the mute
+            raise KeyboardInterrupt
+        return real_apply(self, should_stop)
+
+    monkeypatch.setattr(writer.ScopedWriter, "apply", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        port.apply(plan, "применить", "применить", tmp_path / "u.json", lambda: False)
+    monkeypatch.setattr(writer.ScopedWriter, "apply", real_apply)
+    assert emu.mtx[SUB_MATRIX]["on"]

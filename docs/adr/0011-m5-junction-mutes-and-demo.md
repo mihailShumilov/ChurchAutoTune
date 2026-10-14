@@ -74,7 +74,21 @@ delay switch check needed only to be written down (point 9).
     plan's only the last confirmed value of each parameter (a matrix muted and switched back on
     by the plan, then muted by hand, is left alone); `ctune apply-packages` asks the separate
     question for a level far from the venue's first reading too, and refuses it under
-    `--yes-i-am-at-the-console`.
+    `--yes-i-am-at-the-console`. A mute that went out but whose readback was lost counts as
+    muted; on a stop, a failure or Ctrl+C every matrix the plan may have muted is switched back
+    on from a fresh read, and the record goes only when that read shows them on. `ctune sub
+    restore` refuses another console's record and a matrix the console does not have, and asks
+    for the typed word.
+
+11. **Open: the system EQ near the junction while it is not measured.** With the hall hearing
+    the matrices, a system EQ alone can make one seat worse near the crossover (125 Hz, 3.6 dB
+    at one seat while the average improves): a cut aimed at the hump of a hot sub is the same at
+    every seat, and seats without the hump get thin. The check measurement says so and offers
+    the undo. The acoustics review recommends, while the junction is not measured, only broad
+    and gentle cuts in 0.6–2 fc and a per-seat guard (no seat predicted more than 2 dB worse);
+    a first attempt broke the hall acceptance tests (the 50 Hz mode and the 250 Hz balance) and
+    showed the optimiser is not stable between runs, so it is left for a separate change with
+    its own review.
 
 ## Consequences
 
