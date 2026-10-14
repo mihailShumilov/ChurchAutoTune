@@ -29,9 +29,9 @@ from churchtune.storage.models import WizardStateFile
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
-from churchtune.wizard.steps.apply import WRITING_GOALS, undo_applied
+from churchtune.wizard.steps.apply import APPLIED, WRITING_GOALS, undo_applied
 from churchtune.wizard.steps.finish import session_analysis
-from churchtune.wizard.steps.measure import measure_rounds, venue_plan
+from churchtune.wizard.steps.measure import measure_rounds, place_text, venue_plan
 from churchtune.wizard.steps.setup import measuring
 from churchtune.wizard.ui import confirm, info, t
 
@@ -40,8 +40,9 @@ MIN_VERIFY_POINTS = 4
 TARGET = TargetSpec()
 # The before/after picture: one column per third octave, 63 Hz-8 kHz.
 CHART_RANGE_HZ = (63.0, 8000.0)
-CHART_LEVELS = " ▁▂▃▄▅▆▇█"
+CHART_LEVELS = "▁▂▃▄▅▆▇█"  # the lowest block for "on target", so a row never looks cut off
 CHART_SPAN_DB = 8.0
+SAME_DB = 0.2  # a change of the worst seat smaller than this is "no change"
 
 
 def target_of(analysis: Analysis) -> FloatArray:
@@ -116,17 +117,39 @@ def chart(before: Analysis, after: Analysis) -> str:
     return "\n".join(rows)
 
 
-def _numbers(result: VerifyResult) -> list[Text]:
-    return [
+SHOWN_HARM_DB = 1.0  # a smaller local harm is not worth a line unless it got worse
+
+
+def place_of(plan: PointPlan, point: str) -> Text:
+    """A seat as the measurement step named it: "place 3 (front rows, left, ...)"."""
+    number = plan.ids.index(point) + 1 if point in plan.ids else 0
+    return t("verify-place", number=number, place=place_text(plan, point))
+
+
+def _direction(delta_db: float) -> str:
+    return "better" if delta_db < -SAME_DB else "worse" if delta_db > SAME_DB else "same"
+
+
+def _numbers(result: VerifyResult, plan: PointPlan) -> list[Text]:
+    texts = [
         t("verify-m", before_db=round(result.m_before_db, 1), after_db=round(result.m_after_db, 1)),
-        t("verify-worst", point=result.worst_point, delta_db=round(result.worst_delta_db, 1)),
         t(
-            "verify-band",
-            point=result.band_point,
-            freq_hz=round(result.band_hz),
-            delta_db=round(result.band_delta_db, 1),
+            "verify-worst",
+            place=place_of(plan, result.worst_point),
+            direction=_direction(result.worst_delta_db),
+            delta_db=round(abs(result.worst_delta_db), 1),
         ),
     ]
+    if result.verdict is Verdict.WORSE or result.band_delta_db >= SHOWN_HARM_DB:
+        texts.append(
+            t(
+                "verify-band",
+                place=place_of(plan, result.band_point),
+                freq_hz=round(result.band_hz),
+                delta_db=round(result.band_delta_db, 1),
+            )
+        )
+    return texts
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,17 +167,22 @@ class Verify:
     def run(self, ctx: WizardContext) -> Outcome:
         """Pick the points, measure them again, judge, offer the way back when worse."""
         state = ctx.box.state
-        if state.applied_undo is None:
+        if state.applied_state != APPLIED or state.applied_undo is None:
             info(ctx.prompter, t("verify-nothing-applied"))
             return Outcome.DONE
         baseline = session_analysis(ctx, ctx.session_dir)
         if baseline is None:
-            info(ctx.prompter, t("verify-nothing-applied"))
+            info(ctx.prompter, t("verify-no-baseline"))
             return Outcome.DONE
         plan = venue_plan(ctx)
         points = state.verify_points or verify_points(baseline, plan, len(state.mic_inputs))
         ctx.box.update(verify_points=points)
-        info(ctx.prompter, t("verify-what", count=len(points)), t("verify-same-places"))
+        info(
+            ctx.prompter,
+            t("verify-what", count=len(points)),
+            t("verify-which"),
+            t("verify-same-places", count=len(state.mic_inputs)),
+        )
         directory = ctx.session_dir / VERIFY_DIR
         ctx.mics_checked = False  # read the console again before the first sound
 
@@ -172,7 +200,7 @@ class Verify:
         result = verify(before, after, target_of(before))
         ctx.box.update(verify_verdict=result.verdict.value)
         verdict = t(f"verify-{result.verdict.value.replace('_', '-')}")
-        info(ctx.prompter, verdict, *_numbers(result), t("verify-chart"),
+        info(ctx.prompter, verdict, *_numbers(result, plan), t("verify-chart"),
              picture=chart(before, after))  # fmt: skip
         if result.verdict is not Verdict.WORSE:
             return Outcome.DONE

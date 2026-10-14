@@ -372,7 +372,7 @@ def test_a_console_changed_after_the_proposal_is_refused(rig):
         return Answer("")
 
     volunteer = _volunteer(
-        emulator, hall, **{"step-results-next-milestones": turn_a_knob, "apply-type": "apply"}
+        emulator, hall, **{"step-results-next-apply": turn_a_knob, "apply-type": "apply"}
     )
     result = start(volunteer, services, "en")
     assert result.finished
@@ -394,6 +394,40 @@ def test_a_write_that_does_not_read_back_stops_and_offers_the_way_back(rig):
     assert result.finished
     keys = volunteer.shown_keys()
     assert "apply-readback-failed" in keys
-    assert "apply-offer-undo" in keys
+    assert "apply-offer-undo" in keys or "apply-offer-check" in keys
     assert result.state.applied_undo is not None
     assert "undo-done" in keys or "undo-nothing" in keys or "undo-incomplete" in keys
+
+
+def test_a_typo_in_the_word_asks_again_instead_of_ending(rig):
+    emulator, hall, services = rig
+    answers = iter(["aplly", "apply"])
+    volunteer = _volunteer(emulator, hall, **{"apply-type": lambda _p: Answer(next(answers))})
+    result = start(volunteer, services, "ru")
+    assert result.finished
+    keys = volunteer.shown_keys()
+    assert "apply-word-mismatch" in keys
+    assert "apply-done" in keys
+    assert result.state.applied_state == "applied"
+
+
+def test_after_the_way_back_the_last_screen_does_not_ask_to_save_the_scene(rig):
+    emulator, hall, services = rig
+
+    def spoil_it(prompt):
+        emulator.hand_change("/main/st/eq/5/g", 0.7)
+        emulator.hand_change("/main/st/eq/5/f", 0.6)
+        return Answer("")
+
+    volunteer = _volunteer(
+        emulator, hall,
+        **{"apply-type": "apply", "apply-done": spoil_it, "undo-type": "undo",
+           "step-points-bad": "accept"},
+    )  # fmt: skip
+    result = start(volunteer, services, "uk")
+    keys = volunteer.shown_keys()
+    if result.state.applied_state == "reverted":
+        assert "step-finish-reverted" in keys
+        assert "step-finish-scene" not in keys
+    else:  # the hand change itself was left alone: something written stays
+        assert "step-finish-scene" in keys

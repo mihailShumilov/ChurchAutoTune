@@ -72,8 +72,10 @@ class PlannedWrite:
         strip: The strip it belongs to.
         band: EQ band number, or None for a strip parameter.
         param: ``type``, ``freq``, ``gain``, ``q``, ``eq_on``, ``fader`` or ``on``.
-        before: Its value now, as the console shows it.
-        after: Its value after the write, on the console's grid.
+        before: Its value now, as the console shows it (for logs and experts).
+        after: Its value after the write, on the console's grid (for logs and experts).
+        before_value: The value now in plain units: Hz, dB, Q, the type name, or on/off.
+        after_value: The value after the write in the same units.
     """
 
     path: str
@@ -82,6 +84,8 @@ class PlannedWrite:
     param: str
     before: str
     after: str
+    before_value: float | bool | str = ""
+    after_value: float | bool | str = ""
 
 
 @dataclass(frozen=True, slots=True)

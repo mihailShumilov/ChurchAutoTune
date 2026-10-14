@@ -36,6 +36,7 @@ from churchtune.domain.changes import Change, WireValue, WriteScope
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.errors import UnsafeWrite
+from churchtune.mixers.x32 import params
 from churchtune.mixers.x32.laws import X32ValueLaws
 from churchtune.mixers.x32.nodes import read_console_state
 from churchtune.mixers.x32.plan_writes import (
@@ -565,13 +566,37 @@ class X32WritePort:
         return WriteOutcome(undo_path, sent, complete, stopped, failed)
 
 
+def plain_value(param: str, value: WireValue) -> float | bool | str:
+    """A wire value in plain units for the wizard (Hz, dB, Q, type name, on/off)."""
+    if param in ("on", "eq_on"):
+        return bool(value)
+    if param == "type":
+        return params.EQ_TYPES[int(value)].value
+    convert = {
+        "freq": params.norm_to_freq,
+        "gain": params.norm_to_gain,
+        "q": params.norm_to_q,
+        "fader": params.norm_to_fader,
+    }[param]
+    return float(convert(float(value)))
+
+
 def _rows(planned: Sequence[PlannedChange]) -> tuple[PlannedWrite, ...]:
     rows = []
     for item in planned:
         change = item.change
         strip, band, param = describe_path(change.path)
         rows.append(
-            PlannedWrite(change.path, strip, band, param, change.old_display, change.new_display)
+            PlannedWrite(
+                change.path,
+                strip,
+                band,
+                param,
+                change.old_display,
+                change.new_display,
+                plain_value(param, change.old_value),
+                plain_value(param, change.new_value),
+            )
         )
     return tuple(rows)
 
