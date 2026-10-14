@@ -9,8 +9,14 @@ WireValue = float | int
 class WriteScope(StrEnum):
     """Write scope: which parameters a plan may touch. Values are stored in undo files."""
 
-    MAIN = "main"  # Main LR EQ only
-    SUB = "sub"  # matrix EQ / mute / fader / polarity and output delays
+    MAIN = "main"  # Main LR EQ only (expert CLI, M0)
+    SUB = "sub"  # matrix EQ / mute / fader / polarity and output delays (expert CLI, M0)
+    # The scopes of SPEC §9.2 (M5): one per kind of change, each with its own limits.
+    TEMP_MUTES = "temp_mutes"  # matrix mutes during a measurement, restored after
+    SYSTEM_EQ = "system_eq"  # Main LR and the sub/top matrices' EQ
+    LEVELS = "levels"  # the sub path's fader
+    DELAY = "delay"  # output delays (never verified on hardware)
+    POLARITY = "polarity"  # the sub matrix polarity (never verified on hardware)
 
 
 @dataclass(frozen=True, slots=True)
