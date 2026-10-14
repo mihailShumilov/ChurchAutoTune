@@ -3,37 +3,77 @@
 At the junction points every microphone hears three blocks in one stream: the sub alone, the
 tops alone, and everything as it normally plays. Only matrices are muted, through the write
 port: the original switches are recorded before the first mute, every switch is confirmed by
-readback and the originals come back whatever happens. Without this measurement no crossover is
-proposed (a crossover set blind can open a hole in the bass).
+readback and the originals come back in ``finally``, whatever happens. A restore that is not
+confirmed stops the measurement and tells the person which Mute buttons to check. Without this
+measurement no crossover is proposed (a crossover set blind can open a hole in the bass).
 """
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
+from enum import StrEnum
 
-from churchtune.domain.snapshot import SourceKind
-from churchtune.errors import ConsoleUnreachable, MeasurementAborted, UnsafeWrite
-from churchtune.measure.junction import measure_junction_round
-from churchtune.measure.rounds import plan_rounds
+from churchtune.domain.snapshot import SignalRef, SourceKind
+from churchtune.errors import ConsoleUnreachable, UnsafeWrite
+from churchtune.measure.junction import JunctionMic, junction_problem, measure_junction_round
+from churchtune.measure.plan import PointPlan
+from churchtune.measure.rounds import Round, plan_rounds
 from churchtune.storage.files import JUNCTION_DIR, save_junction_point
 from churchtune.storage.models import JunctionMeta, JunctionState, RolesModel, WizardStateFile
+from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import FS_HZ, MuteSession, WizardContext, WritePort
 from churchtune.wizard.state import Outcome
-from churchtune.wizard.steps.apply import WRITING_GOALS, ask_word, write_table
+from churchtune.wizard.steps.apply import (
+    MUTE_WORD,
+    WRITING_GOALS,
+    ask_word,
+    restore_pending_mutes,
+)
 from churchtune.wizard.steps.measure import (
     MeasurePoints,
     ensure_backend,
+    place_text,
     venue_plan,
     warn_before_sound,
 )
+from churchtune.wizard.steps.proposal import path_text
 from churchtune.wizard.steps.setup import ensure_driver, load_snapshot, measuring
 from churchtune.wizard.ui import info, t
 
-MUTE_WORD = "mute-word"
+logger = logging.getLogger(__name__)
 RESTORE_TRIES = 5
 RESTORE_EVERY_S = 2.0  # SPEC §9.4: try again every 2 s while the console does not answer
-QUIET_BLOCK_DBFS = -50.0
+# The mute switches between blocks happen in the silent pre-roll of the next block; a longer
+# pre-roll than the ordinary sweep's leaves time for a slow readback before the sweep starts.
+JUNCTION_PREROLL_S = 1.0
 
 
-def junction_matrices(ctx: WizardContext) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+class RoundsEnd(StrEnum):
+    """How the junction rounds ended."""
+
+    DONE = "done"
+    MUTE_FAILED = "mute_failed"  # a mute was not confirmed; the switches came back
+    NOT_RESTORED = "not_restored"  # the switches are not confirmed back: the person checks
+
+
+@dataclass(frozen=True, slots=True)
+class JunctionMatrices:
+    """The matrices the junction mutes, with their names on the console."""
+
+    sub: tuple[int, ...]
+    tops: tuple[int, ...]
+    names: dict[int, str]
+
+    def texts(self) -> tuple[Text, ...]:
+        """Every muted matrix in words: "matrix 3 (Sub buffer)"."""
+        texts = []
+        for n in (*self.sub, *self.tops):
+            matrix = path_text(SignalRef(SourceKind.MATRIX, n))
+            name = self.names.get(n, "").strip()
+            texts.append(t("junction-matrix", matrix=matrix, name=name) if name else matrix)
+        return tuple(texts)
+
+
+def junction_matrices(ctx: WizardContext) -> JunctionMatrices | None:
     """The sub and top matrices of the confirmed topology; None when mutes cannot separate them.
 
     Only matrices are muted: a top or sub path on Main LR or a bus cannot be isolated.
@@ -41,68 +81,116 @@ def junction_matrices(ctx: WizardContext) -> tuple[tuple[int, ...], tuple[int, .
     from churchtune.domain.topology import with_roles  # noqa: PLC0415 - one use
 
     driver = ensure_driver(ctx)
-    topology = with_roles(driver.infer_topology(load_snapshot(ctx)), ctx.box.state.roles)
+    snapshot = load_snapshot(ctx)
+    topology = with_roles(driver.infer_topology(snapshot), ctx.box.state.roles)
+    refs = (*topology.subs, *topology.tops)
     if not topology.subs or not topology.tops:
         return None
-    if any(r.kind is not SourceKind.MATRIX for r in (*topology.subs, *topology.tops)):
+    if any(r.kind is not SourceKind.MATRIX for r in refs):
         return None
     sub = tuple(dict.fromkeys(r.number for r in topology.subs))
     tops = tuple(dict.fromkeys(r.number for r in topology.tops))
     if set(sub) & set(tops):
         return None
-    return sub, tops
+    names = {n: m.name for n, m in snapshot.matrices.items() if n in (*sub, *tops)}
+    return JunctionMatrices(sub, tops, names)
 
 
-def restore_pending_mutes(ctx: WizardContext) -> bool:  # noqa: PLR0911 - one exit per case
-    """Put back the mutes of an interrupted measurement (fresh read, table, typed word).
-
-    Returns:
-        True when nothing is pending any more.
-    """
-    writes = ctx.services.writes
-    if writes is None:
-        return True
-    try:
-        plan = writes.pending_mutes()
-    except ConsoleUnreachable:
-        info(ctx.prompter, t("apply-console-lost"))
-        return False
-    if plan is None:
-        return True
-    if not plan.writes:  # the console already has every original switch: nothing is written
-        try:
-            return writes.restore_pending_mutes(plan, "", "")
-        except (UnsafeWrite, ConsoleUnreachable):
-            return False
-    answer = ask_word(
-        ctx, MUTE_WORD, t("mutes-pending-what"), t("mutes-pending-type",
-                                                   word=ctx.services.words(MUTE_WORD)),
-        table=write_table(plan),
-    )  # fmt: skip
-    if answer is None:
-        info(ctx.prompter, t("mutes-pending-left"))
-        return False
-    try:
-        writes.restore_pending_mutes(plan, *answer)
-    except UnsafeWrite:
-        info(ctx.prompter, t("mutes-pending-changed"))
-        return False
-    except ConsoleUnreachable:
-        info(ctx.prompter, t("apply-console-lost"))
-        return False
-    info(ctx.prompter, t("mutes-pending-done"))
-    return True
-
-
-def _restore(ctx: WizardContext, session: MuteSession, matrices: tuple[int, ...]) -> None:
-    """Put the originals back, trying again every 2 s; say what to do by hand if it fails."""
-    for attempt in range(RESTORE_TRIES):
+def _restore(ctx: WizardContext, session: MuteSession, matrices: JunctionMatrices) -> bool:
+    """Put the originals back, trying again every 2 s; tell the person if it never confirms."""
+    for attempt in range(1, RESTORE_TRIES + 1):
         if session.restore():
-            return
-        if attempt < RESTORE_TRIES - 1:
+            return True
+        logger.warning("junction mutes not restored, attempt %d of %d", attempt, RESTORE_TRIES)
+        if attempt < RESTORE_TRIES:
             ctx.services.sleep(RESTORE_EVERY_S)
-    numbers = ", ".join(str(n) for n in matrices)
-    info(ctx.prompter, t("junction-restore-by-hand", matrices=numbers))
+    info(ctx.prompter, t("junction-restore-by-hand", matrices=matrices.texts()))
+    return False
+
+
+@dataclass(frozen=True, slots=True)
+class _Round:
+    """One round of the junction and what it needs to be saved."""
+
+    one: Round
+    plan: PointPlan
+    matrices: JunctionMatrices
+    level_dbfs: float
+
+
+def _save(ctx: WizardContext, round_: _Round, mics: tuple[JunctionMic, ...]) -> None:
+    where = {p.usb_input: p.point for p in round_.one.placements}
+    plan = round_.plan
+    for mic in mics:
+        point = where[mic.usb_input]
+        meta = JunctionMeta(
+            point=point,
+            time=ctx.services.now().isoformat(timespec="seconds"),
+            level_dbfs=round_.level_dbfs,
+            peaks_dbfs=mic.peaks_dbfs,
+            roles=RolesModel(sub=round_.matrices.sub, mains=round_.matrices.tops),
+            state=JunctionState(sub_fader=None),
+        )
+        problem = junction_problem(mic, FS_HZ)
+        if problem is not None:  # never designed on: a mute did not switch, or a block was off
+            number = plan.ids.index(point) + 1 if point in plan.ids else 0
+            place = place_text(plan, point)
+            info(ctx.prompter, t(f"junction-rejected-{problem.value}", number=number,
+                                 place=place))  # fmt: skip
+            continue
+        irs = (mic.sub, mic.tops, mic.both)
+        save_junction_point(ctx.session_dir / JUNCTION_DIR, meta, irs, FS_HZ)
+        measured = {**ctx.box.state.junction_measured, point: point}
+        ctx.box.update(junction_measured=measured)
+
+
+def measure_rounds(
+    ctx: WizardContext,
+    writes: WritePort,
+    todo: list[str],
+    matrices: JunctionMatrices,
+    answer: tuple[str, str],
+) -> RoundsEnd:
+    """Every round: place, warn, record the switches, three blocks, the switches back.
+
+    The switches come back in ``finally``: a stop, a failed mute, an audio error or Ctrl+C;
+    a restore that is not confirmed ends the rounds.
+    """
+    plan = venue_plan(ctx)
+    ctx.mics_checked = False  # read the console again before the first sound
+    stored = ctx.box.state.sweep_level_dbfs
+    level = stored if stored is not None else ctx.services.sweep.level_dbfs
+    sweep = replace(ctx.services.sweep,
+                    preroll_s=max(ctx.services.sweep.preroll_s, JUNCTION_PREROLL_S))  # fmt: skip
+    for one in plan_rounds(todo, list(ctx.box.state.mic_inputs)):
+        MeasurePoints.place(ctx, one, plan)
+        warn_before_sound(ctx, t("junction-sweeps"), countdown=True)
+        try:
+            session = writes.start_junction_mutes(matrices.sub, matrices.tops, *answer)
+        except (UnsafeWrite, ConsoleUnreachable):
+            return RoundsEnd.MUTE_FAILED  # nothing was muted
+        mics: tuple[JunctionMic, ...] = ()
+        failed = False
+        try:
+            mics = measure_junction_round(
+                ensure_backend(ctx),
+                list(one.inputs),
+                session.switch,
+                fs_hz=FS_HZ,
+                sweep=sweep,
+                level_dbfs=level,
+                stop=ctx.services.stop,
+            )
+        except (UnsafeWrite, ConsoleUnreachable):
+            failed = True
+        finally:
+            restored = _restore(ctx, session, matrices)
+        if not restored:
+            return RoundsEnd.NOT_RESTORED
+        if failed:
+            return RoundsEnd.MUTE_FAILED
+        _save(ctx, _Round(one, plan, matrices, level), mics)
+    return RoundsEnd.DONE
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,7 +217,7 @@ class Junction:
         if not todo:
             return Outcome.DONE
         if writes is None:
-            info(ctx.prompter, t("junction-not-possible"))
+            info(ctx.prompter, t("junction-no-writes"))
             return Outcome.DONE
         if not restore_pending_mutes(ctx):
             info(ctx.prompter, t("junction-skipped-pending"))
@@ -138,68 +226,23 @@ class Junction:
         if matrices is None:
             info(ctx.prompter, t("junction-not-possible"))
             return Outcome.DONE
-        sub, tops = matrices
         word = ctx.services.words(MUTE_WORD)
         answer = ask_word(
-            ctx, MUTE_WORD, t("junction-what", count=len(todo)), t("junction-mutes"),
-            t("junction-type", word=word), table=None,
-        )  # fmt: skip
+            ctx,
+            MUTE_WORD,
+            t("junction-what", count=len(todo)),
+            t("junction-mutes"),
+            t("junction-type", word=word),
+            table=None,
+        )
         if answer is None:
             info(ctx.prompter, t("junction-cancelled"))
             return Outcome.DONE
-        self._rounds(ctx, writes, todo, (sub, tops), answer)
-        count = len(ctx.box.state.junction_measured)
-        info(ctx.prompter, t("junction-done", count=count))
+        end = measure_rounds(ctx, writes, todo, matrices, answer)
+        done, total = len(ctx.box.state.junction_measured), len(state.junction_points)
+        partial = t("junction-partial", done=done, total=total)
+        if end is RoundsEnd.MUTE_FAILED:
+            info(ctx.prompter, t("junction-mute-failed"), partial)
+        elif end is RoundsEnd.DONE:
+            info(ctx.prompter, t("junction-done", count=done) if done == total else partial)
         return Outcome.DONE
-
-    @staticmethod
-    def _rounds(
-        ctx: WizardContext,
-        writes: WritePort,
-        todo: list[str],
-        matrices: tuple[tuple[int, ...], tuple[int, ...]],
-        answer: tuple[str, str],
-    ) -> None:
-        sub, tops = matrices
-        plan = venue_plan(ctx)
-        ctx.mics_checked = False  # read the console again before the first sound
-        level = ctx.box.state.sweep_level_dbfs
-        for one in plan_rounds(todo, list(ctx.box.state.mic_inputs)):
-            MeasurePoints.place(ctx, one, plan)
-            warn_before_sound(ctx, t("junction-sweeps"), countdown=True)
-            session = writes.start_junction_mutes(sub, tops, *answer)
-            try:
-                mics = measure_junction_round(
-                    ensure_backend(ctx),
-                    list(one.inputs),
-                    session.switch,
-                    fs_hz=FS_HZ,
-                    sweep=ctx.services.sweep,
-                    level_dbfs=level if level is not None else -24.0,
-                    stop=ctx.services.stop,
-                )
-            except MeasurementAborted:
-                _restore(ctx, session, (*sub, *tops))
-                raise
-            except (UnsafeWrite, ConsoleUnreachable):
-                _restore(ctx, session, (*sub, *tops))
-                info(ctx.prompter, t("junction-mute-failed"))
-                return
-            _restore(ctx, session, (*sub, *tops))
-            where = {p.usb_input: p.point for p in one.placements}
-            for mic in mics:
-                point = where[mic.usb_input]
-                meta = JunctionMeta(
-                    point=point,
-                    time=ctx.services.now().isoformat(timespec="seconds"),
-                    level_dbfs=level if level is not None else -24.0,
-                    peaks_dbfs=mic.peaks_dbfs,
-                    roles=RolesModel(sub=sub, mains=tops),
-                    state=JunctionState(sub_fader=None),
-                )
-                save_junction_point(ctx.session_dir / JUNCTION_DIR, meta,
-                                    (mic.sub, mic.tops, mic.both), FS_HZ)  # fmt: skip
-                ctx.box.update(junction_measured={**ctx.box.state.junction_measured,
-                                                  point: point})  # fmt: skip
-                if min(mic.peaks_dbfs) < QUIET_BLOCK_DBFS:
-                    info(ctx.prompter, t("junction-quiet-block", point=point))

@@ -26,6 +26,7 @@ from churchtune.storage.models import (
     PackageModel,
     PackagesFile,
     PathRefModel,
+    ResultModel,
 )
 
 MAIN = SignalRef(SourceKind.MAIN_L)
@@ -297,9 +298,25 @@ def collapsed_changes(changes: Sequence[ChangeModel]) -> list[ChangeModel]:
     return collapsed
 
 
-def written_values(changes: Sequence[ChangeModel]) -> dict[str, list[WireValue]]:
-    """Every value the plan wrote (or meant to write) per path, in order."""
+def written_values(
+    changes: Sequence[ChangeModel], results: Sequence[ResultModel] = ()
+) -> dict[str, list[WireValue]]:
+    """The values a plan may have left on the console, per path.
+
+    With the results of the undo file: the last confirmed value of each path, plus the values
+    of later writes that went out but did not read back (the console may hold either). A
+    value the plan wrote and then replaced (a matrix muted and switched back on) is not one of
+    them: finding it now means someone set it by hand. Without results (an older file), every
+    value the plan meant to write counts.
+    """
     written: dict[str, list[WireValue]] = {}
-    for change in changes:
-        written.setdefault(change.path, []).append(change.new_value)
+    if not results:
+        for change in changes:
+            written.setdefault(change.path, []).append(change.new_value)
+        return written
+    for change, result in zip(changes, results, strict=False):
+        if result.ok:
+            written[change.path] = [change.new_value]
+        elif result.sent:
+            written.setdefault(change.path, []).append(change.new_value)
     return written

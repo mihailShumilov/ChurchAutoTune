@@ -12,6 +12,7 @@ from enum import StrEnum
 import numpy as np
 import numpy.typing as npt
 
+from churchtune.analysis.response import third_octave_centres
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.levels import peak_dbfs
@@ -192,3 +193,52 @@ def measure_junction_round(  # noqa: PLR0913 - explicit configuration instead of
         )
         mics.append(JunctionMic(usb_input, sub, tops, both, (peaks[0], peaks[1], peaks[2])))
     return tuple(mics)
+
+
+# A junction point is trusted only if the "both" block matches the sum of the sub and tops
+# blocks where they meet: otherwise a mute did not switch, switched late, or something moved.
+CHECK_BAND_HZ = (50.0, 200.0)
+MISMATCH_LIMIT_DB = 3.0
+QUIET_BELOW_LOUDEST_DB = 20.0  # a block this far below the loudest one did not really play
+CLIP_PEAK_DBFS = -0.5
+
+
+def junction_mismatch_db(mic: JunctionMic, fs_hz: float) -> float:
+    """RMS difference (third octaves, 50-200 Hz) between "both" and the complex sum sub + tops.
+
+    The responses are taken as stored (the causal first half of each circular response).
+    """
+    half = len(mic.sub) // 2
+    sub, tops, both = mic.sub[:half], mic.tops[:half], mic.both[:half]
+    n = len(sub)
+    freqs = np.fft.rfftfreq(n, 1.0 / fs_hz)
+    summed = np.abs(np.fft.rfft(sub, n) + np.fft.rfft(tops, n)) ** 2
+    measured = np.abs(np.fft.rfft(both, n)) ** 2
+    differences = []
+    for centre in third_octave_centres(*CHECK_BAND_HZ):
+        inside = (freqs >= centre * 2 ** (-1 / 6)) & (freqs < centre * 2 ** (1 / 6))
+        if not inside.any():
+            continue
+        sum_db = 10 * np.log10(np.mean(summed[inside]) + 1e-30)
+        both_db = 10 * np.log10(np.mean(measured[inside]) + 1e-30)
+        differences.append(sum_db - both_db)
+    return float(np.sqrt(np.mean(np.square(differences)))) if differences else float("inf")
+
+
+class JunctionProblem(StrEnum):
+    """Why a junction point is not used."""
+
+    CLIPPED = "clipped"
+    QUIET = "quiet"
+    MISMATCH = "mismatch"
+
+
+def junction_problem(mic: JunctionMic, fs_hz: float) -> JunctionProblem | None:
+    """Why this microphone's junction blocks cannot be trusted, or None when they can."""
+    if max(mic.peaks_dbfs) > CLIP_PEAK_DBFS:
+        return JunctionProblem.CLIPPED
+    if min(mic.peaks_dbfs) < max(mic.peaks_dbfs) - QUIET_BELOW_LOUDEST_DB:
+        return JunctionProblem.QUIET
+    if junction_mismatch_db(mic, fs_hz) > MISMATCH_LIMIT_DB:
+        return JunctionProblem.MISMATCH
+    return None

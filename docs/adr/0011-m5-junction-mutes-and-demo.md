@@ -9,8 +9,8 @@ proposed a crossover: that needs the sub and the tops measured apart at the junc
 the wizard could not mute anything. Writing a real crossover also showed that the never-louder
 order of ADR 0010 refuses common changes (a high-Q shelf turning into a crossover slope, two cuts
 that swap places). The `--emulator` demo stopped at the playback path, and three SPEC items were
-open: the ±12 dB warning against the venue's first snapshot, a non-interactive mode, the delay
-switch check.
+open: the ±12 dB warning against the venue's first snapshot and a non-interactive mode; the
+delay switch check needed only to be written down (point 9).
 
 ## Decision
 
@@ -22,9 +22,13 @@ switch check.
 2. **The junction step S10b** (`wizard/steps/junction.py`) runs when the confirmed topology has
    a sub and tops on their own matrices (otherwise mutes cannot separate them, and no crossover
    is proposed). Per round of microphones: place, warn, record the switches, three sweeps in one
-   stream (sub, tops, everything; `measure.junction.measure_junction_round`), the originals back
-   in `finally`. A restore that fails is tried every 2 s; after five tries the person is told
-   which matrices to switch on by hand and the pending file stays. Junction points live in
+   stream (sub, tops, everything; `measure.junction.measure_junction_round`, with a 1 s pre-roll
+   so a slow readback still switches before the next sweep), the originals back in `finally`,
+   built from a fresh read of the console (a half-failed switch still comes back). A restore that
+   is not confirmed is tried every 2 s; after five tries the person is told which matrices (by
+   name) to check, the measurement stops and the pending file stays. A point whose blocks do not
+   add up (the "both" block differs from sub + tops by more than 3 dB in 50–200 Hz), whose block
+   is silent (20 dB below the loudest) or clipped is not used. Junction points live in
    `junction/` of the session (apart from the ordinary points of the same name) and go into the
    design, which can then propose the crossover.
 3. **Pending mutes come back first**: before the junction and before the last screen, the
@@ -36,7 +40,8 @@ switch check.
    into a spare band of its strip first (flat before and after; adding a cut is never louder), the
    cut moves, and the copy is removed later like any other change; failing that, a speaker matrix
    (never Main LR) is muted, all its remaining bands are changed, and it is switched back on. The
-   simulation checks every step as before; the mutes are `temp_mutes` writes validated against
+   simulation checks every step as before, on a grid made finer around every shelf with a high Q
+   (its hump lies away from the corner); the mutes are `temp_mutes` writes validated against
    the switch state of the fresh read (the undo uses the values its file recorded).
 5. **Advice packages count as done by hand.** The alignment (delay, polarity) stays advice; the
    packages designed on top of it are written, and the advice is shown as a task right after the
@@ -44,17 +49,32 @@ switch check.
    against the console.
 6. **Levels far from the venue's first snapshot**: a sub fader more than 12 dB away from the
    first snapshot of the venue needs a separate "yes" (default no) before the word. The design
-   proposes at most 9.5 dB per step, so a quantized fader always stays within the ±10 dB scope.
+   proposes at most 9.5 dB per step, so a quantized fader always stays within the ±10 dB scope,
+   and never a level below −89.5 dB (the console would read it as down).
 7. **Non-interactive** `ctune apply-packages --yes-i-am-at-the-console`: replaces only the typed
    word; the fresh read, the second plan right before sending, the undo file and readback stay.
 8. **The `--emulator` demo** (`cli/demo.py`) mutes the channels of the demo microphones once (a
    person would press MUTE) and connects the simulated hall to the emulator: the playback goes
-   through Main LR's EQ and each speaker sounds only while its matrix is on. The demo reaches the
+   through Main LR's EQ, then each speaker through its matrix EQ and fader change, and sounds only
+   while its matrix is on — so a check measurement hears the crossover and the sub level too. The demo reaches the
    junction, the writes and the check measurement.
 9. **The delay switch**: the only paths that write an output delay (`ctune sub` and `hwcheck`
    with `--write-unverified`, and their undo) write the time with the switch or check the stored
    time before switching on (`cli/apply.py`); package plans never write delay. It stays behind
    the opt-in until the hardware checklist confirms it.
+
+10. **After the reviews of this part** (each with a test on the emulator): a temporary mute may
+    switch a matrix back on only if it is the sub's or the tops' (muting any recorded venue
+    matrix stays allowed: it is never louder); the pending record carries the console's address
+    and the sub/top matrices and is refused on another console; a plan that mutes a speaker
+    matrix for a moment writes the pending record first, is never stopped between the mute and
+    the switch back on, switches the matrix back on at once when a write fails in between, and
+    names a matrix that would not come back (the wizard then does not finish, and neither the
+    apply nor the check measurement runs while the record is there); the undo counts as the
+    plan's only the last confirmed value of each parameter (a matrix muted and switched back on
+    by the plan, then muted by hand, is left alone); `ctune apply-packages` asks the separate
+    question for a level far from the venue's first reading too, and refuses it under
+    `--yes-i-am-at-the-console`.
 
 ## Consequences
 

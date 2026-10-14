@@ -37,7 +37,8 @@ def plan(after_db: float) -> WritePlan:
     ],
 )
 def test_a_far_sub_level_needs_a_separate_yes(monkeypatch, first_db, after_db, answer, asked, ok):
-    monkeypatch.setattr(step, "first_fader_db", lambda ctx, strip: first_db)
+    monkeypatch.setattr(step, "first_snapshot", lambda ctx: object())
+    monkeypatch.setattr(step, "first_fader_db", lambda snapshot, strip: first_db)
     prompter = Prompter(answer)
     ctx = SimpleNamespace(prompter=prompter)
     assert step._far_levels_confirmed(ctx, plan(after_db)) is ok

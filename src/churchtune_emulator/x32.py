@@ -178,6 +178,22 @@ class X32Emulator:
         ]
         return SystemEq(self.eq_on, tuple(bands))
 
+    def matrix_eq(self, number: int) -> SystemEq:
+        """A matrix EQ as currently stored (the emulator keeps matrix EQs switched on)."""
+        bands = self.mtx[number]["bands"]
+        return SystemEq(
+            True,
+            tuple(
+                Band(b, p.EQ_TYPES[int(x["type"])], p.norm_to_freq(x["f"]),
+                     p.norm_to_gain(x["g"]), p.norm_to_q(x["q"]))
+                for b, x in sorted(bands.items())
+            ),
+        )  # fmt: skip
+
+    def matrix_fader_db(self, number: int) -> float:
+        """A matrix fader in dB as currently stored."""
+        return p.norm_to_fader(self.mtx[number]["fader"])
+
     def foreign_writes(
         self, allowed_prefixes: tuple[str, ...] = ("/main/st/eq/",)
     ) -> list[tuple[str, list[OscArg]]]:

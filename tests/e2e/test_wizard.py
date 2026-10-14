@@ -6,6 +6,7 @@ from datetime import datetime
 import pytest
 
 from churchtune.audio.fake.hall import FakeHall, FakeMic
+from churchtune.cli.demo import speaker_chains
 from churchtune.cli.package_writes import X32WritePort
 from churchtune.cli.wizard import X32ConsolePort
 from churchtune.i18n import Translator
@@ -53,6 +54,7 @@ def rig(tmp_path):
         "top_r": emulator.mtx[2]["on"],
         "sub": emulator.mtx[3]["on"],
     }
+    hall.speaker_chains = speaker_chains(emulator, [1, 2], [3])  # matrix EQ and fader
     console = X32ConsolePort()
     now = lambda: datetime(2026, 10, 14, 10, 0, 0)  # noqa: E731 - one clock for both
     services = Services(
@@ -338,7 +340,11 @@ def test_typing_the_word_writes_the_chosen_packages_with_an_undo_file(rig):
     assert all(r.ok for r in undo.results)
     assert emulator.unknown == []
     # S13 measured again and judged against the same points.
-    assert result.state.verify_verdict in ("better", "no_change")
+    # The hall now hears the matrices too: a system EQ without the junction measured may make
+    # one seat worse near the crossover, and then the way back is offered.
+    assert result.state.verify_verdict in ("better", "no_change", "worse")
+    if result.state.verify_verdict == "worse":
+        assert "verify-offer-undo" in keys
     assert len(result.state.verify_points) == 4
     assert set(result.state.verify_measured) == set(result.state.verify_points)
     assert "verify-chart" in keys
@@ -474,7 +480,7 @@ def test_mutes_left_by_an_interrupted_run_come_back_before_anything_else(rig):
     emulator.hand_change("/mtx/01/mix/on", 0)  # muted by a run that died
     write_pending_mutes(services.workspace, PendingMutes(created="x", mtx_on={1: True, 2: True,
                                                                             3: True}))  # fmt: skip
-    volunteer = _volunteer(emulator, hall, **{"junction-type": "mute", "mutes-pending-type": "mute",
+    volunteer = _volunteer(emulator, hall, **{"junction-type": "mute", "mutes-pending-type": "undo",
                                               "package-question": "skip"})  # fmt: skip
     result = start(volunteer, services, "en")
     assert result.finished
@@ -499,3 +505,24 @@ def test_after_the_junction_the_crossover_is_proposed_and_written_in_its_place(r
     assert all(a.startswith(("/mtx/01/", "/mtx/02/", "/mtx/03/")) for a in cut_writes), cut_writes
     assert not any(a.startswith("/main/st/eq/") and a.endswith("/type") and
                    a.split("/")[4] in ("1", "6") for a in eq_writes)  # fmt: skip
+
+
+def test_a_mute_that_is_not_confirmed_stops_the_junction_honestly(rig):
+    emulator, hall, services = rig
+
+    def refuse_the_mutes(prompt):
+        emulator.ignored.add("/mtx/01/mix/on")  # the console stops obeying matrix 1
+        return Answer("")
+
+    volunteer = _volunteer(
+        emulator, hall,
+        **{"junction-type": "mute", "junction-sweeps": refuse_the_mutes,
+           "package-question": "skip"},
+    )  # fmt: skip
+    result = start(volunteer, services, "en")
+    keys = volunteer.shown_keys()
+    assert result.finished
+    assert "junction-mute-failed" in keys
+    assert "junction-done" not in keys
+    assert all(emulator.mtx[n]["on"] for n in (1, 2, 3))
+    assert not services.workspace.pending_mutes_file.exists()

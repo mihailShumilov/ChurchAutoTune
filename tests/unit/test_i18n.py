@@ -96,6 +96,7 @@ def used_keys() -> set[str]:
     keys |= {f"verify-{v}" for v in ("better", "no-change", "worse")}
     keys |= {"apply-word", "undo-word", "apply-word-mismatch", "undo-word-mismatch"}
     keys |= {"mute-word", "mute-word-mismatch"}
+    keys |= {f"junction-rejected-{p}" for p in ("clipped", "quiet", "mismatch")}
     keys |= {f"apply-advice-side-{side}" for side in ("sub", "tops")}
     keys |= {f"write-{p}" for p in ("eq-on", "fader", "on")}
     keys |= {f"write-band-{p}" for p in ("type", "freq", "gain", "q")}
