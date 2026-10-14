@@ -57,8 +57,7 @@ simulated hall: no console, no speakers, no sound. See <a href="#try-wizard">Try
 against the emulator.</li>
 <li><strong>Console owners</strong> can run a hardware check at a real X32 or M32 and report the result. This is the
 most valuable help right now.</li>
-<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard does not propose or apply
-changes yet (milestones M4 and M5). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
+<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard proposes changes but does not apply them yet (milestone M5). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>Equipment you will need</h2>
 <p>For the real tuning, later. Nothing here is needed to try the developer version.</p>
@@ -86,8 +85,8 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # all tests: console emulator + simulated audio
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # the real hall session of 2026-10-02</code></pre>
 <h3 id="emulator">3. Try the expert command line on the emulator</h3>
-<p>Until pull requests #8–#10 are merged, the commands below live on the <code>m3-wizard</code> branch. In your clone:</p>
-<pre><code>git checkout m3-wizard
+<p>Until pull requests #8–#11 are merged, the commands below live only on the branches of those pull requests; the newest is <code>m4-proposals</code>. In your clone:</p>
+<pre><code>git checkout m4-proposals
 uv sync</code></pre>
 <p>The quickest way is the global <code>--emulator</code> option: it starts a console emulator inside the program for
 that one command.</p>
@@ -107,7 +106,7 @@ stays as a tool for developers next to the wizard.</p>
 <p>The guided wizard is what volunteers will use. You can explore it today on the built-in console emulator and a
 simulated hall. Nothing leaves your computer: no console is touched and no sound is played.</p>
 <h3 id="try-wizard-start">Start it</h3>
-<p>From a clone with uv installed, on the <code>m3-wizard</code> branch (see <a href="#install">Install</a> and
+<p>From a clone with uv installed, on the <code>m4-proposals</code> branch (see <a href="#install">Install</a> and
 <a href="#emulator">step 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # full-screen wizard
@@ -135,18 +134,56 @@ quits, and <kbd>Ctrl</kbd>+<kbd>C</kbd> stops the sound, saves and quits.</li>
 scene on the console.</li>
 <li><strong>Speakers:</strong> shows which output feeds the main speakers, the subwoofer, the monitors and so on, and asks
 you to confirm the outputs it is not sure about.</li>
-<li><strong>Equipment:</strong> a few questions the console cannot answer: active or passive speakers, size of the
-listening area, how many measurement microphones and which model.</li>
+<li><strong>Equipment:</strong> a few questions the console cannot answer: active or passive speakers, size of the listening area (width × depth in metres, for the point plan; leave it empty for a standard plan), how many measurement microphones and which model.</li>
 <li><strong>Microphones:</strong> you scratch each microphone and it finds which input it is on. It tells you what to do
 on the console, for example switch on +48V or mute that channel.</li>
 <li><strong>Playback path:</strong> checks that the computer's sound goes to the hall speakers, not to the monitors or the
 stream.</li>
 <li><strong>Level:</strong> sets a safe measuring level.</li>
 <li><strong>Microphone calibration:</strong> only with several microphones; compares them against each other.</li>
-<li><strong>Measurement rounds:</strong> test sweeps at the spots in the room.</li>
-<li><strong>Results:</strong> what was measured, in plain words.</li>
+<li><strong>Measurement:</strong> a plan of places in the hall, then test sweeps at each place (see <a href="#try-wizard-points">below</a>).</li>
+<li><strong>Results and proposals:</strong> what was measured, in plain words, then the change packages and advice on the input channels (see <a href="#try-wizard-packages">below</a>).</li>
 <li><strong>What next:</strong> what to do after this session.</li>
 </ol>
+<h3 id="try-wizard-points">The measurement point plan</h3>
+<p>Before the measurement rounds the wizard makes a plan of places where people sit:</p>
+<ul>
+<li>At least 8 seats in the middle part of the hall, off the centre aisle, at uneven distances from each other.</li>
+<li>Each place is described in words with distances, for example “front rows, left, about 6 m from the stage, 3.5 m
+left of the centre aisle”. Left and right are as you face the stage.</li>
+<li>A simple map of the hall shows the stage at the top and numbers only the places of the current round.</li>
+<li>The microphone goes at the ear height of a seated person (1.2 m), pointing at the stage. After Enter you have
+3 seconds to step at least 2 m away.</li>
+<li>If you gave no hall size, the plan is for a typical 12 × 18 m hall and you place the microphones roughly.</li>
+<li>The plan is kept for the venue, so a later check measurement can use the same places.</li>
+</ul>
+<h3 id="try-wizard-packages">Change packages and channel advice</h3>
+<p>After the results the wizard proposes changes in packages. Each package has its own screen:</p>
+<ul>
+<li>a table of what changes: where, the value now and the proposed value;</li>
+<li>why the change helps, the expected effect and the risk;</li>
+<li>the question “Add … to the change plan?”, with “Add to plan” or “Leave it out”.</li>
+</ul>
+<p>When you leave a package out, the packages after it are designed again without it, so nothing in the plan depends on
+a change you did not choose. Your choices are saved in the session folder as <code>proposal.json</code>.</p>
+<p>Today the wizard proposes only the <strong>system EQ</strong>: gentle corrections for what the hall does to the sound
+in most seats. Narrow dips at single seats are left alone, because EQ cannot fix them. The crossover, the subwoofer
+alignment and the subwoofer level need the subwoofer and the main speakers measured separately. The wizard does not do
+that yet (it needs temporary mutes, which come with M5), so it does not propose them and says why: set blind, a
+crossover can leave a gap in the bass.</p>
+<p>Then comes advice on the input channels. The program never changes these itself; you decide by ear, one setting at
+a time, at a rehearsal:</p>
+<ul>
+<li>voices without a low cut (high-pass filter), or with a very high one;</li>
+<li>narrow cuts that probably protect against feedback: make them at most half as deep, at a rehearsal, with the
+monitors on;</li>
+<li>cuts shared by many channels;</li>
+<li>very deep cuts: check whether they are still needed, 3 dB at a time;</li>
+<li>big boosts, which can cause feedback;</li>
+<li>phantom power (+48V) on what looks like a dynamic microphone: switch it off only while the channel is muted.</li>
+</ul>
+<p>Nothing is written to the console at this step. The wizard says so at the end: writing your choices to the console,
+undo and the check measurement come with M5.</p>
 <h3 id="try-wizard-safety">Safety before any sound</h3>
 <ul>
 <li>The wizard never mutes or unmutes anything itself. On a real console <strong>you mute the measurement microphone
@@ -165,9 +202,11 @@ hand yet. So the demo stops at the <strong>Playback path</strong> step with the 
 measurement microphone to the speakers. Mute it on the console, then press Enter.” Pressing Enter again only repeats the
 check. This is the safety rule at work, not a fault. Explore the first steps, then save and quit
 (<kbd>Ctrl</kbd>+<kbd>Q</kbd>, or <kbd>Q</kbd> in the line interface).</p>
+<p>Because of this, the point plan and the change packages described above cannot be reached in the emulator demo
+yet. They are tested automatically on simulated halls.</p>
 <h3 id="try-wizard-not-yet">What it does not do yet</h3>
 <ul>
-<li>It does not propose any changes: crossover, subwoofer level and timing, system EQ (milestone M4).</li>
+<li>It proposes only the system EQ. The crossover, the subwoofer level and the subwoofer timing need the separate subwoofer and main-speaker measurement (M5).</li>
 <li>It does not write anything to the console, and there is no apply, undo or verify yet (M5).</li>
 <li>The speaker-by-speaker check and the separate subwoofer and main-speaker measurement need temporary mutes, so they
 come into the wizard with M5. They exist today only as expert commands.</li>
@@ -203,7 +242,7 @@ firmware, the ChurchTune commit (<code>git rev-parse --short HEAD</code>) and wh
 systems. Remove names and anything personal first; the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">contributing guide</a> explains
 how.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Coming later: tuning your system <span class="tag">Coming later</span></h2>
-<p>This is how the complete wizard is planned to work once milestones M4–M6 are done. The first two steps, reading the console and measuring, are already in the wizard (see <a href="#try-wizard">above</a>); the rest is still being built.</p>
+<p>This is how the complete wizard is planned to work once milestones M5 and M6 are done. The first four steps, reading the console, measuring, analysing and proposing, are already in the wizard (see <a href="#try-wizard">above</a>), the proposals for now only for the system EQ; applying and verifying are still being built.</p>
 <ol>
 <li id="workflow-read"><strong>Read the console.</strong> ChurchTune finds the console and shows what it found, for
 example “X32 Producer, main speakers on Matrix 1/2, subwoofer on Matrix 3. Correct?”. It asks only what it cannot
