@@ -135,6 +135,8 @@ class X32Emulator:
         self.drop_next = 0
         self.ignored: set[str] = set()
         self.silent: set[str] = set()
+        # Node path -> extra delay before its next reply (once); nothing else is answered meanwhile.
+        self.slow_nodes: dict[str, float] = {}
         if raw is None:
             text = dump_file.read_text(encoding="utf-8") if dump_file else reference_dump()
             raw = raw_from_dump(text)
@@ -201,7 +203,8 @@ class X32Emulator:
                 level = p.fmt_fader(p.norm_to_fader(mx["fader"]))
                 return f"/{path} {'ON' if mx['on'] else 'OFF'} {level}"
             return f"/{path} {'ON' if mx['invert'] else 'OFF'}"
-        if m := re.match(r"^outputs/main/(\d\d)/delay$", path):
+        m = re.match(r"^outputs/main/(\d\d)/delay$", path)
+        if m and int(m.group(1)) in self.out_delay:
             d = self.out_delay[int(m.group(1))]
             return f"/{path} {'ON' if d['on'] else 'OFF'}   {p.norm_to_delay(d['time']):.1f}"
         if path in self.nodes:
@@ -280,7 +283,10 @@ class X32Emulator:
             self.queries.append(path)
             if len(args) != 1 or not NODE_PATH_RE.fullmatch(path):
                 self.unknown.append((addr, list(args)))
-            self._send("node", peer, self.node_line(path) + "\n")  # NOTE: no leading slash
+            line = self.node_line(path) + "\n"  # NOTE: the reply address has no leading slash
+            if path in self.slow_nodes:
+                time.sleep(self.slow_nodes.pop(path))  # a busy console: later requests wait too
+            self._send("node", peer, line)
         elif addr == "/meters" and args and args[0] == "/meters/0":
             self.meter_subs[peer] = time.monotonic() + METER_SUBSCRIPTION_S
         elif not args:

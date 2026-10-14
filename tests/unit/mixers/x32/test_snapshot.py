@@ -10,11 +10,19 @@ from churchtune.domain.snapshot import (
     ConsoleIdentity,
     InputKind,
     InputRef,
+    LinkKind,
     OutputKind,
     SignalRef,
     SourceKind,
 )
-from churchtune.mixers.x32.snapshot import parse_snapshot, raw_from_dump, read_raw, snapshot_nodes
+from churchtune.errors import ConsoleUnreachable
+from churchtune.mixers.x32.snapshot import (
+    MAX_SILENT_IN_A_ROW,
+    parse_snapshot,
+    raw_from_dump,
+    read_raw,
+    snapshot_nodes,
+)
 from tests.fixtures.paths import DUMP_2026_09_29, DUMP_2026_10_02, DumpReader
 
 IDENTITY = ConsoleIdentity(ConsoleFamily.X32, "X32P", "X32P-00-00-00", "4.09", "192.0.2.80")
@@ -98,9 +106,10 @@ def test_clock_links_and_raw(snap):
     assert snap.clock is not None
     assert snap.clock.fs_hz == 48000
     assert snap.clock.source == "INT"
-    assert ("matrix", 1) in snap.stereo_links
-    assert ("matrix", 5) in snap.stereo_links
-    assert ("matrix", 3) not in snap.stereo_links
+    assert (LinkKind.MATRIX, 1) in snap.stereo_links
+    assert (LinkKind.MATRIX, 5) in snap.stereo_links
+    assert (LinkKind.MATRIX, 3) not in snap.stereo_links
+    assert (LinkKind.CHANNEL, 11) in snap.stereo_links  # the piano pair
     assert snap.raw["mtx/03/mix"].startswith("/mtx/03/mix")
 
 
@@ -136,7 +145,9 @@ def test_both_real_dumps_parse_without_unexpected_gaps():
         assert not unexpected
 
 
-def test_read_raw_reports_progress_and_skips_silent_nodes():
+def test_read_raw_reports_progress_and_skips_silent_nodes(monkeypatch):
+    # The dump has no polarity and delay nodes: 22 silent nodes in a row at the end of the list.
+    monkeypatch.setattr("churchtune.mixers.x32.snapshot.MAX_SILENT_IN_A_ROW", 100)
     reader = DumpReader(DUMP_2026_10_02)
     seen = []
     raw = read_raw(reader, lambda done, total: seen.append((done, total)))
@@ -152,3 +163,41 @@ def test_snapshot_nodes_are_unique_and_include_polarity_and_delays():
     assert len(nodes) == len(set(nodes))
     assert "mtx/03/preamp" in nodes
     assert "outputs/main/16/delay" in nodes
+
+
+def test_read_raw_stops_when_the_console_goes_silent():
+
+    class GoesSilent:
+        def __init__(self):
+            self.asked = 0
+
+        def node(self, path, timeout_s=0.0):
+            self.asked += 1
+            return f"/{path} 0" if self.asked <= 5 else None
+
+    reader = GoesSilent()
+    with pytest.raises(ConsoleUnreachable):
+        read_raw(reader)
+    assert reader.asked == 5 + MAX_SILENT_IN_A_ROW
+
+
+def test_odd_routing_and_preamp_lines_are_listed_not_fatal():
+    raw = raw_from_dump(DUMP_2026_10_02.read_text(encoding="utf-8"))
+    raw["config/userrout/in"] = "/config/userrout/in " + " ".join(["x"] * 32)
+    raw["ch/01/preamp"] = "/ch/01/preamp +0.0 OFF ON 24 high"
+    raw["config/routing/IN"] = "/config/routing/IN A1-4 A5-8 A9-16 A17-24 AUX1-4"
+    snap = parse_snapshot(IDENTITY, raw, "t")
+    assert "config/userrout/in" in snap.unparsed
+    assert "ch/01/preamp" in snap.unparsed
+    assert not snap.channels[1].hpf_on
+    assert snap.input_sources[0] == InputRef(InputKind.UNKNOWN)
+    assert len(snap.input_sources) == 32
+
+
+def test_channel_sources_off_and_unknown_differ():
+    raw = raw_from_dump(DUMP_2026_10_02.read_text(encoding="utf-8"))
+    raw["ch/09/config"] = '/ch/09/config "" 1 OFF 0'
+    raw["ch/30/config"] = '/ch/30/config "USB" 1 OFF 39'
+    snap = parse_snapshot(IDENTITY, raw, "t")
+    assert snap.channels[9].source == InputRef(InputKind.OFF)
+    assert snap.channels[30].source == InputRef(InputKind.UNKNOWN)

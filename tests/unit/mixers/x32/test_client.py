@@ -266,6 +266,20 @@ def test_node_ignores_replies_that_are_not_the_requested_line(reply):
     assert X32Client(transport).node("main/st/eq/2") is None
 
 
+def test_node_skips_a_late_reply_for_an_earlier_path_within_one_attempt():
+    transport = ScriptedTransport(
+        [
+            ("node", ["/main/st/eq/1 BU18 23.0 +0.00 2.0\n"]),
+            ("node", ["/main/st/eq/2 PEQ 1k97 -3.50 6.4\n"]),
+        ]
+    )
+
+    line = X32Client(transport).node("main/st/eq/2")
+
+    assert line == "/main/st/eq/2 PEQ 1k97 -3.50 6.4"
+    assert len(transport.sent) == 1  # the late reply did not cost an attempt
+
+
 def test_query_returns_the_first_argument():
     transport = ScriptedTransport([("/mtx/03/mix/on", [1])])
 

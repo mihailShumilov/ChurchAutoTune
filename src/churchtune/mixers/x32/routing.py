@@ -107,6 +107,8 @@ def parse_block(name: str) -> tuple[str, int, int] | None:
     if not match:
         return None
     prefix, first, last = match.groups()
+    if int(last) - int(first) + 1 != BLOCK_SIZE:
+        return None  # every routing block carries exactly eight channels
     return prefix, int(first), int(last)
 
 
@@ -164,9 +166,15 @@ _CH_FIRST_AUX = 33
 _CH_AUX_COUNT = 6
 
 
-def channel_input(source_id: int) -> tuple[str, int] | None:
-    """What a channel listens to: ``("input", 5)``, ``("aux", 1)``, or None (off / unknown)."""
+def channel_input(source_id: int) -> tuple[str, int]:
+    """What a channel listens to.
+
+    ``("input", 5)``, ``("aux", 1)``, ``("off", 0)``, or ``("unknown", id)`` for ids this table
+    does not know (USB, FX returns, buses).
+    """
+    if source_id == 0:
+        return "off", 0
     if 1 <= source_id <= CHANNELS:
         return "input", source_id
     number = _in_range(source_id, _CH_FIRST_AUX, _CH_AUX_COUNT)
-    return ("aux", number) if number is not None else None
+    return ("aux", number) if number is not None else ("unknown", source_id)

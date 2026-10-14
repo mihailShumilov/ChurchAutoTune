@@ -7,7 +7,7 @@ lines are kept, so a snapshot file can be parsed again by a newer version.
 
 import math
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Protocol
 
 from churchtune.domain.eq import Band, EqType
@@ -19,6 +19,7 @@ from churchtune.domain.snapshot import (
     InputChannel,
     InputKind,
     InputRef,
+    LinkKind,
     MixStrip,
     OutputDelay,
     OutputKind,
@@ -28,6 +29,8 @@ from churchtune.domain.snapshot import (
     SourceKind,
     UsbRouting,
 )
+from churchtune.errors import ConsoleUnreachable
+from churchtune.mixers.base import ProgressCb
 from churchtune.mixers.x32 import routing
 from churchtune.mixers.x32.dump import (
     AUX_OUTPUTS,
@@ -43,17 +46,21 @@ from churchtune.mixers.x32.dump import (
 )
 from churchtune.mixers.x32.params import parse_freq
 
-ProgressCb = Callable[[int, int], None]
 # Per-node wait during a snapshot. A console answers in a few ms; a short wait keeps a lossy
 # network from stretching the read (one retry follows in the client).
 SNAPSHOT_NODE_TIMEOUT_S = 0.15
+# A real console leaves about a dozen nodes unanswered, never this many in a row: it is gone.
+MAX_SILENT_IN_A_ROW = 20
 CARD_BLOCKS = 4
 INPUT_BLOCKS = 4
 _NAME_RE = re.compile(r'^\S+\s+"([^"]*)"\s*(.*)$')
 _FS_RE = re.compile(r"^(\d+)K$")
 _CARD_CHANNELS_RE = re.compile(r"^(\d+)/(\d+)$")
-_LINKS = (("config/chlink", "channel", CHANNELS), ("config/buslink", "bus", BUSES))
-_LINKS_MTX = ("config/mtxlink", "matrix", MATRICES)
+_LINKS = (
+    ("config/chlink", LinkKind.CHANNEL, CHANNELS),
+    ("config/buslink", LinkKind.BUS, BUSES),
+    ("config/mtxlink", LinkKind.MATRIX, MATRICES),
+)
 _FS_KILO = 1000
 
 
@@ -78,13 +85,24 @@ def read_raw(reader: NodeReader, progress: ProgressCb | None = None) -> dict[str
     Args:
         reader: Read-only client.
         progress: Called with ``(done, total)`` after each node.
+
+    Raises:
+        ConsoleUnreachable: The console stopped answering (many nodes in a row unanswered).
     """
     nodes = snapshot_nodes()
     raw: dict[str, str] = {}
+    silent = 0
     for done, path in enumerate(nodes, start=1):
         line = reader.node(path, timeout_s=SNAPSHOT_NODE_TIMEOUT_S)
         if line is not None:
             raw[path] = line
+            silent = 0
+        else:
+            silent += 1
+            if silent >= MAX_SILENT_IN_A_ROW:
+                raise ConsoleUnreachable(
+                    f"the console stopped answering during the snapshot (at {path})", node=path
+                )
         if progress is not None:
             progress(done, len(nodes))
     return raw
@@ -187,14 +205,19 @@ def _mix(lines: _Lines, path: str) -> tuple[bool, float, list[str]]:
 
 def _input_sources(lines: _Lines) -> tuple[InputRef, ...]:
     user = lines.fields("config/userrout/in", routing.CHANNELS)
-    user_ids = tuple(int(v) for v in user) if user else ()
+    user_ids: tuple[int, ...] = ()
+    if user is not None:
+        if all(v.isdigit() for v in user):
+            user_ids = tuple(int(v) for v in user)
+        else:
+            lines.bad("config/userrout/in")
     blocks = lines.fields("config/routing/IN", INPUT_BLOCKS)
     if blocks is None:
         return (InputRef(InputKind.UNKNOWN),) * routing.CHANNELS
     sources: list[InputRef] = []
     for block in blocks[:INPUT_BLOCKS]:
         sources.extend(routing.block_sources(block, user_ids))
-    return tuple(sources)
+    return tuple(sources[: routing.CHANNELS])
 
 
 def _channel(lines: _Lines, number: int, inputs: tuple[InputRef, ...]) -> InputChannel:
@@ -203,19 +226,24 @@ def _channel(lines: _Lines, number: int, inputs: tuple[InputRef, ...]) -> InputC
     name, rest = named if named else ("", [])
     source = InputRef(InputKind.UNKNOWN)
     if rest and rest[-1].isdigit():
-        listens = routing.channel_input(int(rest[-1]))
-        if listens is None:
+        kind, index = routing.channel_input(int(rest[-1]))
+        if kind == "off":
             source = InputRef(InputKind.OFF)
-        elif listens[0] == "input":
-            source = inputs[listens[1] - 1]
-        else:
-            source = InputRef(InputKind.AUX_IN, listens[1])
+        elif kind == "input" and index <= len(inputs):
+            source = inputs[index - 1]
+        elif kind == "aux":
+            source = InputRef(InputKind.AUX_IN, index)
     on, fader_db, mix_rest = _mix(lines, f"{base}/mix")
     # mix: on fader st pan mono mlevel
     to_main = bool(mix_rest) and _on(mix_rest[0])
     to_mono = len(mix_rest) > 2 and _on(mix_rest[2])  # noqa: PLR2004 - mono switch position
     preamp = lines.fields(f"{base}/preamp", 5)  # trim invert hpon hpslope hpf
-    hpf_on, hpf_hz = (_on(preamp[2]), float(preamp[4])) if preamp else (False, 0.0)
+    hpf_on, hpf_hz = False, 0.0
+    if preamp is not None:
+        try:
+            hpf_on, hpf_hz = _on(preamp[2]), float(preamp[4])
+        except ValueError:
+            lines.bad(f"{base}/preamp")
     eq_on, eq = _eq(lines, base, CHANNEL_EQ_BANDS)
     return InputChannel(
         number,
@@ -242,7 +270,7 @@ def _strip(lines: _Lines, base: str, ref: SignalRef, *, sends: bool) -> MixStrip
     invert = False
     if ref.kind is SourceKind.MATRIX:
         preamp = lines.fields(f"{base}/preamp")
-        invert = bool(preamp) and _on(preamp[0]) if preamp else False
+        invert = bool(preamp and _on(preamp[0]))
     matrix_sends = _sends(lines, base, MATRIX_SENDS) if sends else ()
     return MixStrip(ref, name, on, fader_db, eq_on, eq, to_main, matrix_sends, invert)
 
@@ -326,9 +354,9 @@ def _clock(lines: _Lines) -> ClockInfo | None:
     return None
 
 
-def _links(lines: _Lines) -> frozenset[tuple[str, int]]:
-    links: set[tuple[str, int]] = set()
-    for path, kind, count in (*_LINKS, _LINKS_MTX):
+def _links(lines: _Lines) -> frozenset[tuple[LinkKind, int]]:
+    links: set[tuple[LinkKind, int]] = set()
+    for path, kind, count in _LINKS:
         parts = lines.fields(path)
         if parts is None:
             continue
