@@ -13,8 +13,9 @@ from hypothesis import strategies as st
 from hypothesis.extra import numpy as npst
 
 from churchtune.audio.base import LIMIT, limit
-from churchtune.audio.factory import open_backend
+from churchtune.audio.factory import open_backend, open_multi_backend
 from churchtune.audio.fake.backend import ConsoleRoomBackend, FakeBackend
+from churchtune.audio.fake.hall import FakeHall
 from churchtune.audio.fake.room import demo_rooms, speaker_rooms, synthetic_room
 from churchtune.domain.console import ConsoleState, MatrixState, OutputDelay
 from churchtune.domain.eq import Band, EqType, SystemEq
@@ -442,3 +443,34 @@ def test_factory_opens_a_real_backend_only_outside_dev_safe(monkeypatch):
 
     assert isinstance(backend, Recorder)
     assert opened == [("X-USB", FS_HZ, 10)]
+
+
+@pytest.mark.parametrize("name", ["X-USB", "", "fake2"])
+def test_multichannel_factory_refuses_real_devices_in_dev_safe(monkeypatch, name):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("a real audio device was opened")
+
+    monkeypatch.setattr(
+        "churchtune.audio.sounddevice_backend.SoundDeviceBackend.__init__", forbidden
+    )
+    monkeypatch.setattr("churchtune.audio.sounddevice_backend.load_sounddevice", forbidden)
+
+    with pytest.raises(DevSafeViolation) as excinfo:
+        open_multi_backend(name, fs_hz=FS_HZ)
+
+    assert excinfo.value.context == {"audio": name}
+
+
+def test_multichannel_factory_opens_the_rig_for_fake_and_a_device_outside_dev_safe(monkeypatch):
+    assert isinstance(open_multi_backend(" FAKE ", fs_hz=FS_HZ), FakeHall)
+    opened = []
+
+    class Recorder:
+        def __init__(self, device_name, fs_hz, mic_input):
+            opened.append((device_name, fs_hz, mic_input))
+
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.delenv("CTUNE_DEV_SAFE", raising=False)
+    monkeypatch.setattr("churchtune.audio.sounddevice_backend.SoundDeviceBackend", Recorder)
+    open_multi_backend("X-USB", fs_hz=FS_HZ)
+    assert opened == [("X-USB", FS_HZ, 1)]

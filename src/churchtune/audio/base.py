@@ -11,12 +11,21 @@ import numpy as np
 import numpy.typing as npt
 
 from churchtune.domain.levels import HARD_LIMIT_DBFS, db_to_lin
-from churchtune.domain.recording import MultiRecording, StopFlag
+from churchtune.domain.recording import Float32Array, MultiRecording, StopFlag
 from churchtune.errors import AudioDeviceError
 
-__all__ = ["MultiRecording", "StopFlag"]
+__all__ = [
+    "STOP_CHECK_S",
+    "AudioBackend",
+    "Float32Array",
+    "MultiChannelBackend",
+    "MultiRecording",
+    "PlaybackEvent",
+    "StopFlag",
+    "check_inputs",
+    "limit",
+]
 
-Float32Array = npt.NDArray[np.float32]
 # (sample index, action): the action runs in the calling thread once playback passed the index.
 PlaybackEvent = tuple[int, Callable[[], None]]
 
@@ -148,8 +157,12 @@ class MultiChannelBackend(Protocol):
         inputs: Sequence[int],
         on_input: Callable[[Float32Array], None],
         stop: StopFlag | None = None,
+        on_tick: Callable[[], None] | None = None,
     ) -> None:
-        """Duplex loop until ``next_block`` returns None; ``on_input`` gets ``float32[frames, k]``.
+        """Duplex loop until ``next_block`` returns None.
+
+        ``next_block`` and ``on_input`` (``float32[frames, k]``) may run in the audio thread and
+        must stay light; ``on_tick`` runs regularly in the calling thread (decisions, UI updates).
 
         Raises:
             MeasurementAborted: Interrupted; the output is already silent.
