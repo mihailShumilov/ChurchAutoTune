@@ -65,6 +65,11 @@ def _mic_calibration_v0(data: Raw) -> Raw:
     )
 
 
+def _wizard_v0(data: Raw) -> Raw:
+    """Wizard state files appeared with schema version 1; a file without a version is not ours."""
+    raise UnsupportedSchema(f"a wizard state file without schema_version: {sorted(data)[:5]}")
+
+
 def _snapshot_v0(data: Raw) -> Raw:
     """Snapshot files appeared with schema version 1; a file without a version is not ours."""
     raise UnsupportedSchema(f"a snapshot file without schema_version: {sorted(data)[:5]}")
@@ -73,6 +78,7 @@ def _snapshot_v0(data: Raw) -> Raw:
 _FROM_V0: Mapping[str, Callable[[Raw], Raw]] = {
     "snapshot": _snapshot_v0,
     "mic_calibration": _mic_calibration_v0,
+    "wizard": _wizard_v0,
     "session": _session_v0,
     "point_meta": _point_meta_v0,
     "junction_meta": _junction_meta_v0,
@@ -87,7 +93,7 @@ def migrate(kind: str, data: Raw) -> Raw:
 
     Args:
         kind: Which file this is: ``session``, ``point_meta``, ``junction_meta``, ``undo``,
-            ``pending``, ``proposal``, ``snapshot`` or ``mic_calibration``.
+            ``pending``, ``proposal``, ``snapshot``, ``mic_calibration`` or ``wizard``.
         data: The parsed JSON object.
 
     Returns:

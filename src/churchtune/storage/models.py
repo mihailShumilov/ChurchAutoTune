@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from churchtune.domain.changes import Change, WriteScope
 from churchtune.domain.eq import Band, EqType, SystemEq
+from churchtune.domain.levels import HARD_LIMIT_DBFS
 from churchtune.domain.snapshot import ConsoleFamily, ConsoleIdentity, ConsoleSnapshot
 
 SCHEMA_VERSION: Literal[1] = 1
@@ -105,6 +106,8 @@ class PointMeta(FileModel):
     latency_ms: float
     verdict: Literal["ok", "warn", "bad"]
     warnings: tuple[CodedText, ...] = ()
+    mic_input: int | None = None
+    repeat_db: float | None = None
 
 
 class RolesModel(FileModel):
@@ -322,3 +325,50 @@ class MicCalibrationFile(FileModel):
     created: str
     centres_hz: tuple[float, ...]
     mics: tuple[MicCalibrationModel, ...]
+
+
+Goal = Literal["full", "verify", "sub", "report"]
+
+
+class HallSizeModel(FileModel):
+    """Hall dimensions for the point plan (all optional knowledge)."""
+
+    width_m: float
+    depth_m: float
+    stage_to_first_row_m: float = 2.0
+
+
+MAX_WIZARD_MICS = 8
+
+
+class WizardStateFile(FileModel):
+    """``venues/<slug>/sessions/<ts>-<kind>/session.json`` of the wizard (SPEC §6.2, §6.4).
+
+    Saved after every step; ``ctune resume`` continues after the last completed step.
+    """
+
+    schema_version: Literal[1] = SCHEMA_VERSION
+    venue: str
+    venue_name: str
+    lang: str
+    goal: Goal = "full"
+    created: str
+    completed: tuple[str, ...] = ()
+    console_host: str | None = None
+    console_port: int | None = None
+    console_model: str | None = None
+    snapshot_file: str | None = None
+    roles: dict[str, str] = {}
+    variant: str | None = None
+    speakers_active: bool | None = None
+    hall: HallSizeModel | None = None
+    mic_count: Annotated[int, Field(ge=0, le=MAX_WIZARD_MICS)] = 1
+    mic_model: str = "ECM8000"
+    mic_inputs: tuple[Annotated[int, Field(gt=0)], ...] = ()
+    calibration_set: str | None = None
+    # Never above the hard output limit: a hand-edited file must not make anything louder.
+    sweep_level_dbfs: Annotated[float, Field(le=HARD_LIMIT_DBFS, allow_inf_nan=False)] | None = None
+    points: tuple[str, ...] = ()
+    measured: dict[str, str] = {}
+    junction_points: tuple[str, ...] = ()
+    proposal_file: str | None = None
