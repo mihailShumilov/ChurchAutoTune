@@ -89,7 +89,7 @@ State after M5 (applying, undo, verify, temporary mutes and the junction; ADR 00
 - `measure/` `config`, `stimulus`, `deconvolution`, `gates`, `point`, `junction` (also multi-mic with injected mute
   switch), `multi` (rounds, repeatability), `calibration`, `mic_mapping`, `level` (ramp, sweep level), `noise`,
   `path_check`, `rounds`, `plan` (point plan, Halton, hall map)
-- `analysis/` `bands`, `response`, `rt60`, `points`, `verdict` (§8.6) · `design/` `target`, `system_eq`, `system_eq_opt`, `crossover`,
+- `analysis/` `bands`, `response`, `rt60`, `points`, `verdict` (§8.6) · `design/` `target`, `system_eq`, `system_eq_opt`, `blind_junction`, `crossover`,
   `alignment`, `proposal`, `packages` (S11 packages, ADR 0009), `channel_audit`
 - `safety/` `policy` (scopes of §9.2), `plan`, `sub_plan`, `order` (never-louder order by simulation), `cut_filters`
   (where a crossover or undo may touch a cut filter), `authorize`

@@ -80,7 +80,7 @@ delay switch check needed only to be written down (point 9).
     restore` refuses another console's record and a matrix the console does not have, and asks
     for the typed word.
 
-11. **Open: the system EQ near the junction while it is not measured.** With the hall hearing
+11. **Resolved by ADR 0013: the system EQ near the junction while it is not measured.** With the hall hearing
     the matrices, a system EQ alone can make one seat worse near the crossover (125 Hz, 3.6 dB
     at one seat while the average improves): a cut aimed at the hump of a hot sub is the same at
     every seat, and seats without the hump get thin. The check measurement says so and offers
