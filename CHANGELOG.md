@@ -113,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (compared with the original tool)
 - Without the subwoofer and the tops measured apart, the system EQ makes only broad, gentle cuts (−3 dB, Q ≤ 1,
   also summed) around the crossover the console has (0.6–2 fc), no boost there, and no seat gets more than 2 dB
-  further from the target in any third of an octave (ADR 0013). The note to the volunteer says so.
+  further from the target in any third of an octave (ADR 0013). The EQ package says so, with the zone in Hz.
 - A system EQ that fixes a hump or a mode is proposed when the largest excess above the target drops by 1 dB
   or more (and the overall deviation does not get worse), even if the RMS deviation moves less than 0.2 dB;
   its screen then shows the largest excess before and after.
@@ -131,6 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stored write values must be real finite numbers; strings and booleans are refused.
 
 ### Fixed
+- An idle EQ boost band is restarted at the largest shortfalls; the search never brought one back once the solver
+  let it go.
 - Putting an uncommon EQ band back restores the old band at its place: the optimiser could move a cut into the
   slot of another, and the hall's existing 500 Hz cut was lost.
 - System EQ design no longer depends on floating-point noise in the cases tested: besides the plain solve,

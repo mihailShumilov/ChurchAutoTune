@@ -256,15 +256,17 @@ def test_without_a_junction_measurement_nothing_gets_worse(defects, near_target_
     packages = build_packages(DesignContext(analysis, REAL, infer_topology(REAL), GRID, FS))
     assert packages.of(PackageKind.CROSSOVER) is None
     assert [n.code for n in packages.notes] == ["junction-not-measured"]
+    eq = packages.of(PackageKind.SYSTEM_EQ)
+    if eq is not None:  # the zone around the hall's own crossover, in whole Hz
+        zone = next(n for n in eq.notes if n.code == "system-eq-blind-junction")
+        assert zone.params["low_hz"] < 100 < zone.params["high_hz"]
     after = listen(natural_ok, packages, REAL)
     for freq_hz in (63, 80, 100, 125, 160, 250, 315, 500, 800, 1000, 2000):
         before_dev = abs(over_target(hall, freq_hz))
         assert abs(over_target(after, freq_hz)) <= before_dev + 1.5, freq_hz
     if near_target_at_250_300:
-        assert abs(over_target(after, 250)) < 2.5
-        # Without the junction measured, the dip at 3 fc is not lifted (a boost's skirt would
-        # feed the excess the gentle junction cuts leave, and the dip is positional): not worse.
-        assert abs(over_target(after, 300)) <= abs(over_target(hall, 300)) + 0.5
+        for freq_hz in (250, 300):
+            assert abs(over_target(after, freq_hz)) < 2.5
     assert over_target(after, 50.0) < over_target(hall, 50.0)
 
 
@@ -311,3 +313,48 @@ def test_the_proposal_does_not_hinge_on_the_score_prices(
     assert len(bands) == len(reference)
     for band, ref in zip(bands, reference, strict=True):
         assert abs(np.log2(band.freq_hz / ref.freq_hz)) < 1 / 12, (band, ref)
+
+
+THIRDS_HZ = (63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000)
+
+
+def thirds(curve: np.ndarray) -> np.ndarray:
+    return np.array(
+        [
+            curve[(c * 2 ** (-1 / 6) <= GRID_HZ) & (c * 2 ** (1 / 6) > GRID_HZ)].mean()
+            for c in THIRDS_HZ
+        ]
+    )
+
+
+BLIND_CASES = {
+    "good": replace(Defects(), sub_extra_ms=None, sub_inverted=False, sub_gain_db=0.0),
+    "bad": Defects(),
+    "late": replace(Defects(), sub_inverted=False, sub_gain_db=0.0),
+    "hot": replace(Defects(), sub_extra_ms=None, sub_inverted=False),
+    "inverted": replace(Defects(), sub_extra_ms=None, sub_gain_db=0.0),
+}
+
+
+@pytest.mark.parametrize("case", list(BLIND_CASES))
+def test_without_a_junction_measurement_no_seat_gets_thin(case):
+    """ADR 0013: no seat more than 2 dB further from the target in any third of an octave,
+    levels aligned as the check measurement aligns them; the hall's 500 Hz cut stays."""
+    natural_ok = defect_hall(FS, BLIND_CASES[case])
+    hall = measured(natural_ok, console_eqs(REAL))
+    analysis = analyze_points({p: PointResponse(h.both, FS) for p, h in hall.items()})
+    packages = build_packages(DesignContext(analysis, REAL, infer_topology(REAL), GRID, FS))
+    heard = listen(natural_ok, packages, REAL)
+    after = analyze_points({p: PointResponse(h.both, FS) for p, h in heard.items()})
+    for point, curve in analysis.norm_db.items():
+        before_db = thirds(curve - TARGET)
+        after_db = thirds(after.norm_db[point] - TARGET)
+        after_db -= np.median(after_db - before_db)
+        worse = np.abs(after_db) - np.abs(before_db)
+        assert worse.max() <= 2.0, (point, THIRDS_HZ[int(np.argmax(worse))], worse.max())
+    eq = packages.of(PackageKind.SYSTEM_EQ)
+    if eq is not None:
+        main = next(p for p in eq.eq if p.path == MAIN)
+        assert any(
+            b.gain_db <= -3.0 and abs(np.log2(b.freq_hz / 496.6)) < 1 / 6 for b in main.after.bands
+        )

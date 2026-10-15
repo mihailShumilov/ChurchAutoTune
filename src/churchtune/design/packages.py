@@ -30,11 +30,12 @@ from churchtune.design.alignment import (
     analyze_alignment,
     recommend_level,
 )
+from churchtune.design.blind_junction import BlindJunction
 from churchtune.design.crossover import DEFAULT_FC_HZ, CrossoverPlan, plan_crossover
 from churchtune.design.crossover import NoteCode as CrossoverNoteCode
 from churchtune.design.proposal import Prediction, TargetSpec
 from churchtune.design.system_eq import DEFAULT_TARGET
-from churchtune.design.system_eq_opt import BlindJunction, optimize_design
+from churchtune.design.system_eq_opt import optimize_design
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.console_paths import console_state, matrix_roles, strip_eq
@@ -67,7 +68,6 @@ MIN_EQ_GAIN_DB = 0.2
 MIN_EQ_PEAK_GAIN_DB = 1.0
 # A cut filter here on the sub's or the tops' matrix is the crossover the console has now.
 PRESENT_CROSSOVER_RANGE_HZ = (50.0, 250.0)
-LAST_BAND_INDEX = 5
 TINY_MOVE_OCT = 1 / 12
 TINY_MOVE_DB = 0.5
 MAIN_SOURCES = (SourceKind.MAIN_L, SourceKind.MAIN_R)
@@ -128,6 +128,7 @@ class NoteCode(StrEnum):
     SUB_LEVEL_BY_EAR = "sub-level-by-ear"
     SYSTEM_EQ_ON = "system-eq-on"
     SYSTEM_EQ_ABOVE_FC = "system-eq-above-fc"
+    SYSTEM_EQ_BLIND_JUNCTION = "system-eq-blind-junction"
     SYSTEM_EQ_PREDICTED_JUNCTION = "system-eq-predicted-junction"
     SYSTEM_EQ_ALSO_OTHER_OUTPUTS = "system-eq-also-other-outputs"
     JUNCTION_NOT_MEASURED = "junction-not-measured"
@@ -672,15 +673,17 @@ def present_crossover_hz(ctx: DesignContext) -> float | None:
     """The crossover frequency set on the console now, or None when there is none.
 
     The cut filter on the last band of the sub's matrix (a low-pass) and on the first band of a
-    top matrix (a high-pass), within 50..250 Hz; their geometric mean when both are there.
+    top matrix (a high-pass), within 50..250 Hz and with that EQ switched on; their geometric
+    mean when both are there.
     """
     roles = matrix_roles(ctx.topology)
     if roles is None:
         return None
     state = console_state(ctx.snapshot)
     found = []
-    for numbers, band_index in ((roles.sub, LAST_BAND_INDEX), (roles.mains, 0)):
-        bands = [state.matrices[n].eq.bands[band_index] for n in numbers if n in state.matrices]
+    for numbers, band_index in ((roles.sub, -1), (roles.mains, 0)):
+        eqs = [state.matrices[n].eq for n in numbers if n in state.matrices]
+        bands = [eq.bands[band_index] for eq in eqs if eq.on]  # a switched-off EQ filters nothing
         cut = next(
             (b for b in bands if b.type in CUT_FILTER_TYPES and _in_crossover_range(b.freq_hz)),
             None,
@@ -728,6 +731,9 @@ def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the package
     notes = [Note(NoteCode.SYSTEM_EQ_ON, {"path": _eq_label(p.path)}) for p in changed]
     if f_low_hz > ctx.analysis.f_low_hz:
         notes.append(Note(NoteCode.SYSTEM_EQ_ABOVE_FC, {"fc_hz": round(f_low_hz)}))
+    if blind is not None:
+        zone = {"low_hz": round(blind.low_hz), "high_hz": round(blind.high_hz)}
+        notes.append(Note(NoteCode.SYSTEM_EQ_BLIND_JUNCTION, zone))
     notes.extend(extra_notes)
     if any(p.path.kind in MAIN_SOURCES for p in changed) and _other_main_outputs(ctx):
         notes.append(Note(NoteCode.SYSTEM_EQ_ALSO_OTHER_OUTPUTS))
