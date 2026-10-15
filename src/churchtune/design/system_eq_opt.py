@@ -11,7 +11,8 @@ cost, and which one the solver reaches can hinge on floating-point noise (anothe
 band the solution leaves idle (nothing in the corrected range), or a second cut on a room mode, is
 put to work on what is left and the solver runs again. A new solution is kept only when its
 finished proposal (on the console grid, uncommon bands put back) scores clearly better, with gain
-counted linearly and stacked cuts refused, so it never makes the proposal worse. That this picks
+counted linearly and no more stacked cuts than the plain solve, so it never makes the proposal
+worse in RMS or peak. That this picks
 the same minimum on every platform is checked empirically (noise tests), not guaranteed. After the
 optimisation every changed band must still address a problem common to the points, or it is put
 back.
@@ -74,12 +75,17 @@ MODE_COMMON = 0.5
 # Rounds of moving an idle band to the largest remaining excess and solving again.
 RESEED_ROUNDS = 3
 RESEED_Q = 2.0
+# Split halves start this many overlap spacings apart.
+SPLIT_SPACING = 1.2
 MODE_PAIR = 2  # two cuts on one room mode
-# A reseeded solution must lower the score of the finished proposal by this much to be kept.
-BETTER_SCORE = 1e-3
-# Gain in the score counts linearly, per dB, so two half bands score no better than one; a split
-# that fits better is stopped by the overlap penalty instead.
+# A reseeded solution must lower the score of the finished proposal by this share to be kept.
+BETTER_SCORE = 0.005
+# Gain in the score counts linearly, per dB, so two half bands score no better than one by gain
+# alone; a split that fits better is still kept when the halves are far enough apart.
 SCORE_GAIN_WEIGHT = 0.06
+# A reseeded proposal with more bands must improve this much (RMS or peak) to be kept.
+EXTRA_BAND_RMS_DB = 0.05
+EXTRA_BAND_PEAK_DB = 0.25
 # A proposal with fewer stacked cuts may score this much (relative) worse and still be kept.
 UNSTACK_TOLERANCE = 0.02
 # A reseeded proposal may not be worse than the plain solve's by more than this (RMS, peak).
@@ -260,8 +266,9 @@ def _reseed_starts(
     ]
     for i in sorted(cuts, key=lambda i: (x[3 * i + 1], i)):
         log_freq, gain, log_q = x[3 * i : 3 * i + 3]
-        shift = math.log(2) / (4 * math.exp(log_q))
-        half = (log_freq - shift, gain / 2, log_q + math.log(2))
+        # Halves a little more than the overlap spacing apart, so they start as two problems.
+        shift = math.log(2) * SPLIT_SPACING * _spacing_oct(math.exp(log_q)) / 2
+        half = (log_freq - shift, gain / 2, log_q)
         split = _moved(x, i, half, problem)
         starts.append(_moved(split, slot, (log_freq + shift, gain / 2, half[2]), problem))
     return starts
@@ -276,30 +283,46 @@ class _Score:
         rms_db: RMS deviation from the target after the proposal.
         max_db: Largest excess above the target after the proposal.
         stacked: How often new cuts sit on top of each other (``_stacked``).
+        bands: How many bands the proposal changes and sets to a gain.
     """
 
     value: float
     rms_db: float
     max_db: float
     stacked: int
+    bands: int
 
     def better_than(self, best: "_Score", plain: "_Score") -> bool:
-        """Clearly better than ``best``, and no worse than the plain solve on any measure.
+        """Whether a candidate replaces ``best``; one rule whichever way the search went.
 
-        Measures: RMS deviation, largest excess, and stacked cuts (a candidate may keep what the
-        plain solve already stacked, never add to it). A candidate with fewer stacked cuts than
-        ``best`` may score up to ``UNSTACK_TOLERANCE`` worse: the same correction in fewer bands.
+        Never more stacked cuts than the plain solve. Fewer stacked cuts than ``best``: kept when
+        it scores at most ``UNSTACK_TOLERANCE`` worse. Fewer bands: kept unless ``best``'s extra
+        band earns its place (``_earns_a_band``). More bands: kept only when they earn it.
+        Otherwise a clearly lower score. A candidate with as many bands or more is never worse
+        than the plain solve in RMS or peak.
         """
-        no_worse = (
-            self.rms_db <= plain.rms_db + NO_WORSE_DB
-            and self.max_db <= plain.max_db + NO_WORSE_DB
-            and self.stacked <= plain.stacked
-        )
-        if not no_worse:
+        if self.stacked > plain.stacked:
             return False
         if self.stacked < best.stacked:
-            return self.value <= best.value * (1 + UNSTACK_TOLERANCE)
-        return self.stacked == best.stacked and self.value < best.value - BETTER_SCORE
+            return self.value <= best.value * (1 + UNSTACK_TOLERANCE) and self._no_worse(plain)
+        if self.bands < best.bands:
+            return self.stacked <= best.stacked and not best.earns_a_band_over(self)
+        if not self._no_worse(plain):
+            return False
+        if self.bands > best.bands:
+            return self.earns_a_band_over(best)
+        return self.stacked == best.stacked and self.value < best.value * (1 - BETTER_SCORE)
+
+    def _no_worse(self, plain: "_Score") -> bool:
+        return (
+            self.rms_db <= plain.rms_db + NO_WORSE_DB and self.max_db <= plain.max_db + NO_WORSE_DB
+        )
+
+    def earns_a_band_over(self, fewer: "_Score") -> bool:
+        """Whether this proposal's extra band buys an audible improvement over ``fewer``."""
+        rms_gain_db = fewer.rms_db - self.rms_db
+        peak_gain_db = fewer.max_db - self.max_db
+        return rms_gain_db >= EXTRA_BAND_RMS_DB or peak_gain_db >= EXTRA_BAND_PEAK_DB
 
 
 def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: float) -> int:
@@ -320,6 +343,32 @@ def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: f
     return close + int(np.min(total) < max_cut_db - MIN_GAIN_DB)
 
 
+_Bounds = tuple[tuple[float, ...], tuple[float, ...]]
+
+
+def _without_a_band(x: FloatArray, problem: _Problem) -> list[tuple[FloatArray, _Bounds]]:
+    """Starts with one working cut taken out (its gain held at 0), the shallowest first.
+
+    The way back from a split: a second band that buys nothing must be removable, or which of
+    two almost equal minima is proposed would depend on where the solver happened to start.
+    """
+    working = [
+        i
+        for i, n in enumerate(problem.slots)
+        if problem.kinds[n] == _Kind.CUT and x[3 * i + 1] <= -MIN_GAIN_DB
+    ]
+    if len(working) < MODE_PAIR:
+        return []
+    starts = []
+    for i in sorted(working, key=lambda i: (-x[3 * i + 1], i)):
+        lower, upper = list(problem.lower), list(problem.upper)
+        lower[3 * i + 1], upper[3 * i + 1] = -MIN_BOUND_WIDTH, 0.0
+        start = np.array(x, dtype=np.float64)
+        start[3 * i + 1] = -MIN_BOUND_WIDTH / 2
+        starts.append((start, (tuple(lower), tuple(upper))))
+    return starts
+
+
 def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected range
     residual: Callable[[FloatArray], FloatArray],
     excess: Callable[[FloatArray], FloatArray],
@@ -330,14 +379,14 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
     active: Callable[[FloatArray, int], bool],
     modes_below_hz: float,
 ) -> FloatArray:
-    """Solve from the greedy start, then put spare bands to work and solve again.
+    """Solve from the greedy start, then try one band fewer or a spare band put to work.
 
     ``excess`` gives the weighted excess above the target (zero outside the corrected range),
     ``score`` judges the finished proposal of a solution (snapped, uncommon bands put back, gain
     counted linearly so two half bands score no better than one) and ``active`` tells whether a
-    slot does anything in the corrected range. A new solution is kept only at a clearly lower
-    score, so the proposal never gets worse than the plain solve's; the procedure is
-    deterministic.
+    slot does anything in the corrected range. A new solution is kept as ``_Score.better_than``
+    says: fewer bands unless the extra one earns its place, never more stacked cuts than the
+    plain solve. The procedure is deterministic.
     """
     bounds = (problem.lower, problem.upper)
     solution = least_squares(residual, problem.x0, bounds=bounds)
@@ -345,16 +394,17 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
     plain = best_score = score(best)
     for _ in range(RESEED_ROUNDS):
         spare = _spare_slot(best, problem, active, modes_below_hz)
-        if spare is None:
-            break
-        slot, freed, merged = spare
-        starts = [freed] if merged else []
-        starts += _reseed_starts(
-            (slot, freed), excess(freed), grid_hz, problem, modes_below_hz=modes_below_hz
-        )
+        starts = _without_a_band(best, problem)
+        if spare is not None:
+            slot, freed, merged = spare
+            moves = [freed] if merged else []
+            moves += _reseed_starts(
+                (slot, freed), excess(freed), grid_hz, problem, modes_below_hz=modes_below_hz
+            )
+            starts += [(start, bounds) for start in moves]
         improved = False
-        for start in starts:
-            solution = least_squares(residual, start, bounds=bounds, max_nfev=RESEED_MAX_NFEV)
+        for start, limits in starts:
+            solution = least_squares(residual, start, bounds=limits, max_nfev=RESEED_MAX_NFEV)
             candidate = np.asarray(solution.x, dtype=np.float64)
             candidate_score = score(candidate)
             if candidate_score.better_than(best_score, plain):
@@ -377,16 +427,23 @@ def _eq_from(x: FloatArray, problem: _Problem, eq_meas: SystemEq) -> SystemEq:
     return SystemEq(True, tuple(bands))
 
 
-def _snap(eq: SystemEq, problem: _Problem, quantizer: EqQuantizer) -> list[Band]:
-    """Put the optimised bands on the console grid; tiny gains become zero."""
+def _snap(eq: SystemEq, problem: _Problem, quantizer: EqQuantizer, eq_meas: SystemEq) -> list[Band]:
+    """Put the optimised bands on the console grid; tiny gains become zero.
+
+    A band that was flat and stays flat keeps its old frequency and Q: moving a band that does
+    nothing would only be a write to the console.
+    """
     snapped = []
-    for band in eq.bands:
+    for band, old in zip(eq.bands, eq_meas.bands, strict=True):
         if not band.adjustable:
             snapped.append(band)
             continue
         gain = quantizer.snap_gain_db(band.gain_db)
         if abs(gain) < MIN_GAIN_DB and problem.kinds.get(band.band) != _Kind.NOTCH:
             gain = 0.0
+        if gain == 0 and old.gain_db == 0:
+            snapped.append(old)
+            continue
         snapped.append(
             replace(
                 band,
@@ -608,7 +665,7 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
         optimised = (
             _eq_from(x, problem, eq_meas) if x is not None else SystemEq(True, eq_meas.bands)
         )
-        bands = _snap(optimised, problem, quantizer)
+        bands = _snap(optimised, problem, quantizer, eq_meas)
         reverted = _revert_uncommon(bands, eq_meas, problem, data=data, zones=zones, cfg=cfg)
         response = eq_response_db(SystemEq(True, tuple(bands)), grid, fs_hz)
         return bands, reverted, np.asarray(dev + response - data.old_response_db)
@@ -624,6 +681,7 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
             rms_db=float(np.sqrt(np.mean(after[mask] ** 2))),
             max_db=float(after[mask].max()),
             stacked=_stacked(changed, grid, fs_hz, cfg.max_cut_db),
+            bands=len(changed),
         )
 
     def active(x: FloatArray, slot: int) -> bool:
