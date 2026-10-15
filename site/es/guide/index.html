@@ -51,7 +51,7 @@
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>Qué puedes hacer hoy <span class="tag tag-now">Ahora</span></h2>
 <ul>
-<li><strong>Cualquiera que se maneje con una terminal</strong> puede recorrer el asistente guiado con el emulador de
+<li><strong>Cualquiera que se maneje con una terminal</strong> puede <a href="#try-wizard-install">instalarlo con un solo comando</a> y recorrer el asistente guiado con el emulador de
 consola incluido y un salón simulado: sin consola, sin altavoces, sin sonido. Mira <a href="#try-wizard">Probar el asistente sin equipo</a>.</li>
 <li><strong>Desarrolladores y testers</strong> pueden instalar el proyecto, correr las pruebas y probar la línea de
 comandos experta con el emulador.</li>
@@ -109,6 +109,13 @@ comandos experta se queda como herramienta para desarrolladores junto al asisten
 un salón simulado. Nada sale de tu computadora: no se toca ninguna consola y no suena nada.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Los pasos que escriben en la consola solo se han probado con el emulador y un salón simulado. No los uses en la consola de tu iglesia hasta que alguien haya hecho las verificaciones de equipo en un salón real (filas 22–28 de la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a>).</p></div>
 <h3 id="try-wizard-start">Iniciarlo</h3>
+<p id="try-wizard-install">Lo más sencillo, en una Mac y sin copia del repositorio: abre Terminal, pega esta línea y pulsa Return. Instala uv si hace falta, luego el comando <code>ctune</code> con su propio Python, sin contraseña de administrador, y termina con la autocomprobación:</p>
+<pre><code>curl -LsSf https://raw.githubusercontent.com/mihailShumilov/ChurchAutoTune/main/scripts/install.sh | sh</code></pre>
+<p>La autocomprobación recorre todo el asistente con el emulador incluido y un salón simulado en unos quince segundos y muestra una línea por paso; nunca contacta una consola real ni reproduce sonido. Después abre una ventana nueva de Terminal e inicia el asistente con el emulador:</p>
+<pre><code>ctune selftest                          # la autocomprobación otra vez, cuando quieras
+ctune --emulator --home /tmp/ctune-demo   # el asistente con el emulador, archivos de prueba aparte</code></pre>
+<p>Para actualizar, vuelve a ejecutar la línea de instalación. Con <code>--emulator</code> el programa usa solo el emulador y el salón simulado durante toda la sesión, aunque haya una consola real en la misma red. La aplicación todavía no está en español: elige inglés con <code>--lang en</code>.</p>
+<p>O desde una copia del repositorio:</p>
 <p>Desde una copia del repositorio con uv instalado, en la rama <code>main</code> (mira <a href="#install">Instalar</a>
 y el <a href="#emulator">paso 3</a>):</p>
 <pre><code>uv sync
