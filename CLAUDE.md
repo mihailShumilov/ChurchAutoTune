@@ -55,14 +55,15 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M6 (applying, undo, verify, temporary mutes and the junction; the session report; ADR 0010, 0011, 0014).
+State after M6 plus the M7 install and self-check (ADR 0010, 0011, 0014, 0015).
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
   `check`, `measure`, `analyze`, `apply` (apply/undo), `apply_packages` (`apply-packages` and the package
   undo, terminal side), `package_writes` (plan, check, re-plan and send package plans; `X32WritePort` for the
   wizard, incl. the read-only `describe_undo` for the report; with `apply` the only places that send a plan), `mute_writes` (temporary matrix mutes, pending
   restore), `demo` (`--emulator` hall link), `sub`, `hwcheck`, `report` (a session's report again, `--for-chat`),
   `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
-  `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI)
+  `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI), `selftest` (whole wizard on the in-process emulator, ADR 0015), `scripted` (the scripted
+  volunteer of selftest and e2e tests)
 - `wizard/` UI-agnostic engine (ADR 0008): `protocol` (serializable `Prompt`/`Answer`, `Prompter`), `state`, `engine`,
   `services` (ports incl. `WritePort`, stop flag), `ui` (prompt helpers), `run` (start/resume), `labels` (console
   words as texts), `proposals` (plan/packages ↔ files), `applying` (proposal → ordered steps from a fresh read),
@@ -99,6 +100,7 @@ State after M6 (applying, undo, verify, temporary mutes and the junction; the se
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).
 - Writes never verified on hardware (output delay, polarity) need `--write-unverified` (ADR 0005); in the wizard and
   `apply-packages` they are advice only (ADR 0010).
+- `scripts/install.sh` one-command install (uv tool install from the source archive, then selftest).
 - Tests: `tests/emulator/` (subclass of the packaged emulator), `tests/fixtures/` (anonymized dumps, golden hall data,
   `x32/topologies/*.toml` = dump + overrides + expected roles), `tests/golden/`, `tests/e2e/` (scripted wizard),
   `tests/tui/` (Pilot tests, SVG snapshots in `__snapshots__/`).
@@ -116,6 +118,7 @@ CTUNE_DEV_SAFE=1 uv run ctune report --for-chat # the newest session's report ag
 # Emulator and doctor (M1); wizard and TUI (M3):
 CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P   # prints port
 CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor              # doctor against an in-process emulator
+CTUNE_DEV_SAFE=1 uv run ctune selftest                       # the whole wizard on the in-process emulator
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake        # the wizard (TUI) on the emulator + simulated hall
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake wizard --plain --lang ru   # line interface
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake resume # continue the newest session

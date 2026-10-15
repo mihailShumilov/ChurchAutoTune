@@ -1,5 +1,7 @@
 # ChurchTune
 
+**English** · [Русский](README.ru.md) · [Українська](README.uk.md)
+
 [![CI](https://github.com/mihailShumilov/ChurchAutoTune/actions/workflows/ci.yml/badge.svg)](https://github.com/mihailShumilov/ChurchAutoTune/actions/workflows/ci.yml)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
@@ -19,33 +21,75 @@ you where to put the microphone, measures, proposes changes, writes them safely 
 measures again and tells you whether it got better.
 
 > [!WARNING]
-> **Pre-alpha. Do not use it on a live system yet.** The measurement and design core works and reproduces a
-> real tuning session, but the guided wizard does not exist yet and some console writes were never verified on
-> hardware. See [Project status](#project-status).
+> **Pre-alpha. Do not use it on a live system yet.** Every step of the wizard exists and works against the
+> console emulator and a simulated hall, but nothing has been tried on a real console yet. The hardware checks
+> and a pilot in real churches (M7) come first. See [Project status](#project-status).
 
 ## Contents
 
+- [Install](#install)
+- [First steps](#first-steps)
 - [How it works](#how-it-works)
 - [Project status](#project-status)
 - [Safety](#safety)
 - [Requirements](#requirements)
-- [Getting started (developers)](#getting-started-developers)
+- [Developers](#developers)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
 
+## Install
+
+Open the Terminal app on your Mac and paste one line:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/mihailShumilov/ChurchAutoTune/main/scripts/install.sh | sh
+```
+
+The [script](scripts/install.sh) installs [uv](https://docs.astral.sh/uv/) if you do not have it, then installs the
+`ctune` command with its own Python. It needs no administrator password. At the end it runs the self-check. Then
+open a new Terminal window.
+
+If you already use uv, one command does the same:
+
+```bash
+uv tool install "churchtune @ https://github.com/mihailShumilov/ChurchAutoTune/archive/main.tar.gz"
+```
+
+To update, run the same line again. To remove it: `uv tool uninstall churchtune` (your measurements in
+`~/ChurchTune` stay).
+
+## First steps
+
+```bash
+ctune selftest           # check the installation: the whole wizard on a built-in emulator, no sound
+ctune --emulator         # try the wizard on the built-in console emulator and a simulated hall
+ctune --help             # all commands
+```
+
+`ctune selftest` and `ctune --emulator` use only a console emulator built into the program and a simulated hall:
+they never contact a real console and never play sound.
+
+With a real console the wizard is started with plain `ctune`. Until the pilot is done, please do that only
+as part of the [hardware checks](docs/hardware-checklist.md), with a scene saved on the console first.
+
 ## How it works
 
-1. **Read the console.** Model, firmware, routing, which matrix or bus feeds the tops and the sub, current EQ.
-2. **Measure.** A measurement microphone (for example a Behringer ECM8000) on a console input, logarithmic
-   sweeps played through the X32 USB card, several positions in the room, quality gates on every sweep.
-3. **Analyse.** 1/6-octave response averaged over positions, spread between positions, RT60, the sub/top
-   junction.
-4. **Propose.** A Linkwitz-Riley crossover, sub level, delay and polarity, and a few broad system-EQ bands within
-   strict limits. It also says what EQ cannot fix (room acoustics).
-5. **Apply.** A diff of every change, a typed confirmation, an undo file written before the first change, and
-   each value read back from the console after it is written.
-6. **Verify and report.** Measure again, compare, offer to undo, write a Markdown report.
+The guided wizard (English, Russian or Ukrainian) takes you through it step by step:
+
+1. **Read the console.** Model, firmware, routing, which matrix or bus feeds the tops and the sub, the current
+   EQ, and the USB routing for the measurement.
+2. **Measure.** One or several measurement microphones (for example a Behringer ECM8000) on console inputs.
+   Several mics are first calibrated against each other. The sweeps are played through the console's USB card,
+   at several places in the room, with a quality check on every sweep.
+3. **Analyse.** The response averaged over the places, the spread between places, the reverberation (RT60)
+   and the junction between the subwoofer and the main speakers.
+4. **Propose.** Packages of changes to choose from: a crossover, the sub level, broad system-EQ bands within
+   strict limits, and advice on delay and polarity. It also says plainly what EQ cannot fix (room acoustics).
+5. **Apply.** A table of every change, a typed confirmation word, an undo file written before the first change,
+   and each value read back from the console after it is written.
+6. **Check and report.** Measure again, compare, offer to put everything back. At the end a report is written:
+   a page that opens without internet, Markdown, JSON and a short text to paste into a chat.
 
 The method comes from a working tool that tuned one real hall on 2026-10-02. That session is part of the
 golden tests.
@@ -56,55 +100,55 @@ ChurchTune is built milestone by milestone (see [SPEC §15](docs/SPEC.md)).
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | Repository, port of the proven tool into a layered package, golden tests | done |
-| M1 | X32/M32 driver: discovery, full read-only snapshot, topology inference | in review |
-| M2 | Audio and measurement engine: multi-mic, mic-set calibration, path checks | next |
-| M3 | Guided wizard (Textual TUI), storage, English / Russian / Ukrainian | planned |
-| M4 | Analysis and proposals | planned |
-| M5 | Apply, undo, verify | planned |
-| M6 | Report | planned |
-| M7 | Pilot in real churches and release 0.1.0 | planned |
+| M0 | Repository, the proven tool moved into a layered package, golden tests | done |
+| M1 | X32/M32 driver: discovery, full read-only snapshot, speaker layout | done |
+| M2 | Audio and measurement: one or several mics, mic calibration, signal checks | done |
+| M3 | Guided wizard, saved progress, English / Russian / Ukrainian | done |
+| M4 | Analysis and proposals | done |
+| M5 | Apply, undo, check measurement, crossover | done, not yet tried on a real console |
+| M6 | Report | done |
+| M7 | Hardware checks and a pilot in real churches, one-command install, release 0.1.0 | in progress |
 
-What exists today is a transitional expert command line (`ctune --help`, Russian texts for now).
-It is for developers, not for volunteers.
+There is no release yet. Version 0.1.0 comes after the full wizard has run on a real X32 Producer with results no
+worse than the manual session of 2026-10-02, and every row of the hardware checklist has been checked by a person.
 
 ## Safety
 
 A sound system can hurt ears and speakers, and a church needs its console to work on Sunday. The design follows
 these rules:
 
-- **Read-only by default.** The console client can only read from a fixed allowlist of addresses. One module
-  writes, and only with a scoped authorization from the safety policy.
+- **Read-only by default.** The console client can only read from a fixed list of addresses. One module
+  writes, and only with a permission from the safety policy for one kind of change.
 - **Limits.** EQ cut and boost, Q, crossover and level changes are bounded. Anything outside the limits is
   refused, not clipped.
 - **Undo first.** An undo file is on disk before the first write. It is never overwritten.
 - **Readback.** Every write is read back from the console and compared.
 - **Quiet audio.** Nothing louder than −6 dBFS peak leaves the computer. Fades on every start and stop.
   Ctrl+C stops the sound immediately.
-- **Unverified writes are opt-in.** Output delay and matrix polarity have not been checked on a real console
-  yet. They are written only with `--write-unverified`
-  ([ADR 0005](docs/adr/0005-unverified-writes-opt-in.md)).
+- **Unchecked settings are not written.** Output delay and matrix polarity have not been checked on a real
+  console yet. The wizard gives their values to set by hand; the expert command line writes them only with
+  `--write-unverified` ([ADR 0005](docs/adr/0005-unverified-writes-opt-in.md)).
 - **Development never touches hardware.** With `CTUNE_DEV_SAFE=1` the code refuses any console that is not on
-  `127.0.0.1` and any audio device that is not the fake backend. All tests run that way.
+  `127.0.0.1` and any audio device that is not the simulated one. All tests run that way.
 
 Hardware behaviour is confirmed only by a person at a console, recorded in
 [`docs/hardware-checklist.md`](docs/hardware-checklist.md).
 
 ## Requirements
 
-- macOS (the target platform). Linux runs the test suite in CI.
-- Python 3.12 and [uv](https://docs.astral.sh/uv/).
-- PortAudio and libsndfile (bundled with the Python wheels on macOS; `libportaudio2 libsndfile1` on Debian/Ubuntu).
-- For real use, later: a Behringer X32 / Midas M32 with the X-USB card and a measurement microphone.
+- A Mac (macOS is the target platform; Linux runs the tests in CI).
+- For real use: a Behringer X32 / Midas M32 (firmware 4.x) with the X-USB card, connected to the Mac by
+  network and USB, and a measurement microphone.
+- The installer brings Python 3.12 and everything else.
 
-## Getting started (developers)
+## Developers
 
 ```bash
 git clone https://github.com/mihailShumilov/ChurchAutoTune.git
 cd ChurchAutoTune
 uv sync
-CTUNE_DEV_SAFE=1 uv run pytest -q          # all tests: X32 emulator + fake audio
-CTUNE_DEV_SAFE=1 uv run ctune --help       # expert CLI
+CTUNE_DEV_SAFE=1 uv run pytest -q                 # all tests: X32 emulator + simulated audio
+CTUNE_DEV_SAFE=1 uv run ctune --emulator          # the wizard on the emulator
 CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor   # find, read and explain an emulated X32
 ```
 
@@ -114,6 +158,9 @@ The full check that CI runs:
 CTUNE_DEV_SAFE=1 uv run ruff format --check . && uv run ruff check . && uv run mypy \
   && CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json && uv run python scripts/check_coverage.py
 ```
+
+The expert commands besides the wizard are transitional and print Russian texts for now
+([ADR 0003](docs/adr/0003-transitional-expert-cli.md)).
 
 ## Documentation
 
