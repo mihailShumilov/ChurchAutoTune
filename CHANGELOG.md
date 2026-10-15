@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- One-command install (M7, ADR 0015): `scripts/install.sh` installs uv when missing, then the `ctune` command
+  with its own Python 3.12 from the GitHub source archive (no git, no administrator rights), and runs the
+  self-check. `ctune selftest [--lang] [--keep]` runs the whole wizard on the built-in emulator and the simulated
+  hall with a scripted volunteer, in dev-safe mode, and says whether the installation works. CI installs the built
+  wheel with the script on macOS.
+- README in English, Russian and Ukrainian, with the install, the first steps and the current status.
 - Session report (M6, ADR 0014): at the end of the wizard, `report.html` (one file, opens offline, light and dark
   theme, prints), `report.md` with its charts, `report.json` and a short text for a chat, in the interface language
   (en/ru/uk), with every section of SPEC §10 — summary, system, measurement quality, response before and after,
