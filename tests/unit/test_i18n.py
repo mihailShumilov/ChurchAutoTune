@@ -28,6 +28,7 @@ CODE = [
     *sorted((SRC / "app").rglob("*.py")),
     *sorted((SRC / "report").rglob("*.py")),
     SRC / "cli" / "report.py",
+    SRC / "cli" / "selftest.py",
     SRC / "cli" / "wizard.py",
 ]
 STATIC_KEY = re.compile(r'(?:\bt|\bText|\btranslate|\bMsg|\btr)\(\s*"([a-z0-9-]+)"')

@@ -76,3 +76,17 @@ output-aux = aux out { $number }
 alignment-delay = { $where }: delay { $ms } ms
 alignment-polarity = { $where }: polarity inverted
 signal-main-lr = Main LR
+
+# The self-check of the installed program
+selftest-start = Self-check of ChurchTune { $version }: the whole wizard runs on a console emulator built into the program and a simulated hall. No real console and no sound card are used, and nothing is played. It takes up to a minute.
+selftest-ok = ✓ { $what }
+selftest-failed = ✗ { $what }
+selftest-what-wizard = The wizard went through every step.
+selftest-what-junction = The subwoofer and the main speakers were measured separately.
+selftest-what-apply = The changes were written to the emulator and checked.
+selftest-what-verify = The check measurement was made.
+selftest-what-report = The report was written.
+selftest-error = The self-check stopped with an error ({ $error }).
+selftest-passed = Self-check passed in { $seconds } s. ChurchTune is installed correctly.
+selftest-not-passed = Self-check failed. Please open an issue on GitHub and paste this output.
+selftest-kept = The self-check files are in { $path }

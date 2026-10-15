@@ -201,11 +201,11 @@ def test_checker_accepts_allowed_import(tmp_path, rel, source):
 EMULATOR_PACKAGE = "churchtune_emulator"
 EMULATOR_SRC = SRC.parent / EMULATOR_PACKAGE
 # Only these development entry points may load the emulator, and only inside a function.
-EMULATOR_IMPORTERS = {"cli/main.py", "cli/console.py"}
+EMULATOR_IMPORTERS = {"cli/main.py", "cli/console.py", "cli/selftest.py"}
 
 
 def emulator_import_violations(src: Path) -> list[str]:
-    """Imports of the emulator package from ``churchtune`` outside the two lazy entry points."""
+    """Imports of the emulator package from ``churchtune`` outside the lazy entry points."""
     problems: list[str] = []
     for path in sorted(src.rglob("*.py")):
         rel = path.relative_to(src).as_posix()
