@@ -35,20 +35,28 @@ class PromptView(Static):
 
     def show(self, translate: Translator, prompt: Prompt) -> None:
         """Show a prompt's text."""
-        parts: list[RichText | RichTable] = []
-        before, question = split_question(prompt)
-        for index, paragraph in enumerate(before):
-            style = "italic" if index == 0 and len(prompt.body) > 1 else ""
-            parts.append(RichText(render(translate, paragraph) + "\n", style=style))
-        if prompt.table is not None:
-            table = RichTable(*(render(translate, h) for h in prompt.table.headers), expand=False)
-            for row in prompt.table.rows:
-                table.add_row(*(render(translate, cell) for cell in row))
-            parts.append(table)
-        if prompt.picture:
-            parts.append(RichText(prompt.picture))
-        parts.extend(RichText("\n" + render(translate, q), style="bold") for q in question)
-        self.update(_stack(parts))
+        self.update(prompt_renderable(translate, prompt))
+
+
+def prompt_renderable(translate: Translator, prompt: Prompt) -> RichTable:
+    """The paragraphs, table and picture of a prompt as one Rich renderable."""
+    parts: list[RichText | RichTable] = []
+    before, question = split_question(prompt)
+    for index, paragraph in enumerate(before):
+        style = "italic" if index == 0 and len(prompt.body) > 1 else ""
+        # Long paths and commands wrap instead of ending in "…": they must stay readable.
+        parts.append(RichText(render(translate, paragraph) + "\n", style=style, overflow="fold"))
+    if prompt.table is not None:
+        table = RichTable(*(render(translate, h) for h in prompt.table.headers), expand=False)
+        for row in prompt.table.rows:
+            table.add_row(*(render(translate, cell) for cell in row))
+        parts.append(table)
+    if prompt.picture:
+        parts.append(RichText(prompt.picture))
+    parts.extend(
+        RichText("\n" + render(translate, q), style="bold", overflow="fold") for q in question
+    )
+    return _stack(parts)
 
 
 def _stack(parts: list[RichText | RichTable]) -> RichTable:

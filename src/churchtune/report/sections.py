@@ -55,6 +55,7 @@ SECTION_IDS = (
 # Octaves whose decay a measurement cannot pin down well (modes, short octave filters).
 APPROXIMATE_OCTAVES = frozenset({63})
 SAME_LEVEL_DB = 1.0
+KILOHERTZ = 1000.0
 NO_CHANGE_DB = 0.05
 
 
@@ -69,7 +70,8 @@ def output_cell(key: str) -> Cell:
     return Msg(f"output-{kind}", {"number": int(number)}) if number.isdecimal() else key
 
 
-def _output_order(key: str) -> tuple[str, int]:
+def output_order(key: str) -> tuple[str, int]:
+    """Outputs by kind, then by number (output 3 before output 10)."""
     kind, _, number = key.partition(" ")
     return kind, int(number) if number.isdecimal() else 0
 
@@ -87,6 +89,13 @@ def _s(value: float | None, approximate: bool = False) -> Cell:
 
 def _hz(value: float) -> Msg:
     return Msg("report-value-hz", {"value": round(value)})
+
+
+def _freq(value: float) -> Msg:
+    """A frequency as people say it: "125 Hz", "2 kHz", "3.15 kHz"."""
+    if value >= KILOHERTZ:
+        return Msg("report-value-khz", {"value": round(value / KILOHERTZ, 2)})
+    return _hz(value)
 
 
 def _place(data: ReportData, name: str) -> Cell:
@@ -122,7 +131,7 @@ def _system(data: ReportData) -> Section:
     ]
     if data.variant is not None:
         rows.append((Msg("report-system-variant"), Msg(f"variant-{kebab(data.variant)}")))
-    speakers = sorted((k for k, r in data.roles.items() if r != "unused"), key=_output_order)
+    speakers = sorted((k for k, r in data.roles.items() if r != "unused"), key=output_order)
     rows += [(output_cell(key), Msg(f"role-{kebab(data.roles[key])}")) for key in speakers]
     head = (Msg("report-column-what"), Msg("report-column-value"))
     return Section("system", Msg("report-section-system"), (Table(head, tuple(rows)),))
@@ -202,7 +211,7 @@ def _junction(alignment: AlignmentResult | None, tr: Translate) -> Section:
     )
     blocks: tuple[Block, ...] = (
         Paragraph(Msg("report-junction-what")),
-        Paragraph(Msg("glossary-crossover")),
+        Paragraph(Msg("report-junction-gloss")),
         Table(head, rows),
         Paragraph(Msg("report-junction-advice")),
         figure,
@@ -240,7 +249,7 @@ def _decay(an: Analysis | None, tr: Translate) -> Section:
     head = (Msg("report-column-octave"), Msg("report-column-t20"), Msg("report-column-edt"))
     rows = tuple(
         (
-            _hz(c),
+            _freq(c),
             _s(an.rt60[c].t20.mean_s, c in APPROXIMATE_OCTAVES),
             _s(an.rt60[c].edt.mean_s, c in APPROXIMATE_OCTAVES),
         )
@@ -269,6 +278,8 @@ def _changes(data: ReportData) -> Section:
         )
         rows = tuple((c.what, c.before, c.after) for c in data.changes)
         blocks += [Paragraph(Msg("report-changes-what")), Table(head, rows)]
+        if any(c.path.endswith("/type") for c in data.changes):
+            blocks.append(Paragraph(Msg("report-changes-types")))
         if data.undo_file is not None:
             blocks.append(Paragraph(Msg("report-changes-undo")))
     if data.advice:
@@ -289,7 +300,7 @@ def _verify(data: ReportData) -> Section:
         return Section("verify", title, (Paragraph(Msg("report-verify-not-done")),))
     head = (Msg("report-column-what"), Msg("report-column-value"))
     worst = Msg(
-        "report-verify-worst",
+        "report-verify-worst-value",
         {
             "place": _place(data, result.worst_point),
             "direction": _direction(result.worst_delta_db),
@@ -297,14 +308,18 @@ def _verify(data: ReportData) -> Section:
         },
     )
     band = Msg(
-        "report-verify-band",
-        {"place": _place(data, result.band_point), "freq_hz": round(result.band_hz)},
+        "report-verify-band-value",
+        {
+            "delta_db": round(max(result.band_delta_db, 0.0), 1),
+            "freq": _freq(result.band_hz),
+            "place": _place(data, result.band_point),
+        },
     )
     rows: tuple[tuple[Cell, ...], ...] = (
         (Msg("report-verify-m-before"), _db(result.m_before_db)),
         (Msg("report-verify-m-after"), _db(result.m_after_db)),
-        (worst, ""),
-        (band, _db(max(result.band_delta_db, 0.0))),
+        (Msg("report-verify-worst"), worst),
+        (Msg("report-verify-band"), band),
         (Msg("report-verify-spread"), _db(result.spread_delta_db)),
     )
     verdict = Paragraph(Msg(f"report-summary-verdict-{kebab(result.verdict.value)}"))

@@ -63,8 +63,8 @@ report-column-after = After
 
 report-value-db = { $value } dB
 report-value-dbfs = { $value } dBFS
-report-value-s = { $value } s
-report-value-s-approx = ≈ { $value } s
+report-value-s = { NUMBER($value, minimumFractionDigits: 2) } s
+report-value-s-approx = ≈ { NUMBER($value, minimumFractionDigits: 2) } s
 report-value-hz = { $value } Hz
 
 report-system-console = Console
@@ -94,7 +94,7 @@ report-junction-delay-none = neither
 report-junction-delay-sub = the subwoofer, by { $ms } ms
 report-junction-delay-tops = the main speakers, by { $ms } ms
 report-junction-polarity = Subwoofer polarity that adds up best
-report-junction-advice = These are calculations from the measurement, not console settings. The program does not write delay and polarity: set them by hand only if the wizard advised it. Filters and levels come first; a delay is worth changing only if it clearly improves the sum.
+report-junction-advice = These are calculations from the measurement, not console settings. The program does not write delay and polarity: set them by hand only if ChurchTune advised it during the tuning. Filters and levels come first; a delay is worth changing only if it clearly improves the sum.
 report-polarity-normal = normal
 report-polarity-inverted = inverted
 report-figure-junction = Subwoofer alone, main speakers alone and both together around the crossover.
@@ -122,18 +122,14 @@ report-changes-none = Nothing was written to the console.
 report-changes-nothing = Nothing was written to the console.
 report-changes-reverted = The changes were written and then put back.
 report-changes-applied = The changes were written; their list is in the undo file.
-report-changes-advice = The wizard also advised setting these by hand (the program does not write them):
+report-changes-advice = During the tuning ChurchTune also advised setting these by hand (the program does not write them):
 
 report-verify-not-done = There was no check measurement.
 report-verify-what = The same places were measured again after the changes. “Deviation” is how far the average is from the target curve: lower is better. “Better” needs the deviation to drop by at least 0.5 dB with no place or band getting clearly worse; smaller differences are within what two measurements of the same thing differ by.
 report-verify-m-before = Deviation from the target before
 report-verify-m-after = Deviation from the target after
-report-verify-worst = The place that sounded worst, { $place }: { $direction ->
-    [better] better by { $delta_db } dB
-    [worse] worse by { $delta_db } dB
-   *[same] no change
-}
-report-verify-band = Largest change for the worse in one band ({ $freq_hz } Hz, { $place })
+report-verify-worst = The place that measured worst before the changes
+report-verify-band = Largest change for the worse in one band
 report-verify-spread = Change of the spread between places (positive is worse)
 
 report-audit-none = No advice on the input channels.
@@ -149,9 +145,9 @@ report-acoustics-no-eq-promise = An equaliser cannot fix echo or reverberation; 
 
 report-check-hand = Put back what you changed by hand today (mutes, sends).
 report-check-mics = Unplug the measurement microphones, unmute their channels if you muted them, and put the cables away.
-report-check-scene = After the mutes and sends are back, save the scene on the console under a new name (for example today’s date), so the tuning survives switching the console off.
-report-check-listen = At the next service, with people in the hall, listen at the back and at the sides: are words clear, is the bass not booming, is it not too sharp? During the sound check raise the speaker’s microphone carefully and listen for ringing or feedback.
-report-check-undo = If it sounds worse, put the old values back: open Terminal on this Mac (connected to the console) and type: { $command }
+report-check-scene = After the mutes and sends are back, save the scene on the console under a new name (for example today’s date): then this tuning is easy to get back even if someone loads another scene.
+report-check-listen = At the next service, with people in the hall, listen at the back and at the sides: are words clear, is the bass not booming, is it not too sharp? During the sound check raise the preacher’s microphone carefully and listen for ringing or feedback.
+report-check-undo = If it sounds worse, put the old values back: open Terminal on this Mac (connected to the console), type the command below, then save the scene again. { $command }
 report-check-channels = Change the input channels only by ear, one setting at a time, during a rehearsal (see “Advice on the input channels”).
 
 report-appendix-version = ChurchTune version
@@ -194,3 +190,13 @@ report-chat-verdict-better = better
 report-chat-verdict-no-change = no clear difference
 report-chat-verdict-worse = worse
 report-chat-question = Question: what else could we improve in this hall, and is anything above a concern?
+report-verify-worst-value = { $place }: { $direction ->
+    [better] better by { $delta_db } dB
+    [worse] worse by { $delta_db } dB
+   *[same] unchanged
+}
+report-verify-band-value = { $delta_db } dB around { $freq }, at { $place }
+report-value-khz = { $value } kHz
+report-junction-gloss = The crossover splits the sound: the low notes go to the subwoofer, the rest to the main speakers.
+report-changes-types = LCut, HShv, LR24 and the like are filter type names as shown on the console; LR24 is the steep cut used for the crossover.
+report-legend-crossover = crossover { $fc_hz } Hz

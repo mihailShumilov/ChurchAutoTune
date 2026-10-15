@@ -381,7 +381,7 @@ verify-band = Largest change for the worse: { $delta_db } dB at the frequency { 
 verify-worse = It got worse. Putting the old values back is recommended.
 verify-no-change = No noticeable difference. You may keep the changes and listen at the next service; the last screen shows how to put the old values back.
 verify-chart = Picture: row 1 is before, row 2 is now; the taller the block, the further from the target (63 Hz on the left, 8 kHz on the right).
-step-finish-scene = After you restore the mutes and sends, save the scene on the console under a new name (for example today's date), so the tuning survives switching the console off.
+step-finish-scene = After you restore the mutes and sends, save the scene on the console under a new name (for example today's date): then this tuning is easy to get back even if someone loads another scene.
 step-finish-undo-later = If the sound is not right at the service, you can put the old values back: open Terminal and type { $command }
 step-finish-reverted = The console has its old settings again; there is nothing to save.
 

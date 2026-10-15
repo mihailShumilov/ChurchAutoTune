@@ -4,10 +4,14 @@ import threading
 from datetime import UTC, datetime
 
 import pytest
+from rich.console import Console
 
+from churchtune.app.widgets import prompt_renderable
 from churchtune.i18n import Translator
+from churchtune.report.html import render_msg
 from churchtune.storage.paths import Workspace
 from churchtune.wizard import reporting
+from churchtune.wizard.protocol import Kind, Prompt, Text
 from churchtune.wizard.run import new_state
 from churchtune.wizard.services import Services, WizardContext
 from churchtune.wizard.state import Outcome, StateBox
@@ -66,3 +70,22 @@ def test_without_a_translator_no_report_is_written(tmp_path, language):
     assert not (ctx.session_dir / "report").exists()
     keys = prompter.keys()
     assert "step-finish-report" not in keys
+
+
+@pytest.mark.parametrize("language", ["en", "ru", "uk"])
+def test_the_year_of_the_session_has_no_thousands_separator(language):
+    created = reporting._date("2026-10-14T10:00:00")
+    text = render_msg(created, Translator(language))  # type: ignore[arg-type]  # a Msg here
+    assert "2026" in text
+    assert "10:00" in text
+
+
+def test_a_long_path_on_the_last_screen_is_not_cut_off():
+    """80 columns: the report's path and the open command wrap instead of ending in "…"."""
+    path = "~/ChurchTune/venues/demo-church/sessions/20261014_100000-baseline/report/report.html"
+    prompt = Prompt(Kind.INFO, (Text("report-place", {"name": path, "where": "x"}),))
+    console = Console(width=80, record=True, color_system=None)
+    console.print(prompt_renderable(Translator("en"), prompt))
+    out = console.export_text()
+    assert "…" not in out
+    assert "report.html" in out.replace("\n", "")

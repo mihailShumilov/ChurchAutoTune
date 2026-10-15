@@ -178,6 +178,9 @@ def junction_png(result: AlignmentResult, tr: Translate) -> bytes:
         ax.plot(centres, _power_mean([p.sum_now_db for p in points]), lw=2.4, color=INK,
                 label=tr("report-legend-both", None))  # fmt: skip
         ax.axvline(result.fc_hz, color=INK2, lw=0.8, ls=":")
+        label = tr("report-legend-crossover", {"fc_hz": round(result.fc_hz)})
+        ax.text(result.fc_hz, 0.98, f" {label}", transform=ax.get_xaxis_transform(),
+                va="top", fontsize=8, color=INK2)  # fmt: skip
         ax.set_xscale("log")
         ax.set_xticks(JUNCTION_TICKS_HZ)
         ax.set_xticklabels([str(f) for f in JUNCTION_TICKS_HZ])

@@ -55,6 +55,7 @@ from churchtune.wizard.steps.verify import VERIFY_DIR
 logger = logging.getLogger(__name__)
 REPORT_DIR = "report"
 HTML_FILE, MD_FILE, JSON_FILE, CHAT_FILE = "report.html", "report.md", "report.json", "for-chat.txt"
+BANDS_LAST = 99
 Describe = Callable[[Path], tuple[PlannedWrite, ...]]
 
 
@@ -95,7 +96,7 @@ def _date(created: str) -> Cell:
         {
             "day": when.day,
             "month": Msg(f"report-month-{when.month}"),
-            "year": when.year,
+            "year": str(when.year),  # a number would get a thousands separator
             "time": when.strftime("%H:%M"),
         },
     )
@@ -111,6 +112,7 @@ def _changes(
     except (ValueError, OSError) as error:
         logger.warning("the undo file of the report could not be read: %s", error)
         return ()
+    ordered = sorted(writes, key=_write_order)
     return tuple(
         ChangeRow(
             w.path,
@@ -120,8 +122,23 @@ def _changes(
             w.before_value,
             w.after_value,
         )
-        for w in writes
+        for w in ordered
     )
+
+
+PARAM_ORDER = ("type", "freq", "q", "gain", "eq_on", "on", "fader")
+
+
+def _write_order(write: PlannedWrite) -> tuple[int, int, int, int]:
+    """The order of the change table: Main LR first, then the matrices by number.
+
+    Bands in order, their settings as on the console (type, frequency, width, gain); faders and
+    switches last.
+    """
+    main = 0 if write.strip.kind.value.startswith("main") else 1
+    param = PARAM_ORDER.index(write.param) if write.param in PARAM_ORDER else len(PARAM_ORDER)
+    band = write.band if write.band is not None else BANDS_LAST
+    return main, write.strip.number or 0, band, param
 
 
 def _packages(root: Path, state: WizardStateFile) -> PackagesFile | None:

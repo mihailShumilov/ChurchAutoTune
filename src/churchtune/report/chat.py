@@ -7,7 +7,7 @@ pictures. Responses are given in thirds of an octave from 63 Hz to 8 kHz.
 from churchtune.report.findings import findings
 from churchtune.report.html import render_msg
 from churchtune.report.model import Cell, Msg, ReportData, Translate
-from churchtune.report.sections import kebab, output_cell
+from churchtune.report.sections import kebab, output_cell, output_order
 from churchtune.report.session_json import THIRDS_HZ, thirds_db
 
 CHAT_THIRDS = tuple(f for f in THIRDS_HZ if 63 <= f <= 8000)  # noqa: PLR2004 - the shown range
@@ -22,10 +22,14 @@ def _curve(values: list[float | None]) -> str:
 def for_chat(data: ReportData, tr: Translate) -> str:
     """The session in a few kilobytes of text."""
     lines = [
-        tr("report-chat-intro", {"venue": data.venue_name, "created": data.created}),
+        tr(
+            "report-chat-intro",
+            {"venue": data.venue_name, "created": _cell(data.created_text or data.created, tr)},
+        ),
         tr("report-chat-console", {"model": data.console_model or "—", "mics": data.mic_count}),
     ]
-    speakers = [(k, r) for k, r in sorted(data.roles.items()) if r != "unused"]
+    keys = sorted((k for k, r in data.roles.items() if r != "unused"), key=output_order)
+    speakers = [(k, data.roles[k]) for k in keys]
     if speakers:
         roles = ", ".join(
             f"{_cell(output_cell(k), tr)} = {tr(f'role-{kebab(r)}', None)}" for k, r in speakers
