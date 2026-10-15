@@ -51,7 +51,7 @@
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>What you can do today <span class="tag tag-now">Now</span></h2>
 <ul>
-<li><strong>Anyone comfortable with a terminal</strong> can try the guided wizard on the built-in console emulator with a
+<li><strong>Anyone comfortable with a terminal</strong> can <a href="#try-wizard-install">install it with one command</a> and try the guided wizard on the built-in console emulator with a
 simulated hall: no console, no speakers, no sound. See <a href="#try-wizard">Try the wizard without hardware</a>.</li>
 <li><strong>Developers and testers</strong> can install the project, run the tests and try the expert command line
 against the emulator.</li>
@@ -109,6 +109,13 @@ stays as a tool for developers next to the wizard.</p>
 simulated hall. Nothing leaves your computer: no console is touched and no sound is played.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> The steps that write to the console have been tested only against the emulator and a simulated hall. Do not run them on your church's console until people have done the hardware checks in a real hall (rows 22–28 of the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a>).</p></div>
 <h3 id="try-wizard-start">Start it</h3>
+<p id="try-wizard-install">The simplest way, on a Mac, without a clone: open Terminal, paste this line and press Return. It installs uv if needed, then the <code>ctune</code> command with its own Python, with no administrator password, and ends with the self-check:</p>
+<pre><code>curl -LsSf https://raw.githubusercontent.com/mihailShumilov/ChurchAutoTune/main/scripts/install.sh | sh</code></pre>
+<p>The self-check runs the whole wizard on the built-in emulator and a simulated hall in about a quarter of a minute and prints one line per step; it never contacts a real console and never plays sound. Then open a new Terminal window and start the wizard on the emulator:</p>
+<pre><code>ctune selftest                          # the self-check again, any time
+ctune --emulator --home /tmp/ctune-demo   # the wizard on the emulator, demo files apart from real ones</code></pre>
+<p>To update, run the install line again. With <code>--emulator</code> the program uses only the emulator and the simulated hall for the whole run, even when a real console is on the same network.</p>
+<p>Or, from a clone:</p>
 <p>From a clone with uv installed, on the <code>main</code> branch (see <a href="#install">Install</a> and
 <a href="#emulator">step 3</a>):</p>
 <pre><code>uv sync
