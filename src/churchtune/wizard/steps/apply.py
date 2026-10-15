@@ -82,7 +82,7 @@ def write_table(plan: WritePlan) -> Table:
     return Table((t("write-what"), t("change-before"), t("write-after")), rows)
 
 
-def _advice(packages: Sequence[PackageModel]) -> list[Text]:
+def advice_lines(packages: Sequence[PackageModel]) -> list[Text]:
     """Output delays and polarity as things to set by hand."""
     lines: list[Text] = []
     for package in packages:
@@ -254,7 +254,7 @@ class Apply:
             info(ctx.prompter, t("apply-proposal-unreadable"))
             return Outcome.DONE
         writes = ctx.services.writes
-        advice = _advice(packages)
+        advice = advice_lines(packages)
         if writes is None or not packages:
             info(ctx.prompter, t("apply-nothing"))
         else:

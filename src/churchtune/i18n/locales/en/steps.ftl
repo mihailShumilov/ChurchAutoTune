@@ -134,10 +134,12 @@ step-results-title = Results
 step-results-no-points = There are no measured places yet.
 step-results-what = What the measurement at { $count } places shows:
 step-results-next-apply = Your choices are saved. The next step shows exactly what will change on the console and asks before it writes anything.
-finding-hump = A hump around { $freq_hz } Hz (+{ $gain_db } dB): voices may sound boomy or boxy.
+finding-hump = A hump around { $freq_hz } Hz (+{ $gain_db } dB above the target): voices may sound boomy.
+finding-hump-sharp = A hump around { $freq_hz } Hz (+{ $gain_db } dB above the target): the sound may be sharp or harsh.
+finding-hump-boxy = A hump around { $freq_hz } Hz (+{ $gain_db } dB above the target): voices may sound boxy or nasal.
 finding-rt60-dry = The hall is rather dry (RT60 { $rt60_s } s): good for speech.
 finding-rt60-good = The hall reverberates moderately (RT60 { $rt60_s } s): good for speech and music.
-finding-rt60-boomy = The hall is reverberant (RT60 { $rt60_s } s): speech gets less clear. EQ does not fix this; curtains and absorbers do.
+finding-rt60-boomy = The hall is reverberant (RT60 { $rt60_s } s): speech gets less clear. EQ does not fix this; enough absorption does (curtains, panels — usually tens of square metres).
 finding-rt60-treatment = The hall is very reverberant (RT60 { $rt60_s } s): acoustic treatment is needed for clear speech. EQ cannot fix this.
 finding-spread-small = The sound is similar across the seats (spread { $spread_db } dB).
 finding-spread-large = The sound differs a lot between seats (spread { $spread_db } dB): speaker aiming matters more than EQ here.
@@ -150,6 +152,8 @@ step-finish-mics = { $count ->
    *[other] Unplug the { $count } measurement microphones, then unmute their channels if you muted them.
 }
 step-finish-saved = Everything is saved in { $path }.
+step-finish-report = The report is ready. It opens in any browser, without internet, and prints well.{"\u000A"}{ $path }{"\u000A"}To open it now, type in Terminal: { $command }
+step-finish-report-failed = The report could not be written. Everything measured is saved. Check that the disk has free space, then type in Terminal: ctune report
 step-connect-not-this-one = Then type the address of your console.
 step-equipment-hall-invalid = That is not a size we can use: two numbers between 3 and 200 metres, width first.
 step-equipment-model-other = Another model

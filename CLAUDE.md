@@ -55,7 +55,7 @@ Ported and generalized from the owner's working tool `~/sites/my/X32-church` (re
 - `mixer-driver` — the `MixerDriver` contract and how to add/extend a console family.
 
 ## Code map
-State after M5 (applying, undo, verify, temporary mutes and the junction; ADR 0010, 0011).
+State after M6 (applying, undo, verify, temporary mutes and the junction; the session report; ADR 0010, 0011, 0014).
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
   `check`, `measure`, `analyze`, `apply` (apply/undo), `apply_packages` (`apply-packages` and the package
   undo, terminal side), `package_writes` (plan, check, re-plan and send package plans; `X32WritePort` for the
@@ -94,7 +94,8 @@ State after M5 (applying, undo, verify, temporary mutes and the junction; ADR 00
 - `safety/` `policy` (scopes of §9.2), `plan`, `sub_plan`, `order` (never-louder order by simulation), `cut_filters`
   (where a crossover or undo may touch a cut filter), `authorize`
   (typed word, undo hash), `laws` (protocol; never imports `mixers`)
-- `storage/` `models`, `migrations`, `paths`, `files` · `report/` `texts`, `markdown`, `plots` · `platform/` `devsafe`
+- `storage/` `models`, `migrations`, `paths`, `files` · `report/` (M6, ADR 0014) `model`, `sections`, `findings`,
+  `figures`, `html`, `session_md`, `session_json`, `chat`; transitional `texts`, `markdown`, `plots` · `platform/` `devsafe`
 - Layer rule enforced by `tests/unit/test_architecture.py` (SPEC §5, clarifications in ADR 0004).
 - Writes never verified on hardware (output delay, polarity) need `--write-unverified` (ADR 0005); in the wizard and
   `apply-packages` they are advice only (ADR 0010).
@@ -111,6 +112,7 @@ CTUNE_DEV_SAFE=1 uv run pytest -q               # all tests (emulator + fake aud
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q  # the hall session of 2026-10-02
 CTUNE_DEV_SAFE=1 uv run pytest --cov --cov-report=json && uv run python scripts/check_coverage.py   # coverage gates
 CTUNE_DEV_SAFE=1 uv run ctune --help            # expert CLI; --console HOST[:PORT] --audio fake --home DIR
+CTUNE_DEV_SAFE=1 uv run ctune report --for-chat # the newest session's report again, or its chat text
 # Emulator and doctor (M1); wizard and TUI (M3):
 CTUNE_DEV_SAFE=1 uv run ctune emulator --model X32P   # prints port
 CTUNE_DEV_SAFE=1 uv run ctune --emulator doctor              # doctor against an in-process emulator

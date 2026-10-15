@@ -7,6 +7,7 @@ keys, so the interface shows "матриця 3" instead of "matrix 3".
 
 import re
 from collections.abc import Mapping
+from pathlib import Path
 
 from churchtune.domain.snapshot import OutputKind, SignalRef, SourceKind
 from churchtune.wizard.protocol import ArgValue, Text
@@ -70,3 +71,11 @@ def issue_args(params: Mapping[str, str | float | int] | None) -> dict[str, ArgV
         else:
             args[name] = value
     return args
+
+
+def short_path(path: Path) -> str:
+    """A path as short as the shell understands it (``~`` for the home folder)."""
+    try:
+        return "~/" + str(path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)

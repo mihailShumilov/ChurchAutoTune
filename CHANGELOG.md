@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Session report (M6, ADR 0014): at the end of the wizard, `report.html` (one file, opens offline, light and dark
+  theme, prints), `report.md` with its charts, `report.json` and a short text for a chat, in the interface language
+  (en/ru/uk), with every section of SPEC §10 — summary, system, measurement quality, response before and after,
+  sub/tops junction, reverberation for speech and music, changes with the undo command, check measurement, channel
+  advice, room acoustics, checklist and technical details. `ctune report [SESSION] [--lang] [--for-chat]` makes it
+  again from the session's files.
 - Project skeleton: `pyproject.toml` (uv, ruff, mypy strict, pytest, coverage), package layout per SPEC §5,
   GPL-3.0-or-later license.
 - Port of the working hall tool into the layered package: X32 codec, value laws, read-only client and the

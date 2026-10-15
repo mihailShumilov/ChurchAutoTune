@@ -21,9 +21,6 @@ from churchtune.analysis.verdict import (
     verify,
     worst_point,
 )
-from churchtune.design.proposal import TargetSpec
-from churchtune.design.target import target_curve
-from churchtune.domain.arrays import FloatArray
 from churchtune.measure.plan import PointPlan
 from churchtune.storage.models import WizardStateFile
 from churchtune.wizard.protocol import Text
@@ -35,30 +32,18 @@ from churchtune.wizard.steps.apply import (
     restore_pending_mutes,
     undo_applied,
 )
-from churchtune.wizard.steps.finish import session_analysis
+from churchtune.wizard.steps.finish import session_analysis, target_of
 from churchtune.wizard.steps.measure import measure_rounds, place_text, venue_plan
 from churchtune.wizard.steps.setup import measuring
 from churchtune.wizard.ui import confirm, info, t
 
 VERIFY_DIR = "verify"
 MIN_VERIFY_POINTS = 4
-TARGET = TargetSpec()
 # The before/after picture: one column per third octave, 63 Hz-8 kHz.
 CHART_RANGE_HZ = (63.0, 8000.0)
 CHART_LEVELS = "▁▂▃▄▅▆▇█"  # the lowest block for "on target", so a row never looks cut off
 CHART_SPAN_DB = 8.0
 SAME_DB = 0.2  # a change of the worst seat smaller than this is "no change"
-
-
-def target_of(analysis: Analysis) -> FloatArray:
-    """The house curve the proposals aimed at, on the analysis grid."""
-    return target_curve(
-        analysis.grid_hz,
-        TARGET.tilt_db_per_oct,
-        TARGET.tilt_from_hz,
-        TARGET.bass_lift_db,
-        TARGET.bass_from_hz,
-    )
 
 
 def centre_point(plan: PointPlan, points: Sequence[str]) -> str:

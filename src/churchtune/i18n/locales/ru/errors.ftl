@@ -14,3 +14,5 @@ err-audio-device = Звуковое устройство не найдено и�
 err-measurement-aborted = Звук остановлен.
 err-unsupported-console = Эта модель пульта в этой версии не поддерживается.
 err-bad-file = Сохранённый файл этой сессии повреждён или пропал. Остальные замеры в порядке.
+err-unknown-language = Неизвестный язык. Выберите en, ru или uk.
+err-report-failed = Отчёт сделать не удалось: { $error }

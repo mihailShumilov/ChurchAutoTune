@@ -7,7 +7,7 @@ Tests hand over the emulator and the simulated hall.
 
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -161,6 +161,15 @@ class WritePort(Protocol):
         """
         ...
 
+    def describe_undo(self, undo_path: Path) -> tuple[PlannedWrite, ...]:
+        """What an undo file's writes changed, one row per parameter (for the report).
+
+        Raises:
+            ValueError: The undo file is damaged.
+            OSError: It cannot be read.
+        """
+        ...
+
     def plan_undo(self, undo_path: Path) -> WritePlan:
         """The writes that put an undo file's old values back where nobody changed them.
 
@@ -240,6 +249,9 @@ class Services:
         shutdown: Set by the UI when it goes away; the stop flag then stays set for good.
         writes: Writes to the connected console (None: this run never writes).
         words: A message key as text in the session's language (typed confirmation words).
+        translate: A message key with its arguments as text in the session's language (the
+            report; None: this run writes no report).
+        language: The language ``translate`` renders (the report's ``lang``).
     """
 
     console: ConsolePort
@@ -256,6 +268,8 @@ class Services:
     shutdown: threading.Event = field(default_factory=threading.Event)
     writes: WritePort | None = None
     words: Callable[[str], str] = str
+    translate: Callable[[str, Mapping[str, str | int | float] | None], str] | None = None
+    language: str = "en"
 
     def reset_stop(self) -> bool:
         """Clear the stop flag for what comes next; False (flag kept) once the UI is gone.
