@@ -268,6 +268,7 @@ def test_a_prediction_needs_junction_points_from_the_analysis(hall, analysis):
         ((1.96, 1.80), (4.72, 1.68), EffectMetric.MAX_EXCESS),  # a hump fixed, the RMS moves little
         ((1.96, 1.97), (4.72, 1.68), None),  # never when the overall deviation gets worse
         ((1.96, 1.96), (4.72, 3.73), None),
+        ((1.96, 1.97), (4.72, 1.72), None),  # 0.01 dB worse overall: a fixed peak is not enough
     ],
 )
 def test_a_system_eq_is_proposed_for_its_rms_or_its_peak(rms, peak, metric):
