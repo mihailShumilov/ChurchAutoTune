@@ -111,6 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hall hears the emulator's EQ and matrix switches.
 
 ### Changed (compared with the original tool)
+- A system EQ that fixes a hump or a mode is proposed when the largest excess above the target drops by 1 dB
+  or more (and the overall deviation does not get worse), even if the RMS deviation moves less than 0.2 dB;
+  its screen then shows the largest excess before and after.
 - The speakers' low roll-off is the start of the pass band; a sub/top cancellation or a room dip
   above it no longer stops the system EQ from correcting lower frequencies.
 - The system-EQ optimiser judges whether a feature is common to the seats where its band acts,
@@ -127,8 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - System EQ design no longer depends on floating-point noise: the optimiser puts idle bands (and a second
   cut on a room mode) to work on what is left and solves again, keeping a lower cost, so near-equal local
-  minima give the same proposal on every platform. A system EQ that fixes a hump or a mode is proposed when
-  the largest excess above the target drops by 1 dB or more, even if the RMS over the range moves less than
-  0.2 dB; an RMS gain of exactly 0.2 dB is no longer lost to rounding (CI failed on Linux because of this).
+  minima give the same proposal on every platform. A modelled gain of exactly 0.2 dB is no longer lost to
+  rounding.
 - `sub align --level-match` no longer writes the delay and polarity it found when the predicted gain is
   below 1 dB and it reports "delay not changed".

@@ -32,7 +32,7 @@ from churchtune.design.alignment import (
 )
 from churchtune.design.crossover import DEFAULT_FC_HZ, CrossoverPlan, plan_crossover
 from churchtune.design.crossover import NoteCode as CrossoverNoteCode
-from churchtune.design.proposal import TargetSpec
+from churchtune.design.proposal import Prediction, TargetSpec
 from churchtune.design.system_eq import DEFAULT_TARGET
 from churchtune.design.system_eq_opt import optimize_design
 from churchtune.domain.arrays import FloatArray
@@ -62,8 +62,7 @@ ZONE_OCTAVES = 1.0  # the junction zone is fc / 2 .. 2 fc
 TINY = 1e-12
 MAIN_LR_LABEL = "main_lr"
 # A system EQ is proposed when it improves the modelled RMS deviation by at least this much, or
-# lowers the largest excess above the target by at least MIN_EQ_PEAK_GAIN_DB (a hump or a mode
-# corrected well can move the RMS over the whole range very little).
+# lowers the largest excess above the target by at least MIN_EQ_PEAK_GAIN_DB (system_eq_effect).
 MIN_EQ_GAIN_DB = 0.2
 MIN_EQ_PEAK_GAIN_DB = 1.0
 TINY_MOVE_OCT = 1 / 12
@@ -103,6 +102,7 @@ class EffectMetric(StrEnum):
     JUNCTION_SCORE = "junction-score"
     SUB_MINUS_TOPS = "sub-minus-tops-at-fc"
     RMS_DEVIATION = "rms-deviation"
+    MAX_EXCESS = "max-excess"
 
 
 class NoteCode(StrEnum):
@@ -640,17 +640,29 @@ def _eq_label(ref: SignalRef) -> str:
     return MAIN_LR_LABEL if ref.kind is SourceKind.MAIN_L else ref.label()
 
 
-def _worth_a_screen(effect: Effect, peak_gain_db: float) -> bool:
-    """True when the modelled improvement of a system EQ is worth proposing.
+def system_eq_effect(prediction: Prediction) -> Effect | None:
+    """The effect a system EQ is proposed for, or None when it is not worth a screen.
 
-    A better peak alone counts only when the RMS deviation does not get worse. The predictions
-    are rounded to 0.01 dB; the differences are rounded the same way so that a
-    gain of exactly the threshold is not lost to floating-point noise.
+    The RMS deviation over the range when it improves by at least ``MIN_EQ_GAIN_DB``; otherwise
+    the largest excess above the target when that drops by at least ``MIN_EQ_PEAK_GAIN_DB`` and
+    the RMS deviation does not get worse (a hump or a mode fixed well moves the RMS little). The
+    predictions are rounded to 0.01 dB and so are the differences, so a gain of exactly a
+    threshold is not lost to floating-point noise.
+
+    Args:
+        prediction: The modelled result of the proposed EQ.
     """
-    rms_gain_db = round(effect.before_db - effect.after_db, 2)
+    rms_gain_db = round(prediction.rms_dev_before_db - prediction.rms_dev_after_db, 2)
+    peak_gain_db = round(prediction.max_dev_before_db - prediction.max_dev_after_db, 2)
     if rms_gain_db >= MIN_EQ_GAIN_DB:
-        return True
-    return rms_gain_db >= 0 and round(peak_gain_db, 2) >= MIN_EQ_PEAK_GAIN_DB
+        return Effect(
+            EffectMetric.RMS_DEVIATION, prediction.rms_dev_before_db, prediction.rms_dev_after_db
+        )
+    if rms_gain_db >= 0 and peak_gain_db >= MIN_EQ_PEAK_GAIN_DB:
+        return Effect(
+            EffectMetric.MAX_EXCESS, prediction.max_dev_before_db, prediction.max_dev_after_db
+        )
+    return None
 
 
 def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the packages before it
@@ -665,22 +677,16 @@ def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the package
     paths, f_low_hz = eq_paths(ctx, fc_hz)
     analysis = replace(base, f_low_hz=f_low_hz)
     eq: list[PathEq] = []
-    effect = None
-    peak_gain_db = 0.0
+    prediction: Prediction | None = None
     for ref in paths:  # every path is designed on its own: locked bands may differ per path
         start = _eq_of(ctx, ref, crossover)
         proposal = optimize_design(analysis, start, ctx.quantizer, ctx.fs_hz, target=ctx.target)
         eq.append(PathEq(ref, start, _without_tiny_moves(start, proposal.to_eq())))
-        if effect is None:
+        if prediction is None:
             prediction = proposal.prediction
-            effect = Effect(
-                EffectMetric.RMS_DEVIATION,
-                prediction.rms_dev_before_db,
-                prediction.rms_dev_after_db,
-            )
-            peak_gain_db = prediction.max_dev_before_db - prediction.max_dev_after_db
     changed = tuple(p for p in eq if p.changed)
-    if not changed or effect is None or not _worth_a_screen(effect, peak_gain_db):
+    effect = system_eq_effect(prediction) if prediction is not None else None
+    if not changed or effect is None:
         return None  # nothing worth a screen: no real improvement expected
     notes = [Note(NoteCode.SYSTEM_EQ_ON, {"path": _eq_label(p.path)}) for p in changed]
     if f_low_hz > ctx.analysis.f_low_hz:

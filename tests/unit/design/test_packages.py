@@ -11,15 +11,15 @@ from churchtune.audio.fake.room import synthetic_room
 from churchtune.design.alignment import JunctionPoint
 from churchtune.design.packages import (
     DesignContext,
-    Effect,
     EffectMetric,
     PackageKind,
     Risk,
-    _worth_a_screen,
     build_packages,
     choose_fc,
     eq_paths,
+    system_eq_effect,
 )
+from churchtune.design.proposal import Prediction
 from churchtune.domain.eq import Band, EqType
 from churchtune.domain.snapshot import SignalRef, SourceKind
 from churchtune.mixers.x32.params import X32EqGrid
@@ -257,15 +257,22 @@ def test_a_prediction_needs_junction_points_from_the_analysis(hall, analysis):
 
 
 @pytest.mark.parametrize(
-    ("before", "after", "peak_gain", "worth"),
+    ("rms", "peak", "metric"),
     [
-        (1.96, 1.76, 0.0, True),  # exactly 0.2 dB, despite 1.96 - 1.76 < 0.2 in floating point
-        (1.96, 1.77, 0.0, False),
-        (1.96, 1.80, 3.04, True),  # a hump fixed: the largest excess drops by 3 dB
-        (1.96, 1.97, 3.04, False),  # never when the overall deviation gets worse
-        (1.96, 1.96, 0.99, False),
+        ((1.96, 1.76), (4.72, 4.0), EffectMetric.RMS_DEVIATION),  # exactly 0.2 dB, not 0.1999
+        ((1.96, 1.77), (4.72, 4.0), None),
+        ((1.96, 1.80), (4.72, 1.68), EffectMetric.MAX_EXCESS),  # a hump fixed, the RMS moves little
+        ((1.96, 1.97), (4.72, 1.68), None),  # never when the overall deviation gets worse
+        ((1.96, 1.96), (4.72, 3.73), None),
     ],
 )
-def test_a_system_eq_is_worth_a_screen(before, after, peak_gain, worth):
-    effect = Effect(EffectMetric.RMS_DEVIATION, before, after)
-    assert _worth_a_screen(effect, peak_gain) is worth
+def test_a_system_eq_is_proposed_for_its_rms_or_its_peak(rms, peak, metric):
+    prediction = Prediction(rms[0], rms[1], peak[0], peak[1], (35.0, 10000.0))
+    effect = system_eq_effect(prediction)
+    if metric is None:
+        assert effect is None
+    else:
+        assert effect is not None
+        assert effect.metric == metric
+        expected = rms if metric == EffectMetric.RMS_DEVIATION else peak
+        assert (effect.before_db, effect.after_db) == expected
