@@ -61,6 +61,26 @@ def write_json(path: Path, model: FileModel) -> None:
     _sync_directory(path.parent)
 
 
+def write_report_files(directory: Path, files: Mapping[str, str | bytes]) -> None:
+    """Write the files of a report (text as UTF-8), each to a temporary file then renamed.
+
+    Names are plain file names inside ``directory``; anything with a path part is refused.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, content in files.items():
+        if Path(name).name != name or name in {"", ".", ".."}:
+            raise ValueError(f"not a plain file name: {name!r}")
+        data = content.encode("utf-8") if isinstance(content, str) else content
+        path = directory / name
+        temporary = path.with_name(path.name + ".tmp")
+        with temporary.open("wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+    _sync_directory(directory)
+
+
 def _sync_directory(directory: Path) -> None:
     """Flush the directory entry, so the renamed file survives a power cut where supported."""
     try:

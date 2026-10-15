@@ -14,3 +14,5 @@ err-audio-device = The audio device is missing or cannot run at 48 kHz. Check th
 err-measurement-aborted = The sound was stopped.
 err-unsupported-console = This console model is not supported by this version.
 err-bad-file = A saved file of this session is damaged or missing. Your other measurements are safe.
+err-unknown-language = Unknown language. Choose en, ru or uk.
+err-report-failed = The report could not be made: { $error }

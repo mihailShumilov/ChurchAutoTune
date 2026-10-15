@@ -26,9 +26,11 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "churchtune"
 CODE = [
     *sorted((SRC / "wizard").rglob("*.py")),
     *sorted((SRC / "app").rglob("*.py")),
+    *sorted((SRC / "report").rglob("*.py")),
+    SRC / "cli" / "report.py",
     SRC / "cli" / "wizard.py",
 ]
-STATIC_KEY = re.compile(r'(?:\bt|\bText|\btranslate)\(\s*"([a-z0-9-]+)"')
+STATIC_KEY = re.compile(r'(?:\bt|\bText|\btranslate|\bMsg|\btr)\(\s*"([a-z0-9-]+)"')
 TOPOLOGY_CODE = sorted((SRC / "mixers" / "x32").glob("topology*.py"))
 ISSUE_CODE = re.compile(
     r'Issue\(\s*"([a-z_]+)"|code = "([a-z_]+)" if|"([a-z_]+)" if audible else "([a-z_]+)"'
@@ -78,6 +80,22 @@ def used_keys() -> set[str]:
     keys |= {f"topology-h-{k}" for k in ("output", "path", "name", "role", "confidence")}
     keys |= {"topology-name", "topology-confidence"}
     keys |= {f"finding-rt60-{v}" for v in ("dry", "good", "boomy", "treatment")}
+    keys |= {f"report-summary-verdict-{v}" for v in ("better", "no-change", "worse")}
+    keys |= {f"report-summary-applied-{a}" for a in ("applied", "nothing", "reverted")}
+    keys |= {f"report-changes-{a}" for a in ("none", "applied", "nothing", "reverted")}
+    keys |= {f"report-quality-{v}" for v in ("ok", "warn", "bad")}
+    for verdict in ("dry", "good", "boomy", "treatment"):
+        keys |= {f"report-decay-speech-{verdict}", f"report-decay-music-{verdict}"}
+        keys |= {f"report-acoustics-{verdict}"}
+    keys |= {f"report-month-{m}" for m in range(1, 13)}
+    keys |= {f"report-decay-edt-{k}" for k in ("short", "normal", "long")}
+    keys |= {"report-decay-bass-long", "report-decay-bass-ok"}
+    keys |= {"report-junction-level-louder", "report-junction-level-quieter"}
+    keys |= {"report-junction-delay-sub", "report-junction-delay-tops"}
+    keys |= {f"report-chat-verdict-{v}" for v in ("better", "no-change", "worse")}
+    keys |= {f"report-appendix-{n}" for n in ("fs-hz", "sweep-s", "f1-hz", "f2-hz", "level-dbfs")}
+    keys |= {"finding-hump", "finding-hump-boxy", "finding-hump-sharp"}
+    keys |= {"report-value-s", "report-value-s-approx", "err-unknown-language"}
     keys |= {"finding-spread-large", "finding-spread-small"}
     keys |= {f"keys-{k.value}" for k in Kind}
     keys |= {f"tui-keys-{k.value}" for k in Kind if k is not Kind.CONFIRM}

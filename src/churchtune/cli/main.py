@@ -17,6 +17,7 @@ from churchtune.cli import (
     hwcheck,
     measure,
     mics,
+    report,
     sub,
     wizard,
 )
@@ -115,6 +116,7 @@ app.command("pathcheck")(mics.pathcheck_command)
 app.add_typer(mics.mics_app, name="mics")
 app.command("wizard")(wizard.wizard_command)
 app.command("resume")(wizard.resume_command)
+app.command("report")(report.report_command)
 
 
 def run() -> None:

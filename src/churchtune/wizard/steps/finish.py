@@ -4,6 +4,8 @@ S11 explains the analysis in plain words and offers the change packages; S14 is 
 for the person, which depends on whether something was written, put back, or nothing at all.
 """
 
+import logging
+import shlex
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,9 +14,14 @@ import numpy as np
 
 from churchtune.analysis.points import Analysis, PointResponse, analyze_points
 from churchtune.analysis.response import GRID_HZ
+from churchtune.design.proposal import TargetSpec
+from churchtune.design.target import target_curve
 from churchtune.domain.arrays import FloatArray
+from churchtune.report.findings import findings as report_findings
+from churchtune.report.model import Msg
 from churchtune.storage.files import load_points, read_session_mic_calibration
 from churchtune.storage.models import MicCalibrationFile, WizardStateFile
+from churchtune.wizard.labels import short_path
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
@@ -23,13 +30,7 @@ from churchtune.wizard.steps.proposal import propose
 from churchtune.wizard.steps.setup import measuring
 from churchtune.wizard.ui import info, t, task
 
-# SPEC room-measurement skill: RT60 500 Hz-1 kHz.
-RT60_DRY_S, RT60_GOOD_S, RT60_BOOMY_S = 0.8, 1.4, 2.0
-MID_OCTAVES = (500, 1000)
-HUMP_MIN_DB = 3.0
-HUMP_BAND_HZ = (80.0, 4000.0)
-SPREAD_BAND_HZ = (100.0, 4000.0)
-LARGE_SPREAD_DB = 3.0
+logger = logging.getLogger(__name__)
 
 
 def _point_corrections(
@@ -49,35 +50,40 @@ def _point_corrections(
     return curves
 
 
+TARGET = TargetSpec()
+
+
+def target_of(analysis: Analysis) -> FloatArray:
+    """The house curve the proposals aimed at, on the analysis grid."""
+    return target_curve(
+        analysis.grid_hz,
+        TARGET.tilt_db_per_oct,
+        TARGET.tilt_from_hz,
+        TARGET.bass_lift_db,
+        TARGET.bass_from_hz,
+    )
+
+
 def findings(analysis: Analysis) -> list[Text]:
     """The most important things the analysis says, in plain words, most important first."""
-    found: list[Text] = []
-    mids = [analysis.rt60[o].t20.mean_s for o in MID_OCTAVES if o in analysis.rt60]
-    values = [v for v in mids if v is not None]
-    if values:
-        rt60 = float(np.mean(values))
-        verdict = (
-            "dry" if rt60 < RT60_DRY_S else "good" if rt60 < RT60_GOOD_S
-            else "boomy" if rt60 < RT60_BOOMY_S else "treatment"
-        )  # fmt: skip
-        found.append(t(f"finding-rt60-{verdict}", rt60_s=round(rt60, 1)))
-        found.append(t("glossary-rt60"))
-    grid = analysis.grid_hz
-    band = (grid >= max(HUMP_BAND_HZ[0], analysis.f_low_hz)) & (grid <= HUMP_BAND_HZ[1])
-    if band.any():
-        index = int(np.argmax(np.where(band, analysis.avg_db, -np.inf)))
-        if analysis.avg_db[index] >= HUMP_MIN_DB:
-            found.insert(0, t("finding-hump", freq_hz=round(float(grid[index])),
-                              gain_db=round(float(analysis.avg_db[index]), 1)))  # fmt: skip
-    spread_band = (grid >= SPREAD_BAND_HZ[0]) & (grid <= SPREAD_BAND_HZ[1])
-    spread = float(np.mean(analysis.spread_db[spread_band]))
-    key = "finding-spread-large" if spread > LARGE_SPREAD_DB else "finding-spread-small"
-    found.append(t(key, spread_db=round(spread, 1)))
-    return found
+    return [
+        Text(m.key, {k: v for k, v in m.args.items() if not isinstance(v, Msg)})
+        for m in report_findings(analysis, target_of(analysis))
+    ]
 
 
 def session_analysis(
     ctx: WizardContext, directory: Path, names: Collection[str] | None = None
+) -> Analysis | None:
+    """The analysis of the points stored in a directory of this session (``analysis_of``)."""
+    return analysis_of(ctx.session_dir, ctx.box.state.calibration_set, directory, names)
+
+
+def analysis_of(
+    session_dir: Path,
+    calibration_set: str | None,
+    directory: Path,
+    names: Collection[str] | None = None,
 ) -> Analysis | None:
     """The analysis of the points stored in a directory (only ``names``, when given).
 
@@ -95,8 +101,8 @@ def session_analysis(
     if not stored:
         return None
     calibration = None
-    if ctx.box.state.calibration_set is not None:
-        calibration = read_session_mic_calibration(ctx.session_dir)
+    if calibration_set is not None:
+        calibration = read_session_mic_calibration(session_dir)
     mics = {name: point.meta.mic_input if point.meta else None for name, point in stored.items()}
     return analyze_points(
         {name: PointResponse(p.ir, p.fs_hz) for name, p in stored.items()},
@@ -129,14 +135,6 @@ class Results:
         return Outcome.DONE
 
 
-def _short(path: Path) -> str:
-    """A path as short as the shell understands it (``~`` for the home folder)."""
-    try:
-        return "~/" + str(path.relative_to(Path.home()))
-    except ValueError:
-        return str(path)
-
-
 @dataclass(frozen=True, slots=True)
 class Finish:
     """S14: what to do now (save the scene, listen at the next service)."""
@@ -163,12 +161,41 @@ class Finish:
             lines += [
                 t("step-finish-scene"),
                 t("step-finish-listen"),
-                t("step-finish-undo-later", command=f"ctune undo {_short(undo)}"),
+                t("step-finish-undo-later", command=f"ctune undo {short_path(undo)}"),
             ]
         elif state.applied_state == "reverted":
             lines += [t("step-finish-reverted"), t("step-finish-listen")]
         else:
             lines.append(t("step-finish-listen"))
         task(ctx.prompter, *lines)
-        info(ctx.prompter, t("step-finish-saved", path=str(ctx.session_dir)))
+        saved = t("step-finish-saved", path=str(ctx.session_dir))
+        info(ctx.prompter, *_write_report(ctx), saved)
         return Outcome.DONE
+
+
+def _write_report(ctx: WizardContext) -> list[Text]:
+    """S14: write the report (SPEC §10); what to tell the person about it.
+
+    The report is not worth losing the end of the wizard over: any failure while making it is
+    logged and the person is told to make it again with ``ctune report``.
+    """
+    services = ctx.services
+    if services.translate is None:
+        return []
+    # The report reads what the steps above stored; imported here, it does not import back.
+    from churchtune.wizard.reporting import REPORT_DIR, report_data, write_report  # noqa: PLC0415
+
+    state = ctx.box.state
+    describe = services.writes.describe_undo if services.writes is not None else None
+    try:
+        data = report_data(
+            state, ctx.session_dir, services.workspace, sweep=services.sweep, describe=describe
+        )
+        files = write_report(
+            data, ctx.session_dir / REPORT_DIR, services.translate, services.language
+        )
+    except Exception:
+        logger.exception("the report could not be written")
+        return [t("step-finish-report-failed")]
+    command = f"open {shlex.quote(str(files.html))}"
+    return [t("step-finish-report", path=short_path(files.html), command=command)]

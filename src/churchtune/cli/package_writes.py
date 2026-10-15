@@ -524,6 +524,10 @@ class X32WritePort:
         planned = recipe(state, policy)
         return WritePlan(_rows(planned), _PortPlan(recipe, planned, cut))
 
+    def describe_undo(self, undo_path: Path) -> tuple[PlannedWrite, ...]:
+        """What an undo file's writes changed (``describe_undo``); read only."""
+        return describe_undo(undo_path)
+
     def plan_undo(self, undo_path: Path) -> WritePlan:
         """Three-way undo of a package undo file."""
         try:
@@ -606,6 +610,41 @@ def _rows(planned: Sequence[PlannedChange]) -> tuple[PlannedWrite, ...]:
                 change.new_display,
                 plain_value(param, change.old_value),
                 plain_value(param, change.new_value),
+            )
+        )
+    return tuple(rows)
+
+
+def describe_undo(undo_path: Path) -> tuple[PlannedWrite, ...]:
+    """What an undo file's writes changed, for the report: one row per parameter.
+
+    Read only. A parameter written several times (a brief mute and back, a band moved through a
+    safe order) shows its first old value and its last new value; one that ends where it began is
+    left out. Addresses the driver cannot describe are left out too.
+
+    Raises:
+        ValueError: The undo file is damaged.
+        OSError: It cannot be read.
+    """
+    undo = files.read_undo(undo_path)
+    first: dict[str, ChangeModel] = {}
+    last: dict[str, ChangeModel] = {}
+    for change in undo.changes:
+        first.setdefault(change.path, change)
+        last[change.path] = change
+    rows = []
+    for path, begin in first.items():
+        end = last[path]
+        if begin.old_value == end.new_value:
+            continue
+        try:
+            strip, band, param = describe_path(path)
+            before, after = plain_value(param, begin.old_value), plain_value(param, end.new_value)
+        except (ValueError, KeyError, IndexError):
+            continue
+        rows.append(
+            PlannedWrite(
+                path, strip, band, param, begin.old_display, end.new_display, before, after
             )
         )
     return tuple(rows)

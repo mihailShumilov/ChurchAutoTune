@@ -263,6 +263,8 @@ def _run(
     """
     translate = Translator(language)
     services.words = translate
+    services.translate = translate
+    services.language = language
     if plain or not sys.stdin.isatty() or not sys.stdout.isatty():
         result: RunResult | None = begin(LinePrompter(translate))
     else:
