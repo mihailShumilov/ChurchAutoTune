@@ -188,7 +188,8 @@ def test_a_session_that_only_measured_says_so():
     assert "<figure>" not in page
 
 
-def test_after_a_worse_check_and_the_undo_the_summary_does_not_ask_to_undo_again(data):
+@pytest.mark.parametrize("verdict", [Verdict.WORSE, Verdict.NO_CHANGE])
+def test_after_the_check_and_the_undo_nothing_asks_to_undo_again(data, verdict):
     """The check said worse, the person put the old values back: the console is as it was."""
     worse = VerifyResult(
         points=("p1",),
@@ -200,11 +201,13 @@ def test_after_a_worse_check_and_the_undo_the_summary_does_not_ask_to_undo_again
         band_point="p1",
         band_hz=125.0,
         spread_delta_db=0.5,
-        verdict=Verdict.WORSE,
+        verdict=verdict,
     )
     tr = Translator("en")
     page = render_html(
         build_document(replace(data, verify=worse, applied_state="reverted"), tr), tr, "en"
     )
     assert "already been put back" in page
-    assert "the command is in" not in page.split('id="system"')[0].split("already been put back")[1]
+    assert "the command is in" not in page  # there is no undo command to point to
+    assert "Put the old values back" not in page
+    assert "ctune undo" not in page

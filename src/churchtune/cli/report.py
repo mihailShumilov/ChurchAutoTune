@@ -3,6 +3,7 @@
 The report is made from the session's files alone: no console, no sound.
 """
 
+import logging
 import shlex
 from pathlib import Path
 from typing import Annotated
@@ -11,13 +12,14 @@ import typer
 
 from churchtune.cli.context import EXIT_OK, fail, settings_of
 from churchtune.cli.package_writes import describe_undo
-from churchtune.errors import ChurchTuneError
 from churchtune.i18n import LANGUAGES, Translator, detect_language
 from churchtune.report.chat import for_chat
 from churchtune.storage.files import read_wizard_state
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.labels import short_path
 from churchtune.wizard.reporting import REPORT_DIR, report_data, write_report
+
+logger = logging.getLogger(__name__)
 
 
 def _newest_session(workspace: Workspace) -> Path | None:
@@ -53,14 +55,15 @@ def report_command(
     translate = Translator(language)
     try:
         data = report_data(state, directory, workspace, describe=describe_undo)
-        if chat:
-            typer.echo(for_chat(data, translate), nl=False)
-            raise typer.Exit(EXIT_OK)
-        files = write_report(data, directory / REPORT_DIR, translate, language)
-    except (ChurchTuneError, OSError, ValueError) as error:
+        chat_text = for_chat(data, translate) if chat else None
+        files = None if chat else write_report(data, directory / REPORT_DIR, translate, language)
+    except Exception as error:  # a damaged session must not end in a traceback
+        logger.exception("the report could not be made")
         fail(translate("err-report-failed", {"error": str(error)}))
-    command = f"open {shlex.quote(str(files.html))}"
-    typer.echo(
-        translate("step-finish-report", {"path": short_path(files.html), "command": command})
-    )
+    if chat_text is not None:
+        typer.echo(chat_text, nl=False)
+    elif files is not None:
+        command = f"open {shlex.quote(str(files.html))}"
+        path = short_path(files.html)
+        typer.echo(translate("step-finish-report", {"path": path, "command": command}))
     raise typer.Exit(EXIT_OK)

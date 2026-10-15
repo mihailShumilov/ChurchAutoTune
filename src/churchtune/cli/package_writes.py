@@ -641,6 +641,7 @@ def describe_undo(undo_path: Path) -> tuple[PlannedWrite, ...]:
             strip, band, param = describe_path(path)
             before, after = plain_value(param, begin.old_value), plain_value(param, end.new_value)
         except (ValueError, KeyError, IndexError):
+            logger.warning("a write of %s cannot be described for the report: %s", undo_path, path)
             continue
         rows.append(
             PlannedWrite(

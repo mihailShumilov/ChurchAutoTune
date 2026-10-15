@@ -17,6 +17,7 @@ from churchtune import __version__
 from churchtune.analysis.verdict import verify
 from churchtune.design.alignment import JunctionPoint, analyze_alignment
 from churchtune.design.crossover import DEFAULT_FC_HZ
+from churchtune.domain.snapshot import SourceKind
 from churchtune.measure.config import SweepConfig
 from churchtune.report.chat import for_chat
 from churchtune.report.html import render_html
@@ -56,6 +57,8 @@ logger = logging.getLogger(__name__)
 REPORT_DIR = "report"
 HTML_FILE, MD_FILE, JSON_FILE, CHAT_FILE = "report.html", "report.md", "report.json", "for-chat.txt"
 BANDS_LAST = 99
+PARAM_ORDER = ("type", "freq", "q", "gain", "eq_on", "on", "fader")
+MAIN_KINDS = frozenset({SourceKind.MAIN_L, SourceKind.MAIN_R})
 Describe = Callable[[Path], tuple[PlannedWrite, ...]]
 
 
@@ -126,16 +129,13 @@ def _changes(
     )
 
 
-PARAM_ORDER = ("type", "freq", "q", "gain", "eq_on", "on", "fader")
-
-
 def _write_order(write: PlannedWrite) -> tuple[int, int, int, int]:
     """The order of the change table: Main LR first, then the matrices by number.
 
     Bands in order, their settings as on the console (type, frequency, width, gain); faders and
     switches last.
     """
-    main = 0 if write.strip.kind.value.startswith("main") else 1
+    main = 0 if write.strip.kind in MAIN_KINDS else 1
     param = PARAM_ORDER.index(write.param) if write.param in PARAM_ORDER else len(PARAM_ORDER)
     band = write.band if write.band is not None else BANDS_LAST
     return main, write.strip.number or 0, band, param

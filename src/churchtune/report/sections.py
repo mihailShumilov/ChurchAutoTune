@@ -108,7 +108,7 @@ def _summary(data: ReportData) -> Section:
     blocks: list[Block] = []
     if data.verify is not None and data.applied_state == "reverted":
         verdict = kebab(data.verify.verdict.value)
-        blocks.append(Paragraph(Msg(f"report-summary-verdict-{verdict}")))
+        blocks.append(Paragraph(Msg(f"report-verify-result-{verdict}")))
         blocks.append(Paragraph(Msg("report-summary-reverted-after-check")))
     elif data.verify is not None:
         blocks.append(Paragraph(Msg(f"report-summary-verdict-{kebab(data.verify.verdict.value)}")))
@@ -322,7 +322,7 @@ def _verify(data: ReportData) -> Section:
         (Msg("report-verify-band"), band),
         (Msg("report-verify-spread"), _db(result.spread_delta_db)),
     )
-    verdict = Paragraph(Msg(f"report-summary-verdict-{kebab(result.verdict.value)}"))
+    verdict = Paragraph(Msg(f"report-verify-result-{kebab(result.verdict.value)}"))
     blocks = (verdict, Paragraph(Msg("report-verify-what")), Table(head, rows))
     return Section("verify", title, blocks)
 

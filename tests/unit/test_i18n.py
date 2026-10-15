@@ -81,6 +81,7 @@ def used_keys() -> set[str]:
     keys |= {"topology-name", "topology-confidence"}
     keys |= {f"finding-rt60-{v}" for v in ("dry", "good", "boomy", "treatment")}
     keys |= {f"report-summary-verdict-{v}" for v in ("better", "no-change", "worse")}
+    keys |= {f"report-verify-result-{v}" for v in ("better", "no-change", "worse")}
     keys |= {f"report-summary-applied-{a}" for a in ("applied", "nothing", "reverted")}
     keys |= {f"report-changes-{a}" for a in ("none", "applied", "nothing", "reverted")}
     keys |= {f"report-quality-{v}" for v in ("ok", "warn", "bad")}

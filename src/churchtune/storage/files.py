@@ -73,11 +73,14 @@ def write_report_files(directory: Path, files: Mapping[str, str | bytes]) -> Non
         data = content.encode("utf-8") if isinstance(content, str) else content
         path = directory / name
         temporary = path.with_name(path.name + ".tmp")
-        with temporary.open("wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary.replace(path)
+        try:
+            with temporary.open("wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)  # nothing is left behind when a write fails
     _sync_directory(directory)
 
 
