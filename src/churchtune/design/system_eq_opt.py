@@ -11,12 +11,12 @@ The objective has several local minima of almost the same cost, and which one th
 reaches can hinge on floating-point noise (another platform). So the solver also starts from the
 solution with one cut fewer (two cuts on one problem merged, or one taken out) and with an idle
 band put to work, and every finished proposal (on the console grid, uncommon bands put back) gets
-one number: the weighted RMS deviation, plus a little per dB of gain, plus 0.05 dB for every
-second cut on the problem of another (closer than half the wider one's width, at least 1/6
-octave). The lowest number wins, so a second cut on one problem stays only when it buys more than
-that. That this picks the same proposal on every platform is checked empirically (noise tests),
-not guaranteed. After the optimisation every
-changed band must still address a problem common to the points, or it is put back.
+one number: the weighted RMS deviation, plus GAIN_COST_DB per dB of gain, plus BAND_COST_DB for
+every second cut on the problem of another (closer than half the wider one's width, at least 1/6
+octave) and for every stacked pair. The lowest number wins, so a second cut on one problem stays
+only when it buys more than that. That this picks the same proposal on every platform is checked
+empirically (noise tests), not guaranteed. After the optimisation every changed band must still
+address a problem common to the points, or it is put back.
 """
 
 import itertools
@@ -78,7 +78,7 @@ RESEED_ROUNDS = 6
 RESEED_Q = 2.0
 # Split halves start this many overlap spacings apart.
 SPLIT_SPACING = 1.2
-MODE_PAIR = 2  # two cuts on one problem
+PAIR = 2
 # What the score charges, in dB of weighted RMS deviation: per second cut on one problem (closer
 # than _spacing_oct to another; it has to buy more than this) and per dB of gain (linear: two
 # half bands cost what one does; small, a tie-break: low frequencies weigh little in the
@@ -94,6 +94,9 @@ MIN_CUT_SPACING_OCT = 1 / 6
 STACKED_OCT = 1 / 8
 OVERLAP_PENALTY = 2.0
 _SKIPS_KEPT_FROM_GREEDY = frozenset({SkipCode.NARROW_DIP, SkipCode.LOCAL_PEAK})
+
+
+_Bounds = tuple[tuple[float, ...], tuple[float, ...]]
 
 
 class _Kind:
@@ -194,9 +197,6 @@ def _moved(
     return moved
 
 
-_Bounds = tuple[tuple[float, ...], tuple[float, ...]]
-
-
 def _working_cuts(x: FloatArray, problem: _Problem) -> list[int]:
     return [
         i
@@ -225,20 +225,21 @@ def _fewer_band_starts(
 ) -> list[tuple[FloatArray, _Bounds]]:
     """Starts with one working cut fewer, in a fixed order.
 
-    First every pair of cuts on one problem (closer than ``MIN_CUT_SPACING_OCT``, or within a
+    First every pair of cuts on one problem (closer than ``_spacing_oct``, or within a
     third of an octave in the mode zone) merged into one: centred between them by gain, both
     gains, widened by their distance. Then each working cut taken out, the shallowest first. The
     way back from a split: without it, which of two almost equal minima is proposed would depend
     on where the solver happened to start.
     """
     working = _working_cuts(x, problem)
-    if len(working) < MODE_PAIR:
+    if len(working) < PAIR:
         return []
     starts = []
-    for one, two in itertools.combinations(working, MODE_PAIR):
+    for one, two in itertools.combinations(working, PAIR):
         distance_oct = abs(x[3 * one] - x[3 * two]) / math.log(2)
         in_modes = max(x[3 * one], x[3 * two]) < math.log(modes_below_hz)
-        if distance_oct < MIN_CUT_SPACING_OCT or (in_modes and distance_oct < ZONE_HALF_OCT):
+        spacing_oct = _spacing_oct(math.exp(min(x[3 * one + 2], x[3 * two + 2])))
+        if distance_oct < spacing_oct or (in_modes and distance_oct < ZONE_HALF_OCT):
             deep, shallow = (one, two) if x[3 * one + 1] <= x[3 * two + 1] else (two, one)
             g_deep, g_shallow = x[3 * deep + 1], x[3 * shallow + 1]
             centre = (g_deep * x[3 * deep] + g_shallow * x[3 * shallow]) / (g_deep + g_shallow)
@@ -354,13 +355,13 @@ def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: f
     twice), and one more when together they cut deeper than one band may (``max_cut_db``).
     """
     cuts = sorted((b for b in bands if b.gain_db < 0), key=lambda b: b.freq_hz)
+    if not cuts:
+        return 0
     close = sum(
         1
         for low, high in itertools.pairwise(cuts)
         if math.log2(high.freq_hz / low.freq_hz) < STACKED_OCT
     )
-    if not cuts:
-        return 0
     total = sum(band_response_db(b, grid_hz, fs_hz) for b in cuts)
     return close + int(np.min(total) < max_cut_db - MIN_GAIN_DB)
 
@@ -637,7 +638,7 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
     norm = math.sqrt(max(int(mask.sum()), 1))
     n_slots = len(problem.slots)
     cuts = [i for i, n in enumerate(problem.slots) if problem.kinds[n] == _Kind.CUT]
-    cut_pairs = [(i, j) for i, j in itertools.combinations(cuts, MODE_PAIR)]
+    cut_pairs = list(itertools.combinations(cuts, 2))
 
     def after_of(x: FloatArray) -> FloatArray:
         response = eq_response_db(_eq_from(x, problem, eq_meas), grid, fs_hz)
@@ -673,7 +674,7 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
         return _Score(
             weighted_rms_db=float(np.sqrt(np.mean(weighted[mask] ** 2))),
             gain_db=sum(abs(b.gain_db) for b in changed),
-            stacked=_stacked([b for b in changed if b.gain_db], grid, fs_hz, cfg.max_cut_db),
+            stacked=_stacked(changed, grid, fs_hz, cfg.max_cut_db),
             crowded=_crowded([b for b in changed if b.gain_db < 0]),
         )
 

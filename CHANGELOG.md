@@ -128,14 +128,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stored write values must be real finite numbers; strings and booleans are refused.
 
 ### Fixed
-- System EQ design no longer depends on floating-point noise: the optimiser puts idle bands (and a second
-  cut on a room mode) to work on what is left and solves again, keeping a lower cost, so near-equal local
-  minima give the same proposal on every platform. A modelled gain of exactly 0.2 dB is no longer lost to
-  rounding.
+- System EQ design no longer depends on floating-point noise in the cases tested: besides the plain solve,
+  the optimiser tries one cut fewer (two cuts on one problem merged, or one taken out) and an idle band put
+  to work, and keeps the finished proposal with the lowest score, so near-equal local minima give the same
+  proposal (checked empirically with noise tests, ADR 0012). A modelled gain of exactly 0.2 dB is no longer
+  lost to rounding.
 - System EQ no longer spreads one cut over several near-identical bands: the optimiser is penalised for two
-  working cuts closer than half the wider one's width, so the table stays short and two bands never add up
-  to more than the −9 dB one band may cut. Every candidate proposal gets one number (weighted deviation, a small
-  price per dB of gain, 0.05 dB for each second cut on the problem of another) and the lowest wins, so a
-  second cut on one problem stays only when it buys more than that; a band that stays flat is not moved (ADR 0012).
+  working cuts closer than half the wider one's width, and a proposal is scored by one number (weighted
+  deviation, a small price per dB of gain, 0.05 dB for each second cut on the problem of another and for each
+  pair of cuts stacked closer than 1/8 octave or deeper than −9 dB together), so a second cut on one problem
+  stays only when it buys more than that. A band that stays flat is not moved.
 - `sub align --level-match` no longer writes the delay and polarity it found when the predicted gain is
   below 1 dB and it reports "delay not changed".
