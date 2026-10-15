@@ -12,9 +12,10 @@ reaches can hinge on floating-point noise (another platform). So the solver also
 solution with one cut fewer (two cuts on one problem merged, or one taken out) and with an idle
 band put to work, and every finished proposal (on the console grid, uncommon bands put back) gets
 one number: the weighted RMS deviation, plus a little per dB of gain, plus 0.05 dB for every
-second cut within half an octave of another. The lowest number wins, so a second cut on one
-problem stays only when it buys more than that. That this picks the same proposal on every
-platform is checked empirically (noise tests), not guaranteed. After the optimisation every
+second cut on the problem of another (closer than half the wider one's width, at least 1/6
+octave). The lowest number wins, so a second cut on one problem stays only when it buys more than
+that. That this picks the same proposal on every platform is checked empirically (noise tests),
+not guaranteed. After the optimisation every
 changed band must still address a problem common to the points, or it is put back.
 """
 
@@ -73,17 +74,16 @@ ZONE_HALF_OCT = 1 / 3
 MIN_ZONE_HALF_OCT = 1 / 12
 MODE_COMMON = 0.5
 # Rounds of trying one band fewer or an idle band put to work, and solving again.
-RESEED_ROUNDS = 3
+RESEED_ROUNDS = 6
 RESEED_Q = 2.0
 # Split halves start this many overlap spacings apart.
 SPLIT_SPACING = 1.2
 MODE_PAIR = 2  # two cuts on one problem
-# What the score charges, in dB of weighted RMS deviation: per second cut on one problem (within
-# CROWDED_OCT of another; it has to buy more than this) and per dB of gain (linear: two half bands
-# cost what one does; small, a tie-break: low frequencies weigh little in the deviation, and a
-# room-mode cut must not be priced out).
+# What the score charges, in dB of weighted RMS deviation: per second cut on one problem (closer
+# than _spacing_oct to another; it has to buy more than this) and per dB of gain (linear: two
+# half bands cost what one does; small, a tie-break: low frequencies weigh little in the
+# deviation, and a room-mode cut must not be priced out).
 BAND_COST_DB = 0.05
-CROWDED_OCT = 1 / 2
 GAIN_COST_DB = 0.001
 # Solver evaluations for a reseeded start (the plain solve keeps scipy's default).
 RESEED_MAX_NFEV = 100
@@ -312,8 +312,8 @@ class _Score:
         gain_db: Sum of the absolute gains of the changed bands (counted linearly, so two half
             bands cost no less than one).
         stacked: How often new cuts sit on top of each other (``_stacked``).
-        crowded: How many new cuts sit within ``CROWDED_OCT`` of the previous one: a second cut on
-            one problem.
+        crowded: How many new cuts act on the same problem as their lower neighbour
+            (``_crowded``).
     """
 
     weighted_rms_db: float
@@ -334,9 +334,17 @@ class _Score:
 
 
 def _crowded(cuts: list[Band]) -> int:
-    """How many cuts sit within ``CROWDED_OCT`` of their lower neighbour."""
-    freqs = sorted(b.freq_hz for b in cuts)
-    return sum(1 for low, high in itertools.pairwise(freqs) if math.log2(high / low) < CROWDED_OCT)
+    """How many cuts act on the same problem as their lower neighbour.
+
+    Closer than ``_spacing_oct`` of the wider of the two: the rule the solver's overlap penalty
+    uses, so two narrow resonances a few tenths of an octave apart stay two problems.
+    """
+    ordered = sorted(cuts, key=lambda b: b.freq_hz)
+    return sum(
+        1
+        for low, high in itertools.pairwise(ordered)
+        if math.log2(high.freq_hz / low.freq_hz) < _spacing_oct(min(low.q, high.q))
+    )
 
 
 def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: float) -> int:
@@ -373,8 +381,9 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
     ``score`` judges the finished proposal of a solution (snapped, uncommon bands put back) and
     ``active`` tells whether a slot does anything in the corrected range. Every round tries all
     moves from the best solution so far and keeps the lowest ``_Score.total_db``: one total order,
-    so the result does not depend on the order the moves were tried in. A proposal never has
-    more stacked cuts than the plain solve's. The procedure is deterministic.
+    so the result does not depend on the order the moves were tried in. On top of their price in
+    the score, stacked cuts are a hard limit: never more than the plain solve's. The procedure is
+    deterministic.
     """
     bounds = (problem.lower, problem.upper)
     solution = least_squares(residual, problem.x0, bounds=bounds)

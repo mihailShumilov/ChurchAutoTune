@@ -100,15 +100,15 @@ def test_one_resonance_gets_one_cut_at_its_centre(seed):
     assert_no_stacked_cuts(proposal)
 
 
-@pytest.mark.parametrize("seed", [4, 6, 8])
-def test_noise_does_not_change_the_number_of_cuts(seed):
+@pytest.mark.parametrize(("seed", "level"), [(4, 1e-7), (6, 1e-4), (8, 1e-7), (8, 1e-4)])
+def test_noise_does_not_change_the_cuts(seed, level):
     analysis = analyze_points(random_hall(seed))
-    reference = optimize_design(analysis, FLAT, X32EqGrid(), FS)
-    for k in range(3):
+    reference = proposed_cuts(optimize_design(analysis, FLAT, X32EqGrid(), FS))
+    for k in range(2):
         rng = np.random.default_rng(k)
-        norm = {p: c + rng.normal(0.0, 1e-7, c.shape) for p, c in analysis.norm_db.items()}
+        norm = {p: c + rng.normal(0.0, level, c.shape) for p, c in analysis.norm_db.items()}
         noisy = optimize_design(replace(analysis, norm_db=norm), FLAT, X32EqGrid(), FS)
-        assert len(proposed_cuts(noisy)) == len(proposed_cuts(reference)), k
+        assert proposed_cuts(noisy) == reference, k
 
 
 def test_the_optimisation_is_deterministic():
@@ -138,12 +138,43 @@ def test_gain_is_only_a_tie_break():
 
 
 @pytest.mark.parametrize(
-    ("freqs", "crowded"),
-    [([400.0, 1000.0], 0), ([400.0, 520.0], 1), ([400.0, 520.0, 650.0], 2), ([400.0], 0)],
+    ("cuts", "crowded"),
+    [
+        ([(400.0, 6.0), (1000.0, 6.0)], 0),
+        ([(400.0, 6.0), (430.0, 6.0)], 1),  # 0.10 octave: closer than 1/6
+        ([(400.0, 6.0), (492.0, 6.0)], 0),  # 0.30 octave, both narrow: two resonances
+        ([(400.0, 1.0), (492.0, 6.0)], 1),  # 0.30 octave, one wide: within its half width
+        ([(400.0, 6.0), (430.0, 6.0), (462.0, 6.0)], 2),
+        ([(400.0, 6.0)], 0),
+    ],
 )
-def test_crowded_cuts(freqs, crowded):
-    cuts = [Band(n + 1, EqType.PEQ, f, -3.0, 4.0) for n, f in enumerate(freqs)]
-    assert system_eq_opt._crowded(cuts) == crowded
+def test_crowded_cuts(cuts, crowded):
+    bands = [Band(n + 1, EqType.PEQ, f, -3.0, q) for n, (f, q) in enumerate(cuts)]
+    assert system_eq_opt._crowded(bands) == crowded
+
+
+def multi_hall(features) -> dict[str, PointResponse]:
+    """Six seats sharing the given peaking features (frequency, gain, Q)."""
+    sos = [band_sos(Band(2, EqType.PEQ, f, g, q), FS) for f, g, q in features]
+    points = {}
+    for i in range(6):
+        room = synthetic_room(np.random.default_rng(700 + i), FS, length_s=1.0, drr_db=14.0)
+        for section in sos:
+            if section is not None:
+                room = signal.sosfilt(section, room)
+        points[f"p{i + 1}"] = PointResponse(np.asarray(room), FS)
+    return points
+
+
+def test_two_narrow_resonances_in_a_rough_hall_get_two_cuts():
+    """Two resonances 0.42 octave apart are two problems, not one wide cut between them."""
+    dips = [(f, -12.0, 8.0) for f in (180.0, 700.0, 1300.0, 2600.0, 3300.0, 5200.0, 7000.0)]
+    points = multi_hall([(300.0, 4.0, 6.0), (400.0, 4.0, 6.0), *dips])
+    proposal = optimize_design(analyze_points(points), FLAT, X32EqGrid(), FS)
+    cuts = proposed_cuts(proposal)
+    for f0 in (300.0, 400.0):
+        assert any(abs(np.log2(b.freq_hz / f0)) < 1 / 12 for b in cuts), (f0, cuts)
+    assert not any(300.0 < b.freq_hz < 400.0 and b.q < 3.0 for b in cuts), cuts
 
 
 @pytest.mark.parametrize(
