@@ -731,8 +731,8 @@ def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the package
     notes = [Note(NoteCode.SYSTEM_EQ_ON, {"path": _eq_label(p.path)}) for p in changed]
     if f_low_hz > ctx.analysis.f_low_hz:
         notes.append(Note(NoteCode.SYSTEM_EQ_ABOVE_FC, {"fc_hz": round(f_low_hz)}))
-    if blind is not None:
-        zone = {"low_hz": round(blind.low_hz), "high_hz": round(blind.high_hz)}
+    if blind is not None and blind.high_hz > f_low_hz:  # only the part of the zone this EQ reaches
+        zone = {"low_hz": round(max(blind.low_hz, f_low_hz)), "high_hz": round(blind.high_hz)}
         notes.append(Note(NoteCode.SYSTEM_EQ_BLIND_JUNCTION, zone))
     notes.extend(extra_notes)
     if any(p.path.kind in MAIN_SOURCES for p in changed) and _other_main_outputs(ctx):

@@ -338,8 +338,11 @@ BLIND_CASES = {
 
 @pytest.mark.parametrize("case", list(BLIND_CASES))
 def test_without_a_junction_measurement_no_seat_gets_thin(case):
-    """ADR 0013: no seat more than 2 dB further from the target in any third of an octave,
-    levels aligned as the check measurement aligns them; the hall's 500 Hz cut stays."""
+    """ADR 0013: no seat more than 2 dB further from the target in any third of an octave up to
+    2 kHz, levels aligned as the check measurement aligns them; the hall's 500 Hz cut stays.
+
+    Above 2 kHz the optimiser may move the hall's own boost band (open in ADR 0013, as on main).
+    """
     natural_ok = defect_hall(FS, BLIND_CASES[case])
     hall = measured(natural_ok, console_eqs(REAL))
     analysis = analyze_points({p: PointResponse(h.both, FS) for p, h in hall.items()})

@@ -60,6 +60,12 @@ def test_an_existing_correction_in_the_zone_is_left_as_it_was():
     assert within(nudged, base)[0] == base.bands[0]
 
 
+def test_an_existing_correction_in_the_zone_zeroed_by_the_solver_comes_back():
+    base = SystemEq(True, tuple(proposal(Band(1, EqType.PEQ, 125.0, -6.0, 2.0))))
+    zeroed = proposal(Band(1, EqType.PEQ, 125.0, 0.0, 2.0), base=base)
+    assert within(zeroed, base)[0] == base.bands[0]
+
+
 def test_a_cut_next_to_the_zone_cuts_no_deeper_than_the_limit_at_its_edge():
     limited = within(proposal(Band(1, EqType.PEQ, 260.0, -9.0, 0.7)))
     assert BLIND.nearest_db(limited[0], FS) >= BLIND.max_cut_db
@@ -193,6 +199,44 @@ def test_a_moved_correction_comes_back_whole():
     assert guarded(moved, design_input(seats), base)[0] == base.bands[0]
 
 
+def two_slots() -> system_eq_opt._Problem:
+    return system_eq_opt._Problem(
+        slots=(1, 2),
+        kinds=dict.fromkeys((1, 2), system_eq_opt._Kind.CUT),
+        x0=(),
+        lower=(),
+        upper=(),
+    )
+
+
+def test_a_flat_slot_takes_part_in_the_matching():
+    """The 500 Hz slot went flat and its correction moved to the 50 Hz slot: matched back."""
+    base = SystemEq(
+        True,
+        tuple(
+            proposal(Band(1, EqType.PEQ, 500.0, -4.0, 1.2), Band(2, EqType.PEQ, 50.0, -3.0, 1.4))
+        ),
+    )
+    moved = proposal(
+        Band(1, EqType.PEQ, 700.0, 0.0, 1.0), Band(2, EqType.PEQ, 520.0, -3.0, 2.0), base=base
+    )
+    matched = system_eq_opt._matched_to_slots(moved, base, two_slots())
+    assert (matched[0].freq_hz, matched[0].band) == (520.0, 1)
+    assert matched[1].gain_db == 0
+
+
+def test_a_cut_prefers_the_slot_of_a_nearby_correction_to_a_free_one():
+    base = SystemEq(True, tuple(proposal(Band(1, EqType.PEQ, 500.0, -4.0, 1.2))))
+    flat_old_520 = list(base.bands)
+    flat_old_520[1] = Band(2, EqType.PEQ, 520.0, 0.0, 1.0)
+    base = SystemEq(True, tuple(flat_old_520))
+    new = proposal(
+        Band(1, EqType.PEQ, 140.0, -3.0, 1.0), Band(2, EqType.PEQ, 480.0, -3.0, 2.0), base=base
+    )
+    matched = system_eq_opt._matched_to_slots(new, base, two_slots())
+    assert matched[0].freq_hz == 480.0  # next to the hall's 500 Hz cut, not in the empty slot
+
+
 def test_cut_bands_are_matched_to_the_slots_of_their_nearest_old_bands():
     base = SystemEq(
         True,
@@ -233,3 +277,12 @@ def test_the_zone_follows_the_crossover_on_the_console():
     assert present_crossover_hz(hall_context(real)) == pytest.approx(112.5)
     tops_off = {n: replace(m, eq_on=False) for n, m in real.matrices.items()}
     assert present_crossover_hz(hall_context(replace(real, matrices=tops_off))) is None
+
+
+def test_the_sub_low_pass_and_the_tops_high_pass_together_give_their_geometric_mean():
+    real = load(TOPOLOGIES / "hall-2026-10-02.toml").snapshot()
+    sub = real.matrices[3]
+    low_pass = Band(6, EqType.LR24, 90.0, 0.0, 1.0)
+    with_lpf = replace(sub, eq=(*sub.eq[:5], low_pass), eq_on=True)
+    snapshot = replace(real, matrices={**real.matrices, 3: with_lpf})
+    assert present_crossover_hz(hall_context(snapshot)) == pytest.approx(np.sqrt(90.0 * 112.5))
