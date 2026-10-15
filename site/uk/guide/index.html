@@ -86,8 +86,9 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # усі тести: емулятор пульта + імітований звук
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # реальна сесія в залі 2026-10-02</code></pre>
 <h3 id="emulator">3. Експертний командний рядок на емуляторі</h3>
-<p>Усе до M5 включно є в гілці <code>main</code>. Звіт (M6) ще на перевірці: доки його не злито, <code>ctune report</code> і звіт наприкінці майстра є лише в гілці <code>m6-report</code>. Щоб їх спробувати, у вашій копії:</p>
-<pre><code>git checkout m6-report
+<p>Усе до M6 включно, разом зі звітом, є в гілці <code>main</code>. У вашій копії:</p>
+<pre><code>git checkout main
+git pull
 uv sync</code></pre>
 <p>Найпростіше — глобальний параметр <code>--emulator</code>: він запускає емулятор пульта всередині програми на час
 однієї команди.</p>
@@ -108,7 +109,7 @@ CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/
 пульта з імітованим залом. Нічого не виходить за межі вашого комп'ютера: пульт не задіяний, звук не відтворюється.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Запис у справжній пульт ще не перевірено на обладнанні.</strong> Кроки, що записують у пульт, перевірені лише на емуляторі з імітованим залом. Не запускайте їх на пульті своєї церкви, доки люди не пройдуть перевірку обладнання в справжньому залі (рядки 22–28 <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">чек-листа обладнання</a>).</p></div>
 <h3 id="try-wizard-start">Запуск</h3>
-<p>З копії репозиторію з установленим uv, у гілці <code>main</code> (або <code>m6-report</code> для звіту; дивіться <a href="#install">Встановлення</a> і
+<p>З копії репозиторію з установленим uv, у гілці <code>main</code> (дивіться <a href="#install">Встановлення</a> і
 <a href="#emulator">крок 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # повноекранний майстер
@@ -252,8 +253,6 @@ CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo res
 CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --lang uk     # скласти його заново українською
 CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --for-chat    # вивести короткий текст для чату
 CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report SESSION       # звіт певної сесії</code></pre>
-<p>Звіт ще на перевірці (M6). Доки його не злито, він є лише в гілці <code>m6-report</code> (дивіться
-<a href="#emulator">крок 3</a>).</p>
 <h3 id="try-wizard-cli">Застосування й скасування з термінала</h3>
 <p>Експертний командний рядок робить те саме: <code>ctune apply-packages</code> записує вибрані пакети зі збереженого <code>proposal.json</code>, а <code>ctune undo</code> повертає старі значення. Використовуйте їх лише з емулятором і <code>CTUNE_DEV_SAFE=1</code>. Їм потрібен <code>proposal.json</code> із сесії майстра (у теці сесії, <code>&lt;home&gt;/venues/&lt;зала&gt;/sessions/&lt;час&gt;-&lt;мета&gt;/</code>). Найпростіше отримати його, пройшовши демонстрацію на емуляторі до пропозицій (дивіться <a href="#try-wizard-demo">нижче</a>).</p>
 <p>Спершу подивіться, нічого не записуючи. <code>--dry-run</code> показує налаштування, які було б записано, по порядку, і зупиняється:</p>
@@ -289,7 +288,7 @@ CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/
 <ul>
 <li>Ніколи не записує затримку виходу чи полярність: це залишаються значення, які ви виставляєте вручну, доки їх не перевірять на справжньому пульті.</li>
 <li>Перевірки колонок по одній у майстрі ще немає. Зараз вона є лише як експертна команда.</li>
-<li>Звіт ще на перевірці (M6), тож поки він є лише в гілці <code>m6-report</code> (дивіться <a href="#try-wizard-report">Звіт</a>).</li>
+
 <li>На справжньому пульті майстер ще не запускали, і запис у справжній пульт не перевірено на обладнанні. Для цього потрібні перевірки обладнання й пілот (M7).</li>
 </ul>
 </div></section>
@@ -322,7 +321,7 @@ CTUNE_DEV_SAFE=1 uv run ctune --console 127.0.0.1:PORT --audio fake --home /tmp/
 систем. Спершу приберіть назви й усе особисте; як це зробити, пояснює <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">посібник для
 учасників</a>.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Згодом: налаштування вашої системи <span class="tag">Згодом</span></h2>
-<p>Так планується робота повного майстра в справжньому залі після перевірок обладнання й пілоту (M7). Усі шість кроків уже є в майстрі (дивіться <a href="#try-wizard">вище</a>; <a href="#try-wizard-report">звіт</a> ще на перевірці), але їх пробували лише на емуляторі з імітованим залом.</p>
+<p>Так планується робота повного майстра в справжньому залі після перевірок обладнання й пілоту (M7). Усі шість кроків уже є в майстрі (дивіться <a href="#try-wizard">вище</a>; <a href="#try-wizard-report">звіт</a> теж), але їх пробували лише на емуляторі з імітованим залом.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Запис у справжній пульт ще не перевірено на обладнанні.</strong> Застосування, скасування, короткі mute й контрольний замір перевірені лише на емуляторі з імітованим залом. Дочекайтеся перевірок обладнання, перш ніж використовувати їх на системі своєї церкви.</p></div>
 <ol>
 <li id="workflow-read"><strong>Прочитати пульт.</strong> ChurchTune знаходить пульт і показує, що знайшов, наприклад:
