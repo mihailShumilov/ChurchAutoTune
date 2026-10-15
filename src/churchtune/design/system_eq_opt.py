@@ -93,6 +93,8 @@ BAND_COST_DB = 0.05
 GAIN_COST_DB = 0.001
 # Solver evaluations for a reseeded start (the plain solve keeps scipy's default).
 RESEED_MAX_NFEV = 100
+# What a cut pays, in octaves, for a slot whose old band was flat (see _matched_to_slots).
+FREE_SLOT_OCT = 1.0
 BOOST_STARTS = 3  # largest shortfalls an idle boost starts from
 # Two cuts closer than this act on one problem: the solver is penalised for it.
 MIN_CUT_SPACING_OCT = 1 / 6
@@ -477,24 +479,38 @@ def _matched_to_slots(bands: list[Band], eq_meas: SystemEq, problem: _Problem) -
     The solver may move a cut from one slot to another (the hall's 500 Hz cut ending up in the
     slot that held a 50 Hz one). Putting a band back then restores what that slot had, not the
     correction that was there: matched, a cut that goes back restores the old band at its place.
-    Only working cuts take part (a flat band's frequency is wherever the solver left it). Least
-    total distance in octaves; the first such assignment wins (deterministic).
+    Working cuts and flat bands take part. A cut pays its distance in octaves to the old band of
+    the slot, or ``FREE_SLOT_OCT`` for a slot whose old band was flat (no correction is there to
+    restore, but a nearby old correction's slot is the better place). A flat band stays in its
+    own slot or goes to a flat one for free, and pays twice that for another correction's slot
+    (it would read as that correction removed). Least total distance in octaves; the first such
+    assignment wins (deterministic).
     """
     indices = [
         n - 1
         for n in problem.slots
         if problem.kinds[n] == _Kind.CUT
-        and bands[n - 1].gain_db < 0
+        and bands[n - 1].gain_db <= 0
         and eq_meas.bands[n - 1].adjustable
     ]
     if len(indices) < PAIR:
         return bands
     olds = [math.log2(eq_meas.bands[i].freq_hz) for i in indices]
     news = [math.log2(bands[i].freq_hz) for i in indices]
-    best = min(
-        itertools.permutations(range(len(indices))),
-        key=lambda order: sum(abs(news[k] - olds[order[k]]) for k in range(len(indices))),
-    )
+    working = [bands[i].gain_db < 0 for i in indices]
+    corrections = [eq_meas.bands[i].gain_db != 0 for i in indices]
+
+    def cost(k: int, slot: int) -> float:
+        if working[k]:
+            return abs(news[k] - olds[slot]) if corrections[slot] else FREE_SLOT_OCT
+        # A flat band stays in its slot for free; in another correction's slot it would read as
+        # that correction removed.
+        return 0.0 if slot == k or not corrections[slot] else 2 * FREE_SLOT_OCT
+
+    def distance(order: tuple[int, ...]) -> float:
+        return sum(cost(k, order[k]) for k in range(len(indices)))
+
+    best = min(itertools.permutations(range(len(indices))), key=distance)
     matched = list(bands)
     for k, target in enumerate(best):
         source = bands[indices[k]]

@@ -44,12 +44,20 @@ When the topology has a sub and the junction was not measured, `optimize_design`
 ## Consequences
 
 - On the defect hall with the reference hall's EQ, the worst seat (level-aligned thirds, as the
-  check measurement aligns) is at most 1.85 dB worse across five junction variants (was up to
-  3.25 dB); the golden 2026-10-02 proposal is unchanged.
+  check measurement aligns) is at most 1.85 dB worse in 63 Hz – 2 kHz across five junction
+  variants (was up to 3.25 dB); the golden 2026-10-02 proposal is unchanged.
 - The slot matching of 4 and the idle boost of 5 change designs with a measured junction too: on
   the defect hall's "bad" junction a system EQ is now proposed where none was. Covered by the
   acceptance tests; the golden 2026-10-02 proposal does not change.
 - A test checks the worst seat over five junction variants (≤ 2 dB per third, levels aligned) and
   that the hall's 500 Hz cut stays.
+- Open: the optimiser may move an existing correction of the hall to another frequency, and the
+  guard mends only cuts. On the defect hall the reference EQ's single boost band (2790 Hz
+  +2.5 dB) is moved to about 300 Hz in two variants, so one seat loses up to 2.3 dB at 3.15 kHz;
+  `main` does the same. Pinning the existing bands was tried and left almost no system EQ to
+  propose (the 50 Hz mode cut could no longer deepen); this belongs to the optimiser, not to
+  the blind junction rule.
 - Open: the report does not yet say "kept as it was: seat guard" when the guard gives an existing
   correction back.
+- The guard judges the corrected range from its lower end, room modes included: a mode cut is
+  kept to a compromise by the mode rules of ADR 0012, and the guard can soften it further.

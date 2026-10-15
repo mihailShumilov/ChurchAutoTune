@@ -112,8 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (compared with the original tool)
 - Without the subwoofer and the tops measured apart, the system EQ makes only broad, gentle cuts (−3 dB, Q ≤ 1,
-  also summed) around the crossover the console has (0.6–2 fc), no boost there, and no seat gets more than 2 dB
-  further from the target in any third of an octave (ADR 0013). The EQ package says so, with the zone in Hz.
+  also summed) around the crossover the console has (0.6–2 fc), no boost there, and the cuts make no seat more
+  than 2 dB further from the target in any third of an octave (ADR 0013). The EQ package says so, with the zone in Hz.
 - A system EQ that fixes a hump or a mode is proposed when the largest excess above the target drops by 1 dB
   or more (and the overall deviation does not get worse), even if the RMS deviation moves less than 0.2 dB;
   its screen then shows the largest excess before and after.

@@ -3,7 +3,8 @@
 A cut aimed at the bass of a hot or late sub is the same at every seat, and the seats without
 that bass get thin; a dip at the junction may be a cancellation that no EQ fills. So, around the
 crossover the console has, new cuts stay broad and gentle and no boost is centred there, and a
-per-seat guard softens cuts until no seat gets clearly worse anywhere in the corrected range.
+per-seat guard moves cuts back towards what the console had until no seat gets clearly worse by
+them anywhere in the corrected range.
 
 The solver sees the zone as residuals (``zone_residuals``); the finished proposal enforces it on
 the console grid (``within_zone``) and passes the guard (``seat_guarded``).
@@ -153,10 +154,12 @@ def within_zone(  # noqa: PLR0913 - the zone needs the console grid and the mode
     """
     limited = []
     for index, (band, old) in enumerate(zip(bands, eq_meas.bands, strict=True)):
-        if not _changeable(index, band, old, frozen) or band.gain_db == 0:
+        if not _changeable(index, band, old, frozen):
             limited.append(band)
         elif old.adjustable and old.gain_db != 0 and blind.holds(old.freq_hz):
-            limited.append(old)
+            limited.append(old)  # also when the solver zeroed it: blind, it stays as it was
+        elif band.gain_db == 0:
+            limited.append(band)
         elif band.gain_db > 0:
             limited.append(old if blind.holds(band.freq_hz) else band)
         elif blind.holds(band.freq_hz):
@@ -250,15 +253,17 @@ def seat_guarded(  # noqa: PLR0913 - the guard needs the whole picture of the se
     quantizer: EqQuantizer,
     fs_hz: float,
 ) -> list[Band]:
-    """The proposal with cuts softened until no seat gets clearly worse.
+    """The proposal with cuts moved back until no seat gets clearly worse by them.
 
     Judged in thirds of an octave of the corrected range, per seat against its own response
-    before (``BlindJunction`` holds the limits). Only cuts are softened (they are what makes
-    seats without the bass thin; a boost in the zone is not proposed at all). Each step takes the
-    worst broken limit that a cut can mend (it changes the response there by more than half a
-    dB) and moves that cut halfway back to what the console had, on its grid; a cut close to its
-    old gain, or one that took the place of an existing correction, gives the old band back
-    whole. Stops when no broken limit is a cut's doing. Deterministic.
+    before (``BlindJunction`` holds the limits). Only bands proposed as cuts are moved (they are
+    what makes seats without the bass thin; a boost in the zone is not proposed at all). Each
+    step takes the worst broken limit that such a cut can mend (it changes the response there by
+    more than half a dB) and moves the cut halfway back to what the console had there, on its
+    grid (towards a deeper old cut too: the seats were measured with it); a cut close to its old
+    gain, or one that took the place of an existing correction, gives the old band back whole.
+    Stops when no broken limit is a cut's doing: a boost the solver moved from the hall's own
+    correction is not mended here (ADR 0013, open). Deterministic.
     """
     grid = data.grid_hz
     corrected = grid[mask]
