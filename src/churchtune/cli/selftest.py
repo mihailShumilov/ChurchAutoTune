@@ -7,12 +7,12 @@ measurement and the report. Dev-safe mode is switched on for the run, so no real
 sound card can be reached, and nothing is played.
 """
 
-import logging
 import os
 import shutil
 import tempfile
 import threading
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
@@ -21,22 +21,21 @@ import typer
 
 from churchtune import __version__
 from churchtune.audio.base import MultiChannelBackend
-from churchtune.audio.fake.hall import demo_rig
+from churchtune.audio.fake.hall import FakeHall, demo_rig
 from churchtune.cli.context import EXIT_OK, EXIT_USER, fail
 from churchtune.cli.demo import HallLink, prepare_demo
 from churchtune.cli.package_writes import X32WritePort
 from churchtune.cli.scripted import Rule, ScriptedPrompter
 from churchtune.cli.wizard import X32ConsolePort
+from churchtune.errors import DevSafeViolation
 from churchtune.i18n import LANGUAGES, Translator, detect_language
 from churchtune.measure.config import SweepConfig
-from churchtune.platform.devsafe import DEV_SAFE_VAR
+from churchtune.platform.devsafe import DEV_SAFE_VAR, is_dev_safe
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.engine import RunResult
 from churchtune.wizard.reporting import REPORT_DIR
 from churchtune.wizard.run import start
 from churchtune.wizard.services import AudioDeviceInfo, Services
-
-logger = logging.getLogger(__name__)
 
 FS_HZ = 48000.0
 # Short sweeps: the check is about the program working, not about the simulated room.
@@ -44,36 +43,44 @@ SWEEP = SweepConfig(duration_s=1.5, tail_s=1.0)
 # The wizard runs in English: its typed confirmation words are then known to the volunteer.
 WIZARD_LANGUAGE = "en"
 SCRATCH_ORDER = (12, 10, 13, 11)  # the order the volunteer touches the demo microphones in
+ERROR_FILE = "selftest-error.txt"  # the traceback, kept for an issue
 
 
 class _SimulatedAudio:
-    """The only audio device of the self-check: the simulated hall, linked to the emulator."""
+    """The only audio device of the self-check: one simulated hall, linked to the emulator.
 
-    def __init__(self, link: HallLink) -> None:
-        self._link = link
+    The same hall is opened every time and handed to the volunteer, so where the volunteer puts
+    and scratches the microphones is what the measurements hear.
+    """
+
+    def __init__(self, hall: FakeHall, link: HallLink) -> None:
+        self._hall = hall
+        link(hall)
 
     def devices(self) -> list[AudioDeviceInfo]:
         return [AudioDeviceInfo("fake", ())]
 
     def open(self, name: str) -> MultiChannelBackend:  # noqa: ARG002 - one device only
-        hall = demo_rig(FS_HZ)
-        self._link(hall)
-        return hall
+        return self._hall
 
 
 def _run_wizard(home: Path) -> RunResult:
+    if not is_dev_safe():  # second line: the scripted volunteer types the confirmation words
+        raise DevSafeViolation("the self-check runs only in dev-safe mode")
     from churchtune_emulator.x32 import X32Emulator  # noqa: PLC0415 - loaded only for the check
 
     emulator = X32Emulator().start()
     console = X32ConsolePort()
     try:
-        link = prepare_demo(emulator)
+        hall = demo_rig(FS_HZ)
+        hall.auto_scratch = []  # the volunteer scratches the microphones, in this order
+        audio = _SimulatedAudio(hall, prepare_demo(emulator))
         workspace = Workspace(home)
         now = datetime.now
         words = Translator(WIZARD_LANGUAGE)
         services = Services(
-            console=console, audio=_SimulatedAudio(link), workspace=workspace, now=now,
-            stop=threading.Event(), dev_safe=True, sweep=SWEEP, sleep=lambda _s: None,
+            console=console, audio=audio, workspace=workspace, now=now, stop=threading.Event(),
+            dev_safe=True, sweep=SWEEP, sleep=lambda _s: None,
             writes=X32WritePort(console.last, now, workspace), words=words, translate=words,
             language=WIZARD_LANGUAGE,
         )  # fmt: skip
@@ -83,8 +90,7 @@ def _run_wizard(home: Path) -> RunResult:
             "junction-type": words("mute-word"),
             "apply-type": words("apply-word"),
         }
-        hands = demo_rig(FS_HZ)  # where the volunteer puts the microphones
-        volunteer = ScriptedPrompter(hands, rules, scratch_order=list(SCRATCH_ORDER))
+        volunteer = ScriptedPrompter(hall, rules, scratch_order=list(SCRATCH_ORDER))
         return start(volunteer, services, WIZARD_LANGUAGE)
     finally:
         console.close()
@@ -98,14 +104,19 @@ def _report_written(home: Path) -> bool:
 
 
 def checks(result: RunResult, home: Path, tr: Translator) -> list[tuple[str, bool]]:
-    """What the self-check verifies, as (what in words, passed)."""
+    """What the self-check verifies, as (the outcome in words, passed)."""
     state = result.state
+    finished = result.finished
+    junction = bool(state.junction_measured)
+    applied = state.applied_state == "applied"
+    verified = state.verify_verdict is not None
+    report = _report_written(home)
     return [
-        (tr("selftest-what-wizard"), result.finished),
-        (tr("selftest-what-junction"), bool(state.junction_measured)),
-        (tr("selftest-what-apply"), state.applied_state == "applied"),
-        (tr("selftest-what-verify"), state.verify_verdict is not None),
-        (tr("selftest-what-report"), _report_written(home)),
+        (tr("selftest-what-wizard") if finished else tr("selftest-fail-wizard"), finished),
+        (tr("selftest-what-junction") if junction else tr("selftest-fail-junction"), junction),
+        (tr("selftest-what-apply") if applied else tr("selftest-fail-apply"), applied),
+        (tr("selftest-what-verify") if verified else tr("selftest-fail-verify"), verified),
+        (tr("selftest-what-report") if report else tr("selftest-fail-report"), report),
     ]
 
 
@@ -126,10 +137,10 @@ def selftest_command(
     began = time.monotonic()
     try:
         results = checks(_run_wizard(home), home, tr)
-    except Exception as error:  # an installation problem: say so plainly, keep the files
-        logger.exception("the self-check stopped")
+    except Exception as error:  # an installation problem: say so plainly, keep the details
+        (home / ERROR_FILE).write_text(traceback.format_exc(), encoding="utf-8")
         typer.echo(tr("selftest-error", {"error": type(error).__name__}))
-        results = [(tr("selftest-what-wizard"), False)]
+        results = [(tr("selftest-fail-wizard"), False)]
         keep = True
     for what, passed in results:
         if passed:

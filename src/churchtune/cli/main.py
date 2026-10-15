@@ -24,10 +24,12 @@ from churchtune.cli import (
 )
 from churchtune.cli.context import EXIT_REFUSED, Settings, load_venue, parse_console, say
 from churchtune.errors import ChurchTuneError, DevSafeViolation
+from churchtune.platform.devsafe import DEV_SAFE_VAR
 from churchtune.storage.paths import workspace_from_env
 
 CONSOLE_VAR = "CTUNE_CONSOLE"
 AUDIO_VAR = "CTUNE_AUDIO"
+SELFTEST = "selftest"
 
 app = typer.Typer(
     name="ctune",
@@ -62,7 +64,8 @@ def main(
     emulator: Annotated[
         bool,
         typer.Option(
-            "--emulator", help="Development: start an X32 emulator in-process and use it."
+            "--emulator",
+            help="Try it safely: a built-in console emulator and a simulated hall, no sound.",
         ),
     ] = False,
     version: Annotated[  # noqa: ARG001 - handled by its eager callback
@@ -73,6 +76,8 @@ def main(
     ] = False,
 ) -> None:
     """Measure the room and tune a Behringer X32 / Midas M32 system."""
+    if ctx.invoked_subcommand == SELFTEST:
+        return  # it builds its own emulator, hall and folder; the person's settings play no part
     workspace = workspace_from_env(home, os.environ)
     venue = load_venue(workspace)
     if console:
@@ -82,6 +87,9 @@ def main(
         from churchtune.cli.demo import prepare_demo  # noqa: PLC0415 - dev only
         from churchtune_emulator.x32 import LOOPBACK, X32Emulator  # noqa: PLC0415 - dev only
 
+        # Only the emulator and the simulated hall for the whole run: no discovery broadcast
+        # can find the church's real console next to it (dev-safe refuses non-loopback hosts).
+        os.environ[DEV_SAFE_VAR] = "1"
         emu = X32Emulator().start()
         ctx.call_on_close(emu.stop)
         venue = replace(venue, console_host=LOOPBACK, console_port=emu.port)
@@ -118,7 +126,7 @@ app.add_typer(mics.mics_app, name="mics")
 app.command("wizard")(wizard.wizard_command)
 app.command("resume")(wizard.resume_command)
 app.command("report")(report.report_command)
-app.command("selftest")(selftest.selftest_command)
+app.command(SELFTEST)(selftest.selftest_command)
 
 
 def run() -> None:

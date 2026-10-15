@@ -40,23 +40,24 @@ measures again and tells you whether it got better.
 
 ## Install
 
-Open the Terminal app on your Mac and paste one line:
+Open the Terminal app on your Mac, paste this line and press Return:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/mihailShumilov/ChurchAutoTune/main/scripts/install.sh | sh
 ```
 
 The [script](scripts/install.sh) installs [uv](https://docs.astral.sh/uv/) if you do not have it, then installs the
-`ctune` command with its own Python. It needs no administrator password. At the end it runs the self-check. Then
-open a new Terminal window.
+`ctune` command with its own Python and adds it to your PATH. It needs no administrator password. At the end it runs
+the self-check: if the last lines say "Self-check passed", all is well. Then open a new Terminal window so that the
+`ctune` command is found.
 
-If you already use uv, one command does the same:
+If you already use uv, you can install it directly (the self-check then does not run by itself):
 
 ```bash
-uv tool install "churchtune @ https://github.com/mihailShumilov/ChurchAutoTune/archive/main.tar.gz"
+uv tool install --reinstall --force "churchtune @ https://github.com/mihailShumilov/ChurchAutoTune/archive/main.tar.gz"
 ```
 
-To update, run the same line again. To remove it: `uv tool uninstall churchtune` (your measurements in
+To update, run the install line again. To remove it: `uv tool uninstall churchtune` (your measurements in
 `~/ChurchTune` stay).
 
 ## First steps
@@ -70,8 +71,8 @@ ctune --help             # all commands
 `ctune selftest` and `ctune --emulator` use only a console emulator built into the program and a simulated hall:
 they never contact a real console and never play sound.
 
-With a real console the wizard is started with plain `ctune`. Until the pilot is done, please do that only
-as part of the [hardware checks](docs/hardware-checklist.md), with a scene saved on the console first.
+To run the wizard on a real console, type just `ctune`. Until it has been tried in real churches, please do that
+only as part of the [hardware checks](docs/hardware-checklist.md), with a scene saved on the console first.
 
 ## How it works
 
@@ -120,7 +121,7 @@ these rules:
 - **Read-only by default.** The console client can only read from a fixed list of addresses. One module
   writes, and only with a permission from the safety policy for one kind of change.
 - **Limits.** EQ cut and boost, Q, crossover and level changes are bounded. Anything outside the limits is
-  refused, not clipped.
+  refused by the final check (the subwoofer planner keeps its target within the limits before that).
 - **Undo first.** An undo file is on disk before the first write. It is never overwritten.
 - **Readback.** Every write is read back from the console and compared.
 - **Quiet audio.** Nothing louder than −6 dBFS peak leaves the computer. Fades on every start and stop.
@@ -129,7 +130,7 @@ these rules:
   console yet. The wizard gives their values to set by hand; the expert command line writes them only with
   `--write-unverified` ([ADR 0005](docs/adr/0005-unverified-writes-opt-in.md)).
 - **Development never touches hardware.** With `CTUNE_DEV_SAFE=1` the code refuses any console that is not on
-  `127.0.0.1` and any audio device that is not the simulated one. All tests run that way.
+  this computer (loopback, the emulator) and any audio device that is not the simulated one. All tests run that way.
 
 Hardware behaviour is confirmed only by a person at a console, recorded in
 [`docs/hardware-checklist.md`](docs/hardware-checklist.md).
