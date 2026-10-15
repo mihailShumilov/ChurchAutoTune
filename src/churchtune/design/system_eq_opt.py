@@ -87,6 +87,20 @@ BAND_COST_DB = 0.05
 GAIN_COST_DB = 0.001
 # Solver evaluations for a reseeded start (the plain solve keeps scipy's default).
 RESEED_MAX_NFEV = 100
+# The blind junction zone (ADR 0013): 0.6 fc .. 2 fc, its soft edge for the solver (in natural
+# log of frequency) and the weight of its residuals.
+JUNCTION_LOW = 0.6
+JUNCTION_HIGH = 2.0
+ZONE_EDGE = 0.05
+ZONE_PENALTY = 2.0
+Q_STEP_DOWN = 0.97
+BOOST_STARTS = 3  # largest shortfalls an idle boost starts from
+ZONE_POINTS = 48  # where the summed cuts are checked across the zone
+ZONE_SUM_STEPS = 72
+GAIN_STEP_DB = 0.25  # the console's gain step
+SEAT_GUARD_STEPS = 24
+# Around a blind junction the average may get worse by no more than this in a third of an octave.
+AVERAGE_GUARD_DB = 1.5
 # Two cuts closer than this act on one problem: the solver is penalised for it.
 MIN_CUT_SPACING_OCT = 1 / 6
 # On the console grid (about 1/20 octave a step) two such cuts may come two steps closer; closer
@@ -366,12 +380,49 @@ def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: f
     return close + int(np.min(total) < max_cut_db - MIN_GAIN_DB)
 
 
+def _peaks(curve_db: FloatArray, grid_hz: FloatArray, count: int) -> list[int]:
+    """Indices of the ``count`` largest positive peaks, at least a third of an octave apart."""
+    chosen: list[int] = []
+    for index in np.argsort(-curve_db, kind="stable"):
+        if curve_db[index] <= 0 or len(chosen) == count:
+            break
+        far = all(abs(math.log2(grid_hz[index] / grid_hz[k])) >= ZONE_HALF_OCT for k in chosen)
+        if far:
+            chosen.append(int(index))
+    return chosen
+
+
+def _boost_starts(
+    x: FloatArray,
+    problem: _Problem,
+    active: Callable[[FloatArray, int], bool],
+    shortfall_db: FloatArray,
+    grid_hz: FloatArray,
+) -> list[FloatArray]:
+    """Starts with an idle boost band at one of the largest remaining shortfalls.
+
+    The cut moves cannot bring a boost back once the solver has let it go idle.
+    """
+    idle = [
+        i
+        for i, n in enumerate(problem.slots)
+        if problem.kinds[n] == _Kind.BOOST and not active(x, i)
+    ]
+    starts = []
+    for i in idle:
+        for peak in _peaks(shortfall_db, grid_hz, BOOST_STARTS):
+            values = (math.log(float(grid_hz[peak])), float(shortfall_db[peak]), 0.0)
+            starts.append(_moved(x, i, values, problem))
+    return starts
+
+
 def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected range
     residual: Callable[[FloatArray], FloatArray],
     excess: Callable[[FloatArray], FloatArray],
     score: Callable[[FloatArray], _Score],
     problem: _Problem,
     *,
+    shortfall: Callable[[FloatArray], FloatArray],
     grid_hz: FloatArray,
     active: Callable[[FloatArray, int], bool],
     modes_below_hz: float,
@@ -379,6 +430,7 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
     """Solve from the greedy start, then try one band fewer or a spare band put to work.
 
     ``excess`` gives the weighted excess above the target (zero outside the corrected range),
+    ``shortfall`` the weighted shortfall below it where a boost may go,
     ``score`` judges the finished proposal of a solution (snapped, uncommon bands put back) and
     ``active`` tells whether a slot does anything in the corrected range. Every round tries all
     moves from the best solution so far and keeps the lowest ``_Score.total_db``: one total order,
@@ -399,6 +451,8 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
                 (spare, best), excess(best), grid_hz, problem, modes_below_hz=modes_below_hz
             )
             starts += [(start, bounds) for start in moves]
+        boosts = _boost_starts(best, problem, active, shortfall(best), grid_hz)
+        starts += [(start, bounds) for start in boosts]
         round_best, round_total = best, best_total
         for start, limits in starts:
             solution = least_squares(residual, start, bounds=limits, max_nfev=RESEED_MAX_NFEV)
@@ -422,6 +476,31 @@ def _eq_from(x: FloatArray, problem: _Problem, eq_meas: SystemEq) -> SystemEq:
             n, eq_type, float(math.exp(log_freq)), float(gain), float(math.exp(log_q))
         )
     return SystemEq(True, tuple(bands))
+
+
+def _matched_to_slots(bands: list[Band], eq_meas: SystemEq, problem: _Problem) -> list[Band]:
+    """The cut bands moved to the slots whose old bands are nearest in frequency.
+
+    The solver may move a cut from one slot to another (the hall's 500 Hz cut ending up in the
+    slot that held a 50 Hz one). Putting a band back then restores what that slot had, not the
+    correction that was there: matched, a cut that goes back restores the old band at its place.
+    Least total distance in octaves; the first such assignment wins (deterministic).
+    """
+    slots = [i for i, n in enumerate(problem.slots) if problem.kinds[n] == _Kind.CUT]
+    indices = [problem.slots[i] - 1 for i in slots]
+    if len(indices) < PAIR:
+        return bands
+    olds = [math.log2(eq_meas.bands[i].freq_hz) for i in indices]
+    news = [math.log2(bands[i].freq_hz) for i in indices]
+    best = min(
+        itertools.permutations(range(len(indices))),
+        key=lambda order: sum(abs(news[k] - olds[order[k]]) for k in range(len(indices))),
+    )
+    matched = list(bands)
+    for k, target in enumerate(best):
+        source = bands[indices[k]]
+        matched[indices[target]] = replace(source, band=eq_meas.bands[indices[target]].band)
+    return matched
 
 
 def _snap(eq: SystemEq, problem: _Problem, quantizer: EqQuantizer, eq_meas: SystemEq) -> list[Band]:
@@ -601,6 +680,222 @@ def _band_proposal(  # noqa: PLR0913 - one band needs the whole picture for its 
     return BandProposal(new, old, action, approximate, reason)
 
 
+@dataclass(frozen=True, slots=True)
+class BlindJunction:
+    """Limits while the junction of the sub and the tops was not measured apart (ADR 0013).
+
+    A cut aimed at the bass of a hot or late sub is the same at every seat, and the seats without
+    that bass get thin; a dip there may be a cancellation that no EQ fills.
+
+    Attributes:
+        low_hz: Lower edge of the junction zone (0.6 fc).
+        high_hz: Upper edge of the junction zone (2 fc).
+        max_cut_db: The deepest cut in the zone.
+        max_q: The narrowest cut in the zone.
+        seat_guard_db: No seat may get worse than this in any third of an octave of the
+            corrected range, nor change by more than twice this.
+    """
+
+    low_hz: float
+    high_hz: float
+    max_cut_db: float = -3.0
+    max_q: float = 1.0
+    seat_guard_db: float = 2.0
+
+    @classmethod
+    def around(cls, fc_hz: float) -> "BlindJunction":
+        """The zone 0.6 fc .. 2 fc with the default limits."""
+        return cls(JUNCTION_LOW * fc_hz, JUNCTION_HIGH * fc_hz)
+
+    def holds(self, freq_hz: float) -> bool:
+        """True for a band centre inside the zone."""
+        return self.low_hz <= freq_hz <= self.high_hz
+
+    def edge_db(self, band: Band, fs_hz: float) -> float:
+        """The band's response at the zone edge nearest its centre (outside the zone)."""
+        edge = self.low_hz if band.freq_hz < self.low_hz else self.high_hz
+        return float(band_response_db(band, np.array([edge]), fs_hz)[0])
+
+
+def _zone_residuals(
+    x: FloatArray, cuts: list[int], blind: BlindJunction | None, fs_hz: float
+) -> FloatArray:
+    """Residuals that grow as a cut breaks the blind junction zone's limits.
+
+    A cut centred in the zone: deeper than ``max_cut_db`` or narrower than ``max_q``; one centred
+    outside: deeper than ``max_cut_db`` at the nearest zone edge. Blended at the edges, so the
+    solver sees where the zone is.
+    """
+    if blind is None:
+        return np.zeros(0)
+    values = np.zeros(3 * len(cuts))
+    low, high = math.log(blind.low_hz), math.log(blind.high_hz)
+    for k, i in enumerate(cuts):
+        log_freq, gain, log_q = x[3 * i : 3 * i + 3]
+        inside = _sigmoid((log_freq - low) / ZONE_EDGE) * _sigmoid((high - log_freq) / ZONE_EDGE)
+        band = Band(1, EqType.PEQ, math.exp(log_freq), float(gain), math.exp(log_q))
+        at_edge = blind.edge_db(band, fs_hz)
+        values[3 * k] = ZONE_PENALTY * inside * max(0.0, blind.max_cut_db - gain)
+        values[3 * k + 1] = ZONE_PENALTY * inside * max(0.0, log_q - math.log(blind.max_q))
+        values[3 * k + 2] = ZONE_PENALTY * (1 - inside) * max(0.0, blind.max_cut_db - at_edge)
+    return values
+
+
+def _sigmoid(value: float) -> float:
+    return 0.5 * (1 + math.tanh(value / 2))
+
+
+def _within_zone(  # noqa: PLR0913 - the zone needs the console grid and the model
+    bands: list[Band],
+    eq_meas: SystemEq,
+    problem: _Problem,
+    blind: BlindJunction,
+    *,
+    quantizer: EqQuantizer,
+    fs_hz: float,
+) -> list[Band]:
+    """The proposal with the blind junction zone's limits enforced.
+
+    A new cut centred in the zone is made no deeper than ``max_cut_db`` and no narrower than
+    ``max_q``; one centred outside is made shallower (in grid steps) until it cuts no deeper than
+    ``max_cut_db`` at the zone edge. A new boost centred in the zone goes back (a dip at the
+    junction may be a cancellation; the seat guard watches a boost's skirt). Kept notches and
+    unchanged bands are left alone.
+    """
+    limited = []
+    for band, old in zip(bands, eq_meas.bands, strict=True):
+        moved = band != old and band.adjustable and problem.kinds.get(band.band) != _Kind.NOTCH
+        if not moved or band.gain_db == 0:
+            limited.append(band)
+        elif band.gain_db > 0:
+            limited.append(old if blind.holds(band.freq_hz) else band)
+        elif blind.holds(band.freq_hz):
+            gain = quantizer.snap_gain_db(max(band.gain_db, blind.max_cut_db))
+            q = quantizer.snap_q(min(band.q, blind.max_q))
+            while q > blind.max_q:  # the grid step above the limit: take the one below
+                q = quantizer.snap_q(q * Q_STEP_DOWN)
+            limited.append(replace(band, gain_db=gain, q=q))
+        else:
+            softer = band
+            while softer.gain_db < 0 and blind.edge_db(softer, fs_hz) < blind.max_cut_db:
+                softer = replace(softer, gain_db=min(0.0, softer.gain_db + GAIN_STEP_DB))
+            limited.append(softer if softer.gain_db < 0 else old)
+    return _zone_sum_limited(limited, eq_meas, blind, fs_hz)
+
+
+def _zone_sum_limited(
+    bands: list[Band], eq_meas: SystemEq, blind: BlindJunction, fs_hz: float
+) -> list[Band]:
+    """The new cuts made shallower until together they cut no deeper than ``max_cut_db``.
+
+    Checked across the zone, one gain step at a time: two broad cuts must not add up to a deep
+    one. The cut that contributes most where the sum is deepest gives way first.
+    """
+    zone = np.geomspace(blind.low_hz, blind.high_hz, ZONE_POINTS)
+    limited = list(bands)
+    for _ in range(ZONE_SUM_STEPS):
+        new_cuts = [
+            i
+            for i, (b, o) in enumerate(zip(limited, eq_meas.bands, strict=True))
+            if b != o and b.adjustable and b.gain_db < 0
+        ]
+        responses = {i: band_response_db(limited[i], zone, fs_hz) for i in new_cuts}
+        if not responses:
+            break
+        total = np.sum(list(responses.values()), axis=0)
+        deepest = int(np.argmin(total))
+        if total[deepest] >= blind.max_cut_db:
+            break
+        worst = min(new_cuts, key=lambda i: (responses[i][deepest], i))
+        softer = replace(limited[worst], gain_db=min(0.0, limited[worst].gain_db + GAIN_STEP_DB))
+        limited[worst] = softer if softer.gain_db < 0 else eq_meas.bands[worst]
+    return limited
+
+
+def _third_octave_worsening(
+    before_db: FloatArray, after_db: FloatArray, grid_hz: FloatArray, centres_hz: FloatArray
+) -> FloatArray:
+    """How much further from the target each third of an octave gets (dB, positive is worse)."""
+    worse = np.zeros(len(centres_hz))
+    for k, centre in enumerate(centres_hz):
+        near = (grid_hz >= centre * 2 ** (-1 / 6)) & (grid_hz < centre * 2 ** (1 / 6))
+        if near.any():
+            worse[k] = abs(float(after_db[near].mean())) - abs(float(before_db[near].mean()))
+    return worse
+
+
+def _seat_guarded(  # noqa: PLR0913 - the guard needs the whole picture of the seats
+    bands: list[Band],
+    eq_meas: SystemEq,
+    data: DesignInput,
+    *,
+    mask: np.ndarray,
+    fs_hz: float,
+    blind: BlindJunction,
+) -> list[Band]:
+    """The proposal with the bands softened until no seat gets worse than ``seat_guard_db``.
+
+    Judged in thirds of an octave of the corrected range, per seat against its own response
+    before, and no third may change by more than twice ``seat_guard_db``; the average may get
+    worse by no more than ``AVERAGE_GUARD_DB``. Only cuts are softened (they are what makes seats
+    without the bass thin; a boost in the zone is not proposed at all): the cut that changes the
+    response most, and by more than half a dB, where it suffers most moves halfway back to what
+    it was (on the grid steps of the gain); a band within half a dB of its
+    old gain goes back. Deterministic; at most ``SEAT_GUARD_STEPS`` steps.
+    """
+    grid = data.grid_hz
+    corrected = grid[mask]
+    low, high = float(corrected[0]), float(corrected[-1])
+    if high <= low:
+        return list(bands)
+    count = max(1, math.ceil(3 * math.log2(high / low)))
+    centres = low * 2 ** ((np.arange(count) + 0.5) / 3)
+    guarded = list(bands)
+    old_response = eq_response_db(SystemEq(True, eq_meas.bands), grid, fs_hz)
+    for _ in range(SEAT_GUARD_STEPS):
+        change = eq_response_db(SystemEq(True, tuple(guarded)), grid, fs_hz) - old_response
+        worst_db, worst_hz = 0.0, 0.0
+        curves = [(seat, blind.seat_guard_db) for seat in data.point_devs_db]
+        curves.append((data.dev_db, AVERAGE_GUARD_DB))
+        for curve, allowed_db in curves:
+            worse = _third_octave_worsening(curve, curve + change, grid, centres) - allowed_db
+            k = int(np.argmax(worse))
+            if worse[k] > worst_db:
+                worst_db, worst_hz = float(worse[k]), float(centres[k])
+        # A seat swinging from above the target to below it is not "no worse": the change itself
+        # is capped too (the same at every seat).
+        zero = np.zeros_like(change)
+        swing = _third_octave_worsening(zero, change, grid, centres) - 2 * blind.seat_guard_db
+        k = int(np.argmax(swing))
+        if swing[k] > worst_db:
+            worst_db, worst_hz = float(swing[k]), float(centres[k])
+        if worst_db <= 0:
+            break
+        at = np.array([worst_hz])
+        moves = [
+            (abs(float(band_response_db(b, at, fs_hz)[0] - band_response_db(o, at, fs_hz)[0])), i)
+            for i, (b, o) in enumerate(zip(guarded, eq_meas.bands, strict=True))
+            if b != o and b.adjustable and b.gain_db < 0
+        ]
+        moves = [(effect, i) for effect, i in moves if effect > MIN_GAIN_DB]
+        if not moves:  # not a cut's doing (a boost outside the zone, or the old EQ going)
+            break
+        _, i = max(moves)
+        band, old = guarded[i], eq_meas.bands[i]
+        moved = (band.freq_hz, band.q, band.type) != (old.freq_hz, old.q, old.type)
+        if abs(band.gain_db - old.gain_db) <= MIN_GAIN_DB or (moved and old.gain_db != 0):
+            guarded[i] = old  # a correction moved from its place comes back whole
+        else:
+            guarded[i] = replace(band, gain_db=_on_grid_toward(band.gain_db, old.gain_db))
+    return guarded
+
+
+def _on_grid_toward(gain_db: float, old_db: float) -> float:
+    """Halfway from ``gain_db`` back to ``old_db``, on the steps of the gain."""
+    half = (gain_db + old_db) / 2
+    return round(half / GAIN_STEP_DB) * GAIN_STEP_DB
+
+
 def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
     an: Analysis,
     eq_meas: SystemEq,
@@ -611,6 +906,7 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
     eq_now: SystemEq | None = None,
     cfg: EqDesignConfig = DEFAULT_CONFIG,
     keep_notches: bool = True,
+    blind_junction: BlindJunction | None = None,
 ) -> Proposal:
     """System-EQ design by joint optimisation of all adjustable bands.
 
@@ -623,6 +919,8 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
         eq_now: EQ on the console now, if read; a difference to ``eq_meas`` is flagged.
         cfg: Design thresholds.
         keep_notches: Treat narrow existing cuts as feedback notches that keep half their depth.
+        blind_junction: The junction zone while the sub and the tops were not measured apart:
+            only broad, gentle cuts there, and no seat made clearly worse anywhere.
 
     Returns:
         The proposal. ``prediction.max_dev_*`` is the largest excess above the target (dips are
@@ -650,10 +948,18 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
         gains = np.array([x[3 * i + 1] for i in range(n_slots)])
         penalty = GAIN_PENALTY * gains
         overlap = _overlap_residuals(x, cut_pairs)
-        return np.concatenate([weighted[mask] / norm * RESIDUAL_SCALE, penalty, overlap])
+        zone = _zone_residuals(x, cuts, blind_junction, fs_hz)
+        return np.concatenate([weighted[mask] / norm * RESIDUAL_SCALE, penalty, overlap, zone])
 
     def excess(x: FloatArray) -> FloatArray:
         return np.asarray(np.where(mask, np.maximum(after_of(x), 0.0) * weight, 0.0))
+
+    boost_mask = mask & (grid >= BOOST_FREQ_RANGE_HZ_LOW)
+    if blind_junction is not None:  # a dip at the junction may be a cancellation
+        boost_mask &= (grid < blind_junction.low_hz) | (grid > blind_junction.high_hz)
+
+    def shortfall(x: FloatArray) -> FloatArray:
+        return np.asarray(np.where(boost_mask, np.maximum(-after_of(x), 0.0) * weight, 0.0))
 
     zones = _Zones(grid, mask)
 
@@ -662,8 +968,15 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
         optimised = (
             _eq_from(x, problem, eq_meas) if x is not None else SystemEq(True, eq_meas.bands)
         )
-        bands = _snap(optimised, problem, quantizer, eq_meas)
+        bands = _matched_to_slots(_snap(optimised, problem, quantizer, eq_meas), eq_meas, problem)
         reverted = _revert_uncommon(bands, eq_meas, problem, data=data, zones=zones, cfg=cfg)
+        if blind_junction is not None:
+            bands = _within_zone(
+                bands, eq_meas, problem, blind_junction, quantizer=quantizer, fs_hz=fs_hz
+            )
+            bands = _seat_guarded(
+                bands, eq_meas, data, mask=mask, fs_hz=fs_hz, blind=blind_junction
+            )
         response = eq_response_db(SystemEq(True, tuple(bands)), grid, fs_hz)
         return bands, reverted, np.asarray(dev + response - data.old_response_db)
 
@@ -689,6 +1002,7 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
             excess,
             score,
             problem,
+            shortfall=shortfall,
             grid_hz=grid,
             active=active,
             modes_below_hz=cfg.mode_below_hz,

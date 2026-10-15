@@ -34,11 +34,11 @@ from churchtune.design.crossover import DEFAULT_FC_HZ, CrossoverPlan, plan_cross
 from churchtune.design.crossover import NoteCode as CrossoverNoteCode
 from churchtune.design.proposal import Prediction, TargetSpec
 from churchtune.design.system_eq import DEFAULT_TARGET
-from churchtune.design.system_eq_opt import optimize_design
+from churchtune.design.system_eq_opt import BlindJunction, optimize_design
 from churchtune.domain.arrays import FloatArray
 from churchtune.domain.console import ConsoleState, Roles
 from churchtune.domain.console_paths import console_state, matrix_roles, strip_eq
-from churchtune.domain.eq import EqQuantizer, SystemEq
+from churchtune.domain.eq import CUT_FILTER_TYPES, EqQuantizer, SystemEq
 from churchtune.domain.eq_model import band_sos
 from churchtune.domain.snapshot import ConsoleSnapshot, OutputKind, SignalRef, SourceKind
 from churchtune.domain.topology import TOP_ROLES, TopologyGuess
@@ -65,6 +65,9 @@ MAIN_LR_LABEL = "main_lr"
 # lowers the largest excess above the target by at least MIN_EQ_PEAK_GAIN_DB (system_eq_effect).
 MIN_EQ_GAIN_DB = 0.2
 MIN_EQ_PEAK_GAIN_DB = 1.0
+# A cut filter here on the sub's or the tops' matrix is the crossover the console has now.
+PRESENT_CROSSOVER_RANGE_HZ = (50.0, 250.0)
+LAST_BAND_INDEX = 5
 TINY_MOVE_OCT = 1 / 12
 TINY_MOVE_DB = 0.5
 MAIN_SOURCES = (SourceKind.MAIN_L, SourceKind.MAIN_R)
@@ -665,6 +668,33 @@ def system_eq_effect(prediction: Prediction) -> Effect | None:
     return None
 
 
+def present_crossover_hz(ctx: DesignContext) -> float | None:
+    """The crossover frequency set on the console now, or None when there is none.
+
+    The cut filter on the last band of the sub's matrix (a low-pass) and on the first band of a
+    top matrix (a high-pass), within 50..250 Hz; their geometric mean when both are there.
+    """
+    roles = matrix_roles(ctx.topology)
+    if roles is None:
+        return None
+    state = console_state(ctx.snapshot)
+    found = []
+    for numbers, band_index in ((roles.sub, LAST_BAND_INDEX), (roles.mains, 0)):
+        bands = [state.matrices[n].eq.bands[band_index] for n in numbers if n in state.matrices]
+        cut = next(
+            (b for b in bands if b.type in CUT_FILTER_TYPES and _in_crossover_range(b.freq_hz)),
+            None,
+        )
+        if cut is not None:
+            found.append(cut.freq_hz)
+    return float(np.exp(np.mean(np.log(found)))) if found else None
+
+
+def _in_crossover_range(freq_hz: float) -> bool:
+    low, high = PRESENT_CROSSOVER_RANGE_HZ
+    return low <= freq_hz <= high
+
+
 def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the packages before it
     ctx: DesignContext,
     fc_hz: float,
@@ -676,11 +706,18 @@ def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the package
 ) -> Package | None:
     paths, f_low_hz = eq_paths(ctx, fc_hz)
     analysis = replace(base, f_low_hz=f_low_hz)
+    # Without the junction measured, the EQ stays broad and gentle there and no seat may suffer;
+    # the zone sits around the crossover the console has, when it has one.
+    blind = None
+    if ctx.topology.subs and not ctx.junction:
+        blind = BlindJunction.around(present_crossover_hz(ctx) or fc_hz)
     eq: list[PathEq] = []
     prediction: Prediction | None = None
     for ref in paths:  # every path is designed on its own: locked bands may differ per path
         start = _eq_of(ctx, ref, crossover)
-        proposal = optimize_design(analysis, start, ctx.quantizer, ctx.fs_hz, target=ctx.target)
+        proposal = optimize_design(
+            analysis, start, ctx.quantizer, ctx.fs_hz, target=ctx.target, blind_junction=blind
+        )
         eq.append(PathEq(ref, start, _without_tiny_moves(start, proposal.to_eq())))
         if prediction is None:
             prediction = proposal.prediction

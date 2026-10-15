@@ -261,8 +261,10 @@ def test_without_a_junction_measurement_nothing_gets_worse(defects, near_target_
         before_dev = abs(over_target(hall, freq_hz))
         assert abs(over_target(after, freq_hz)) <= before_dev + 1.5, freq_hz
     if near_target_at_250_300:
-        for freq_hz in (250, 300):
-            assert abs(over_target(after, freq_hz)) < 2.5
+        assert abs(over_target(after, 250)) < 2.5
+        # Without the junction measured, the dip at 3 fc is not lifted (a boost's skirt would
+        # feed the excess the gentle junction cuts leave, and the dip is positional): not worse.
+        assert abs(over_target(after, 300)) <= abs(over_target(hall, 300)) + 0.5
     assert over_target(after, 50.0) < over_target(hall, 50.0)
 
 
