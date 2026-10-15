@@ -132,5 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cut on a room mode) to work on what is left and solves again, keeping a lower cost, so near-equal local
   minima give the same proposal on every platform. A modelled gain of exactly 0.2 dB is no longer lost to
   rounding.
+- System EQ no longer spreads one cut over several near-identical bands: the optimiser is penalised for two
+  working cuts closer than half the wider one's width, so the table stays short and two bands never add up
+  to more than the −9 dB one band may cut.
 - `sub align --level-match` no longer writes the delay and polarity it found when the predicted gain is
   below 1 dB and it reports "delay not changed".
