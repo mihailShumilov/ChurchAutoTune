@@ -45,8 +45,8 @@
 <p class="eyebrow">Guide</p>
 <h1>Using ChurchTune today</h1>
 <p class="lead">An honest guide to what you can do now, and what is coming. It grows with every milestone.</p>
-<p class="updated">Last updated: <time datetime="2026-10-14">14 October 2026</time></p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> The guided wizard reads the console, measures, proposes changes and can write them, with undo and a check measurement. Writing to a real console has not been verified on hardware yet: all of it is tested only against the emulator and a simulated hall. It runs from the source code only. Do not use it on your church's live system yet. See the <a href="../../en/roadmap/">roadmap</a>.</p></div>
+<p class="updated">Last updated: <time datetime="2026-10-15">15 October 2026</time></p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alpha.</strong> The guided wizard reads the console, measures, proposes changes and can write them, with undo and a check measurement, and at the end it writes a report. Writing to a real console has not been verified on hardware yet: all of it is tested only against the emulator and a simulated hall. It runs from the source code only. Do not use it on your church's live system yet. See the <a href="../../en/roadmap/">roadmap</a>.</p></div>
 <nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ol><li><a href="#today">What you can do today</a></li><li><a href="#equipment">Equipment you will need</a></li><li><a href="#developers">For developers and testers</a></li><li><a href="#try-wizard">Try the wizard without hardware</a></li><li><a href="#hardware-check">For console owners: hardware checks</a></li><li><a href="#volunteer-workflow">Coming later: tuning your system</a></li><li><a href="#get-help">Questions and problems</a></li></ol></nav>
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>What you can do today <span class="tag tag-now">Now</span></h2>
@@ -57,8 +57,8 @@ simulated hall: no console, no speakers, no sound. See <a href="#try-wizard">Try
 against the emulator.</li>
 <li><strong>Console owners</strong> can run a hardware check at a real X32 or M32 and report the result. This is the
 most valuable help right now.</li>
-<li><strong>Developers</strong> can follow the wizard all the way on the emulator: the subwoofer and main-speaker measurement, applying the changes and the check measurement (see <a href="#try-wizard-demo">What you will see in the demo</a>). They can also apply a change plan and undo it from the terminal (see <a href="#try-wizard-cli">Apply and undo from the terminal</a>).</li>
-<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard can now write the changes, but this has been tested only against the emulator, never on a real console (milestone M5 is in progress). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
+<li><strong>Developers</strong> can follow the wizard all the way on the emulator: the subwoofer and main-speaker measurement, applying the changes, the check measurement and the report at the end (see <a href="#try-wizard-demo">What you will see in the demo</a> and <a href="#try-wizard-report">The report</a>). They can also apply a change plan and undo it from the terminal (see <a href="#try-wizard-cli">Apply and undo from the terminal</a>).</li>
+<li><strong>Volunteers</strong> who want to tune their church system: please wait. The wizard can now write the changes, but this has been tested only against the emulator, never on a real console (milestone M5 is done, but the hardware checks are still open). Watch releases on <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> to hear when it is ready.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>Equipment you will need</h2>
 <p>For the real tuning, later. Nothing here is needed to try the developer version.</p>
@@ -86,8 +86,8 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # all tests: console emulator + simulated audio
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # the real hall session of 2026-10-02</code></pre>
 <h3 id="emulator">3. Try the expert command line on the emulator</h3>
-<p>Until pull requests #8–#11 and the M5 work are merged, the commands below live only on their branches; the newest is <code>m5b-mutes</code>. In your clone:</p>
-<pre><code>git checkout m5b-mutes
+<p>Everything up to M5 is on the <code>main</code> branch. The report (M6) is still in review: until it is merged, <code>ctune report</code> and the report at the end of the wizard live only on the <code>m6-report</code> branch. To try them, in your clone:</p>
+<pre><code>git checkout m6-report
 uv sync</code></pre>
 <p>The quickest way is the global <code>--emulator</code> option: it starts a console emulator inside the program for
 that one command.</p>
@@ -108,7 +108,7 @@ stays as a tool for developers next to the wizard.</p>
 simulated hall. Nothing leaves your computer: no console is touched and no sound is played.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> The steps that write to the console have been tested only against the emulator and a simulated hall. Do not run them on your church's console until people have done the hardware checks in a real hall (rows 22–28 of the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a>).</p></div>
 <h3 id="try-wizard-start">Start it</h3>
-<p>From a clone with uv installed, on the <code>m5b-mutes</code> branch (see <a href="#install">Install</a> and
+<p>From a clone with uv installed, on the <code>main</code> branch (or <code>m6-report</code> for the report; see <a href="#install">Install</a> and
 <a href="#emulator">step 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # full-screen wizard
@@ -148,7 +148,7 @@ stream.</li>
 <li><strong>Results and proposals:</strong> what was measured, in plain words, then the change packages and advice on the input channels (see <a href="#try-wizard-packages">below</a>).</li>
 <li><strong>Apply the changes:</strong> writes the packages you chose, after a fresh read of the console and a typed word (see <a href="#try-wizard-apply">below</a>).</li>
 <li><strong>Check measurement:</strong> measures some seats again and says whether it got better (see <a href="#try-wizard-verify">below</a>).</li>
-<li><strong>What next:</strong> what to do after this session, including saving the scene on the console under a new name.</li>
+<li><strong>What next:</strong> what to do after this session, including saving the scene on the console under a new name. Then it writes the report (see <a href="#try-wizard-report">below</a>).</li>
 </ol>
 <h3 id="try-wizard-points">The measurement point plan</h3>
 <p>Before the measurement rounds the wizard makes a plan of places where people sit:</p>
@@ -232,6 +232,29 @@ a separate question first (the safe answer is “no”).</li>
 <h3 id="try-wizard-verify">The check measurement</h3>
 <p>Then the step <strong>Check measurement</strong> measures at least four seats again, among them the seat that sounded worst and the one in the middle of the hall. Put the microphones exactly where they stood before. By fixed rules it says one of three things: <strong>better</strong>, <strong>no noticeable difference</strong> or <strong>worse</strong>, with a small before and after picture. When it got worse, it recommends putting the old values back and offers to do it right away.</p>
 <p>The last screen reminds you to save the scene on the console under a new name (for example with today's date), so the new settings survive a restart. It also shows the command that puts the old values back later.</p>
+<h3 id="try-wizard-report">The report</h3>
+<p>At the end the wizard writes a report of the session, in the language of the interface (English, Russian or
+Ukrainian). It goes into the session folder, in a folder called <code>report</code>:</p>
+<ul>
+<li><code>report.html</code>: the report in one file. It opens in any browser without internet, follows the light or
+dark theme of your computer and prints well.</li>
+<li><code>report.md</code> with its charts: the same report as plain text.</li>
+<li><code>report.json</code>: the same data for other programs.</li>
+<li><code>for-chat.txt</code>: a short text to paste into a chat or forum when you ask someone for advice.</li>
+</ul>
+<p>The report has these parts: a summary, the system, how good the measurement was at each place, the frequency
+response before and after, where the subwoofer meets the main speakers, reverberation for speech and for music, what
+was changed (with the command that undoes it), the check measurement, advice on the input channels, what the room
+itself could use, a checklist for the next service, and technical details.</p>
+<p>The wizard prints where the report is and an <code>open "…"</code> command: paste it into the terminal and the
+report opens in your browser. You can make the report again at any time from the saved session, without a console.
+Without a session folder it takes the newest session:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report               # write the report of the newest session again
+CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --lang uk     # write it again in Ukrainian
+CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --for-chat    # print the short text for a chat
+CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report SESSION       # the report of one particular session</code></pre>
+<p>The report is still in review (M6). Until it is merged, it is only on the <code>m6-report</code> branch (see
+<a href="#emulator">step 3</a>).</p>
 <h3 id="try-wizard-cli">Apply and undo from the terminal</h3>
 <p>The expert command line does the same: <code>ctune apply-packages</code> writes the chosen packages of a saved <code>proposal.json</code>, and <code>ctune undo</code> puts the old values back. Use them only with the emulator and <code>CTUNE_DEV_SAFE=1</code>. They need a <code>proposal.json</code> from a wizard session (in the session folder, <code>&lt;home&gt;/venues/&lt;hall&gt;/sessions/&lt;time&gt;-&lt;goal&gt;/</code>). The easiest way to get one is to run the emulator demo up to the proposals (see <a href="#try-wizard-demo">below</a>).</p>
 <p>First look without writing anything. <code>--dry-run</code> shows the settings it would write, in order, and stops:</p>
@@ -260,7 +283,7 @@ check your routing yourself.</li>
 channels of its measurement microphones itself, as a person would on a real console. The simulated hall listens to the
 emulator: the test sound goes through the Main LR EQ, and each speaker plays only while its matrix is switched on.</p>
 <p>So you can follow every step: the point plan, the subwoofer and main-speaker measurement with its short mutes, the
-change packages (with the crossover), applying, the check measurement and the last screen. Choose the full setup (or
+change packages (with the crossover), applying, the check measurement and the last screen with the <a href="#try-wizard-report">report</a>. Choose the full setup (or
 only the subwoofer) at the start to reach the steps that write. Save and quit at any time with <kbd>Ctrl</kbd>+<kbd>Q</kbd>
 (<kbd>Q</kbd> in the line interface). On a real console the wizard does not mute the microphone channels for you: there
 it waits until you do it.</p>
@@ -268,7 +291,7 @@ it waits until you do it.</p>
 <ul>
 <li>It never writes output delay or polarity: they stay values for you to set by hand until they are checked on a real console.</li>
 <li>The speaker-by-speaker check is not in the wizard yet. Today it exists only as an expert command.</li>
-<li>No report file yet (M6).</li>
+<li>The report is still in review (M6), so for now it is only on the <code>m6-report</code> branch (see <a href="#try-wizard-report">The report</a>).</li>
 <li>It has not been run at a real console yet, and writing to a real console is not verified on hardware. That needs the hardware checks and the pilot (M7).</li>
 </ul>
 </div></section>
@@ -288,7 +311,7 @@ console's network.</li>
 <ol>
 <li>Open the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a> and pick a row for your console. Rows 1 and 2
 (<code>ctune hwcheck delay</code> and <code>ctune hwcheck polarity</code>) can be run today; others depend on
-features that are still being built. Rows 22–28 check the new writing of M5 (applying, undo, the check measurement, the short matrix mutes, the subwoofer and main-speaker measurement and the crossover); they need the <code>m5b-mutes</code> branch, and a person must run them in an empty hall before anyone relies on these writes.</li>
+features that are still being built. Rows 22–28 check the new writing of M5 (applying, undo, the check measurement, the short matrix mutes, the subwoofer and main-speaker measurement and the crossover); they are on the <code>main</code> branch, and a person must run them in an empty hall before anyone relies on these writes.</li>
 <li>Read the row: what to verify, the command, and the expected result.</li>
 <li>Run the command and watch the console screen. Compare what happens with the expected result.</li>
 <li>Restore the old value as the row describes (with the undo file, or by recalling your scene).</li>
@@ -300,7 +323,7 @@ firmware, the ChurchTune commit (<code>git rev-parse --short HEAD</code>) and wh
 systems. Remove names and anything personal first; the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">contributing guide</a> explains
 how.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Coming later: tuning your system <span class="tag">Coming later</span></h2>
-<p>This is how the complete wizard is planned to work in a real hall once milestones M5 and M6 are done. Reading the console, measuring, analysing, proposing, applying and the check measurement are already in the wizard (see <a href="#try-wizard">above</a>); the report comes with M6.</p>
+<p>This is how the complete wizard is planned to work in a real hall once the hardware checks and the pilot (M7) are done. All six steps are already in the wizard (see <a href="#try-wizard">above</a>; the <a href="#try-wizard-report">report</a> is still in review), but they have been tried only on the emulator and a simulated hall.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> Applying, undo, the short mutes and the check measurement have been tested only against the emulator and a simulated hall. Wait until the hardware checks are done before you use them on your church's system.</p></div>
 <ol>
 <li id="workflow-read"><strong>Read the console.</strong> ChurchTune finds the console and shows what it found, for
@@ -316,7 +339,7 @@ each with a short “why”.</li>
 <li id="workflow-apply"><strong>Apply.</strong> You see every change, confirm by typing, an undo file is saved first,
 and each value is read back.</li>
 <li id="workflow-verify"><strong>Verify and report.</strong> It measures again, shows before and after, offers to undo
-if it is not better, saves a report and reminds you to save a scene on the console.</li>
+if it is not better, saves a <a href="#try-wizard-report">report</a> and reminds you to save a scene on the console.</li>
 </ol></div></section>
 <section class="section section-alt" id="get-help"><div class="wrap prose"><h2>Questions and problems</h2>
 <ul>
@@ -358,7 +381,7 @@ if it is not better, saves a report and reminds you to save a scene on the conso
 </div>
 </div>
 <p>Behringer, X32, Midas and M32 are trademarks of their respective owners. ChurchTune is an independent project and is not affiliated with or endorsed by them.</p>
-<p>Last updated: <time datetime="2026-10-14">14 October 2026</time></p>
+<p>Last updated: <time datetime="2026-10-15">15 October 2026</time></p>
 </div>
 </footer>
 </body>

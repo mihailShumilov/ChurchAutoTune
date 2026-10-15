@@ -45,8 +45,8 @@
 <p class="eyebrow">Guía</p>
 <h1>ChurchTune hoy</h1>
 <p class="lead">Una guía honesta de lo que puedes hacer ahora y de lo que viene. Crecerá con cada etapa.</p>
-<p class="updated">Última actualización: <time datetime="2026-10-14">14 de octubre de 2026</time></p>
-<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alfa.</strong> El asistente guiado lee la consola, mide, propone cambios y puede escribirlos, con deshacer y una medición de comprobación. La escritura en una consola real todavía no se ha verificado en equipo real: todo se ha probado solo con el emulador y un salón simulado. Solo funciona desde el código fuente. No lo uses todavía en el sistema en uso de tu iglesia. Mira la <a href="../../es/roadmap/">hoja de ruta</a>.</p></div>
+<p class="updated">Última actualización: <time datetime="2026-10-15">15 de octubre de 2026</time></p>
+<div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Pre-alfa.</strong> El asistente guiado lee la consola, mide, propone cambios y puede escribirlos, con deshacer y una medición de comprobación, y al final escribe un informe. La escritura en una consola real todavía no se ha verificado en equipo real: todo se ha probado solo con el emulador y un salón simulado. Solo funciona desde el código fuente. No lo uses todavía en el sistema en uso de tu iglesia. Mira la <a href="../../es/roadmap/">hoja de ruta</a>.</p></div>
 <nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">En esta página</h2><ol><li><a href="#today">Qué puedes hacer hoy</a></li><li><a href="#equipment">El equipo que necesitarás</a></li><li><a href="#developers">Para desarrolladores y testers</a></li><li><a href="#try-wizard">Probar el asistente sin equipo</a></li><li><a href="#hardware-check">Para dueños de consolas: verificaciones de equipo</a></li><li><a href="#volunteer-workflow">Más adelante: ajustar tu sistema</a></li><li><a href="#get-help">Preguntas y problemas</a></li></ol></nav>
 </div></div>
 <section class="section section-alt" id="today"><div class="wrap prose"><h2>Qué puedes hacer hoy <span class="tag tag-now">Ahora</span></h2>
@@ -57,8 +57,8 @@ consola incluido y un salón simulado: sin consola, sin altavoces, sin sonido. M
 comandos experta con el emulador.</li>
 <li><strong>Dueños de consolas</strong> pueden hacer una verificación en una X32 o M32 real y reportar el resultado.
 Es la ayuda más valiosa ahora mismo.</li>
-<li><strong>Los desarrolladores</strong> pueden recorrer el asistente hasta el final con el emulador: la medición separada del subwoofer y los altavoces principales, la aplicación de los cambios y la medición de comprobación (mira <a href="#try-wizard-demo">Qué verás en la demostración</a>). También pueden aplicar un plan de cambios y deshacerlo desde la terminal (mira <a href="#try-wizard-cli">Aplicar y deshacer desde la terminal</a>).</li>
-<li><strong>Si eres voluntario</strong> y quieres ajustar el sistema de tu iglesia, te pedimos que esperes. El asistente ya puede escribir los cambios, pero eso solo se ha probado con el emulador, nunca en una consola real (la etapa M5 está en curso). Sigue los lanzamientos en <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> para enterarte cuando esté listo.</li>
+<li><strong>Los desarrolladores</strong> pueden recorrer el asistente hasta el final con el emulador: la medición separada del subwoofer y los altavoces principales, la aplicación de los cambios, la medición de comprobación y el informe del final (mira <a href="#try-wizard-demo">Qué verás en la demostración</a> y <a href="#try-wizard-report">El informe</a>). También pueden aplicar un plan de cambios y deshacerlo desde la terminal (mira <a href="#try-wizard-cli">Aplicar y deshacer desde la terminal</a>).</li>
+<li><strong>Si eres voluntario</strong> y quieres ajustar el sistema de tu iglesia, te pedimos que esperes. El asistente ya puede escribir los cambios, pero eso solo se ha probado con el emulador, nunca en una consola real (la etapa M5 está terminada, pero las verificaciones de equipo siguen pendientes). Sigue los lanzamientos en <a href="https://github.com/mihailShumilov/ChurchAutoTune">GitHub</a> para enterarte cuando esté listo.</li>
 </ul></div></section>
 <section class="section" id="equipment"><div class="wrap prose"><h2>El equipo que necesitarás</h2>
 <p>Para el ajuste real, más adelante. Nada de esto hace falta para probar la versión para desarrolladores.</p>
@@ -86,8 +86,8 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # todas: emulador de consola + audio simulado
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # la sesión real del salón, 2026-10-02</code></pre>
 <h3 id="emulator">3. Probar la línea de comandos con el emulador</h3>
-<p>Mientras los pull requests #8–#11 y el trabajo de M5 no estén fusionados, los comandos de abajo están solo en sus ramas; la más nueva es <code>m5b-mutes</code>. En tu copia:</p>
-<pre><code>git checkout m5b-mutes
+<p>Todo hasta M5 está en la rama <code>main</code>. El informe (M6) todavía está en revisión: hasta que se fusione, <code>ctune report</code> y el informe al final del asistente están solo en la rama <code>m6-report</code>. Para probarlos, en tu copia:</p>
+<pre><code>git checkout m6-report
 uv sync</code></pre>
 <p>Lo más rápido es la opción global <code>--emulator</code>: arranca un emulador de consola dentro del programa durante
 ese comando.</p>
@@ -108,7 +108,7 @@ comandos experta se queda como herramienta para desarrolladores junto al asisten
 un salón simulado. Nada sale de tu computadora: no se toca ninguna consola y no suena nada.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Los pasos que escriben en la consola solo se han probado con el emulador y un salón simulado. No los uses en la consola de tu iglesia hasta que alguien haya hecho las verificaciones de equipo en un salón real (filas 22–28 de la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a>).</p></div>
 <h3 id="try-wizard-start">Iniciarlo</h3>
-<p>Desde una copia del repositorio con uv instalado, en la rama <code>m5b-mutes</code> (mira <a href="#install">Instalar</a>
+<p>Desde una copia del repositorio con uv instalado, en la rama <code>main</code> (o <code>m6-report</code> para el informe; mira <a href="#install">Instalar</a>
 y el <a href="#emulator">paso 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # asistente a pantalla completa
@@ -149,7 +149,7 @@ los monitores ni a la transmisión.</li>
 <li><strong>Resultados y propuestas:</strong> lo que se midió, con palabras sencillas, y luego los paquetes de cambios y los consejos sobre los canales de entrada (mira <a href="#try-wizard-packages">más abajo</a>).</li>
 <li><strong>Aplicar los cambios:</strong> escribe los paquetes que elegiste, después de leer la consola de nuevo y de que escribas una palabra (mira <a href="#try-wizard-apply">más abajo</a>).</li>
 <li><strong>Medición de comprobación:</strong> vuelve a medir algunos asientos y dice si mejoró (mira <a href="#try-wizard-verify">más abajo</a>).</li>
-<li><strong>Qué sigue:</strong> qué hacer después de esta sesión, por ejemplo guardar la escena en la consola con un nombre nuevo.</li>
+<li><strong>Qué sigue:</strong> qué hacer después de esta sesión, por ejemplo guardar la escena en la consola con un nombre nuevo. Después escribe el informe (mira <a href="#try-wizard-report">más abajo</a>).</li>
 </ol>
 <h3 id="try-wizard-points">El plan de puntos de medición</h3>
 <p>Antes de las rondas de medición, el asistente prepara un plan de lugares donde se sienta la gente:</p>
@@ -238,6 +238,30 @@ vez, antes hace una pregunta aparte (la respuesta segura es «no»).</li>
 <h3 id="try-wizard-verify">La medición de comprobación</h3>
 <p>Luego el paso <strong>Medición de comprobación</strong> vuelve a medir al menos cuatro asientos, entre ellos el que peor sonaba y el del centro del salón. Pon los micrófonos exactamente donde estaban antes. Con reglas fijas dice una de tres cosas: <strong>mejor</strong>, <strong>sin diferencia notable</strong> o <strong>peor</strong>, con un pequeño dibujo de antes y después. Si empeoró, recomienda devolver los valores anteriores y ofrece hacerlo en ese mismo momento.</p>
 <p>La última pantalla te recuerda guardar la escena en la consola con un nombre nuevo (por ejemplo con la fecha de hoy), para que los ajustes nuevos sigan ahí después de reiniciar. También muestra el comando para devolver los valores anteriores más tarde.</p>
+<h3 id="try-wizard-report">El informe</h3>
+<p>Al final el asistente escribe un informe de la sesión en el idioma de la interfaz: inglés, ruso o ucraniano. La
+aplicación todavía no tiene interfaz en español, así que el informe tampoco sale en español. Se guarda en la carpeta
+de la sesión, dentro de una carpeta llamada <code>report</code>:</p>
+<ul>
+<li><code>report.html</code>: el informe en un solo archivo. Se abre en cualquier navegador sin internet, sigue el
+tema claro u oscuro de tu ordenador y se imprime bien.</li>
+<li><code>report.md</code> con sus gráficas: el mismo informe en texto simple.</li>
+<li><code>report.json</code>: los mismos datos para otros programas.</li>
+<li><code>for-chat.txt</code>: un texto corto para pegar en un chat o un foro cuando pides consejo.</li>
+</ul>
+<p>El informe tiene estas partes: un resumen, el sistema, qué tan buena fue la medición en cada lugar, la respuesta en
+frecuencia antes y después, dónde se unen el subwoofer y los altavoces principales, la reverberación para la palabra y
+para la música, qué se cambió (con el comando que lo deshace), la medición de comprobación, consejos sobre los canales
+de entrada, qué le vendría bien a la propia sala, una lista para el próximo culto y los detalles técnicos.</p>
+<p>El asistente muestra dónde está el informe y un comando <code>open "…"</code>: pégalo en la terminal y el informe
+se abre en tu navegador. Puedes volver a generar el informe cuando quieras a partir de la sesión guardada, sin
+consola. Si no indicas la carpeta de la sesión, toma la más reciente:</p>
+<pre><code>CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report               # volver a escribir el informe de la sesión más reciente
+CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --lang uk     # escribirlo de nuevo en ucraniano
+CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --for-chat    # mostrar el texto corto para un chat
+CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report SESSION       # el informe de una sesión concreta</code></pre>
+<p>El informe todavía está en revisión (M6). Hasta que se fusione, está solo en la rama <code>m6-report</code> (mira el
+<a href="#emulator">paso 3</a>).</p>
 <h3 id="try-wizard-cli">Aplicar y deshacer desde la terminal</h3>
 <p>La línea de comandos experta hace lo mismo: <code>ctune apply-packages</code> escribe los paquetes elegidos de un <code>proposal.json</code> guardado, y <code>ctune undo</code> devuelve los valores anteriores. Úsalos solo con el emulador y <code>CTUNE_DEV_SAFE=1</code>. Necesitan un <code>proposal.json</code> de una sesión del asistente (en la carpeta de la sesión, <code>&lt;home&gt;/venues/&lt;salón&gt;/sessions/&lt;hora&gt;-&lt;objetivo&gt;/</code>). La forma más fácil de obtener uno es recorrer la demostración con el emulador hasta las propuestas (mira <a href="#try-wizard-demo">más abajo</a>).</p>
 <p>Primero mira sin escribir nada. <code>--dry-run</code> muestra los ajustes que escribiría, en orden, y se detiene:</p>
@@ -268,14 +292,14 @@ real. El salón simulado escucha al emulador: el sonido de prueba pasa por la ec
 suena solo mientras su matriz está encendida.</p>
 <p>Así puedes seguir cada paso: el plan de puntos, la medición separada del subwoofer y los altavoces principales con sus
 mute breves, los paquetes de cambios (con el crossover), la aplicación, la medición de comprobación y la última
-pantalla. Elige al principio el ajuste completo (o solo el subwoofer) para llegar a los pasos que escriben. Guarda y sal
+pantalla con el <a href="#try-wizard-report">informe</a>. Elige al principio el ajuste completo (o solo el subwoofer) para llegar a los pasos que escriben. Guarda y sal
 cuando quieras con <kbd>Ctrl</kbd>+<kbd>Q</kbd> (<kbd>Q</kbd> en la interfaz de líneas). En una consola real el
 asistente no pone mute por ti a los canales de los micrófonos: ahí espera a que lo hagas tú.</p>
 <h3 id="try-wizard-not-yet">Lo que todavía no hace</h3>
 <ul>
 <li>Nunca escribe el retardo de salida ni la polaridad: siguen siendo valores para poner a mano hasta que se verifiquen en una consola real.</li>
 <li>La revisión de los altavoces uno por uno todavía no está en el asistente. Hoy existe solo como comando experto.</li>
-<li>Todavía no hay archivo de informe (M6).</li>
+<li>El informe todavía está en revisión (M6), así que por ahora está solo en la rama <code>m6-report</code> (mira <a href="#try-wizard-report">El informe</a>).</li>
 <li>Todavía no se ha usado en una consola real, y la escritura en una consola real no está verificada en equipo real. Para eso hacen falta las verificaciones de equipo y la prueba piloto (M7).</li>
 </ul>
 </div></section>
@@ -295,7 +319,7 @@ red de la consola.</li>
 <ol>
 <li>Abre la <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">lista de verificación</a> y elige una fila para tu consola. Las filas 1 y 2
 (<code>ctune hwcheck delay</code> y <code>ctune hwcheck polarity</code>) ya se pueden hacer hoy; las demás dependen de
-funciones que aún se están construyendo. Las filas 22–28 verifican la nueva escritura de M5 (aplicar, deshacer, la medición de comprobación, los mute breves de las matrices, la medición separada del subwoofer y los altavoces principales y el crossover); necesitan la rama <code>m5b-mutes</code>, y una persona tiene que hacerlas en un salón vacío antes de que alguien confíe en estas escrituras.</li>
+funciones que aún se están construyendo. Las filas 22–28 verifican la nueva escritura de M5 (aplicar, deshacer, la medición de comprobación, los mute breves de las matrices, la medición separada del subwoofer y los altavoces principales y el crossover); están en la rama <code>main</code>, y una persona tiene que hacerlas en un salón vacío antes de que alguien confíe en estas escrituras.</li>
 <li>Lee la fila: qué verificar, el comando y el resultado esperado.</li>
 <li>Ejecuta el comando mirando la pantalla de la consola. Compara lo que pasa con el resultado esperado.</li>
 <li>Restaura el valor anterior como indica la fila (con el archivo para deshacer o recuperando tu escena).</li>
@@ -308,7 +332,7 @@ formulario está en inglés; basta con frases sencillas.</li>
 (M1) a reconocer más sistemas. Quita antes los nombres y cualquier dato personal; la
 <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">guía para colaborar</a> explica cómo.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Más adelante: ajustar tu sistema <span class="tag">Más adelante</span></h2>
-<p>Así está previsto que funcione el asistente completo en un salón real cuando terminen las etapas M5 y M6. Leer la consola, medir, analizar, proponer, aplicar y la medición de comprobación ya están en el asistente (mira <a href="#try-wizard">más arriba</a>); el informe llega con M6.</p>
+<p>Así está previsto que funcione el asistente completo en un salón real cuando terminen las verificaciones de equipo y la prueba piloto (M7). Los seis pasos ya están en el asistente (mira <a href="#try-wizard">más arriba</a>; el <a href="#try-wizard-report">informe</a> todavía está en revisión), pero solo se han probado con el emulador y un salón simulado.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>La escritura en una consola real todavía no está verificada en equipo real.</strong> Aplicar, deshacer, los mute breves y la medición de comprobación solo se han probado con el emulador y un salón simulado. Espera a que terminen las verificaciones de equipo antes de usarlos en el sistema de tu iglesia.</p></div>
 <ol>
 <li id="workflow-read"><strong>Leer la consola.</strong> ChurchTune encuentra la consola y muestra lo que encontró, por
@@ -324,7 +348,7 @@ cambios, cada uno con un breve «por qué».</li>
 <li id="workflow-apply"><strong>Aplicar.</strong> Ves cada cambio y lo confirmas escribiendo; primero se guarda un
 archivo para deshacer y cada valor se relee después de escribirlo.</li>
 <li id="workflow-verify"><strong>Verificar e informar.</strong> Mide de nuevo, muestra el antes y el después, ofrece
-deshacer si no mejoró, guarda un informe y te recuerda guardar una escena en la consola.</li>
+deshacer si no mejoró, guarda un <a href="#try-wizard-report">informe</a> y te recuerda guardar una escena en la consola.</li>
 </ol></div></section>
 <section class="section section-alt" id="get-help"><div class="wrap prose"><h2>Preguntas y problemas</h2>
 <ul>
@@ -366,7 +390,7 @@ deshacer si no mejoró, guarda un informe y te recuerda guardar una escena en la
 </div>
 </div>
 <p>Behringer, X32, Midas y M32 son marcas registradas de sus respectivos dueños. ChurchTune es un proyecto independiente y no está afiliado a ellos ni cuenta con su respaldo.</p>
-<p>Última actualización: <time datetime="2026-10-14">14 de octubre de 2026</time></p>
+<p>Última actualización: <time datetime="2026-10-15">15 de octubre de 2026</time></p>
 </div>
 </footer>
 </body>
