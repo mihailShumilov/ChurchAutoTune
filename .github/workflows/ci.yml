@@ -46,3 +46,19 @@ jobs:
       - run: uv run python -c "import sounddevice, soundfile; print(sounddevice.get_portaudio_version())"
       # The golden values were produced on macOS; run them on both platforms.
       - run: uv run pytest tests/unit tests/golden
+
+  install:
+    name: Install with one command on macOS, then the self-check
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build --wheel
+      # The install script as a person runs it, but from the wheel just built and into a
+      # throwaway tool folder; it ends with the self-check (emulator and simulated hall only).
+      - name: scripts/install.sh
+        run: |
+          CHURCHTUNE_SOURCE="$(ls "$PWD"/dist/*.whl)" \
+          UV_TOOL_DIR="$RUNNER_TEMP/tools" UV_TOOL_BIN_DIR="$RUNNER_TEMP/bin" \
+          CHURCHTUNE_NO_PATH=1 sh scripts/install.sh
+      - run: '"$RUNNER_TEMP/bin/ctune" --version'
