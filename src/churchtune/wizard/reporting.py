@@ -38,13 +38,14 @@ from churchtune.storage.files import (
     load_junction_points,
     read_packages,
     read_plan,
+    read_undo,
     session_levels,
     write_report_files,
 )
 from churchtune.storage.models import PackagesFile, WizardStateFile
 from churchtune.storage.paths import Workspace
 from churchtune.wizard.applying import chosen_packages
-from churchtune.wizard.labels import short_path
+from churchtune.wizard.labels import undo_command
 from churchtune.wizard.proposals import plan_from_file
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import FS_HZ, PlannedWrite
@@ -105,18 +106,32 @@ def _date(created: str) -> Cell:
     )
 
 
+def _undo_path(workspace: Workspace, state: WizardStateFile) -> Path | None:
+    """The applied writes' undo file, only when it lies in the workspace's undo folder."""
+    if state.applied_state != "applied" or state.applied_undo is None:
+        return None
+    path = (workspace.root / state.applied_undo).resolve()
+    if not path.is_relative_to(workspace.undo.resolve()) or not path.is_file():
+        logger.warning("the undo file of the session is not in the undo folder: %s", path)
+        return None
+    return path
+
+
 def _changes(
-    root: Path, state: WizardStateFile, describe: Describe | None
-) -> tuple[ChangeRow, ...]:
-    if state.applied_state != "applied" or state.applied_undo is None or describe is None:
-        return ()
+    undo_path: Path | None, describe: Describe | None
+) -> tuple[tuple[ChangeRow, ...], bool]:
+    """The written settings in words, and whether the plan stopped before all were sent."""
+    if undo_path is None or describe is None:
+        return (), False
     try:
-        writes = describe(root / state.applied_undo)
+        writes = describe(undo_path)
+        undo = read_undo(undo_path)
     except (ValueError, OSError) as error:
         logger.warning("the undo file of the report could not be read: %s", error)
-        return ()
-    ordered = sorted(writes, key=_write_order)
-    return tuple(
+        return (), False
+    sent = {r.path for r in undo.results if r.sent}
+    incomplete = any(c.path not in sent for c in undo.changes)
+    rows = tuple(
         ChangeRow(
             w.path,
             as_msg(write_text(w)),
@@ -125,8 +140,19 @@ def _changes(
             w.before_value,
             w.after_value,
         )
-        for w in ordered
+        for w in sorted(writes, key=_write_order)
     )
+    return rows, incomplete
+
+
+def _undo_command(workspace: Workspace, undo_path: Path | None) -> str | None:
+    if undo_path is None:
+        return None
+    try:
+        console = read_undo(undo_path).ip
+    except (ValueError, OSError):
+        console = None
+    return undo_command(workspace.root, undo_path, console)
 
 
 def _write_order(write: PlannedWrite) -> tuple[int, int, int, int]:
@@ -233,6 +259,8 @@ def report_data(
     if state.sweep_level_dbfs is not None:
         measurement["level_dbfs"] = state.sweep_level_dbfs
     names = tuple(sorted({p.name for p in points} | set(state.verify_points)))
+    undo_path = _undo_path(workspace, state)
+    changes, incomplete = _changes(undo_path, describe)
     return ReportData(
         venue_name=state.venue_name,
         created=state.created,
@@ -246,8 +274,9 @@ def report_data(
         points=points,
         alignment=alignment,
         applied_state=state.applied_state,
-        changes=_changes(root, state, describe),
-        undo_file=short_path(root / state.applied_undo) if state.applied_undo else None,
+        changes=changes,
+        changes_incomplete=incomplete,
+        undo_command=_undo_command(workspace, undo_path),
         verify=result,
         verify_analysis=after,
         audit=audit,
@@ -287,9 +316,9 @@ def write_report(data: ReportData, directory: Path, tr: Translate, lang: str) ->
         CHAT_FILE: for_chat(data, tr),
     }
     files.update({figure.name: figure.png for figure in figures_of(document)})
-    if directory.is_dir():
+    if directory.is_dir() and not directory.is_symlink():
         for old in directory.glob("*.png"):
-            if old.name not in files:
+            if old.name not in files and old.is_file() and not old.is_symlink():
                 old.unlink()
     write_report_files(directory, files)
     return ReportFiles(directory)

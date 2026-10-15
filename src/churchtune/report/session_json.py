@@ -20,14 +20,30 @@ THIRDS_HZ = (
     31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600,
     2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000,
 )  # fmt: skip
+THIRDS_FROM_1K = THIRDS_HZ.index(1000)
 
 
-def thirds_db(grid_hz: FloatArray, curve_db: FloatArray) -> list[float | None]:
-    """The curve's mean in each third of an octave of ``THIRDS_HZ`` (None outside the grid)."""
+def thirds_db(
+    grid_hz: FloatArray, curve_db: FloatArray, *, energy: bool = True
+) -> list[float | None]:
+    """The curve's mean in each third of an octave of ``THIRDS_HZ`` (None outside the grid).
+
+    Band edges come from the exact centres 1000·2^(k/3) (the nominal ones only name the bands),
+    so neighbouring bands neither overlap nor leave gaps. Levels are averaged as power (as in the
+    rest of the analysis); ``energy=False`` averages the dB values (a spread, not a level).
+    """
     values: list[float | None] = []
-    for centre in THIRDS_HZ:
+    for k in range(len(THIRDS_HZ)):
+        centre = 1000.0 * 2 ** ((k - THIRDS_FROM_1K) / 3)
         near = (grid_hz >= centre * 2 ** (-1 / 6)) & (grid_hz < centre * 2 ** (1 / 6))
-        values.append(round(float(np.mean(curve_db[near])), 2) if near.any() else None)
+        band = curve_db[near]
+        band = band[np.isfinite(band)]
+        if band.size == 0:
+            values.append(None)
+        elif energy:
+            values.append(round(float(10 * np.log10(np.mean(10 ** (band / 10)))), 2))
+        else:
+            values.append(round(float(np.mean(band)), 2))
     return values
 
 
@@ -42,7 +58,7 @@ def _analysis(an: Analysis) -> dict[str, Any]:
         "corrected_from_hz": round(an.f_low_hz, 1),
         "thirds_hz": list(THIRDS_HZ),
         "average_db": thirds_db(an.grid_hz, an.avg_db),
-        "spread_db": thirds_db(an.grid_hz, an.spread_db),
+        "spread_db": thirds_db(an.grid_hz, an.spread_db, energy=False),
         "per_point_db": {name: thirds_db(an.grid_hz, c) for name, c in an.norm_db.items()},
         "decay_s": {
             str(c): {"t20": an.rt60[c].t20.mean_s, "edt": an.rt60[c].edt.mean_s}
@@ -71,7 +87,8 @@ def report_json(data: ReportData) -> dict[str, Any]:
         "changes": [
             {"path": c.path, "before": c.before_value, "after": c.after_value} for c in data.changes
         ],
-        "undo_file": data.undo_file,
+        "undo_command": data.undo_command,
+        "changes_incomplete": data.changes_incomplete,
         "audit": [asdict(a) for a in data.audit],
         "baseline": None,
         "findings": [],

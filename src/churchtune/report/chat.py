@@ -46,7 +46,10 @@ def for_chat(data: ReportData, tr: Translate) -> str:
         lines.append(tr("report-chat-thirds", {"thirds": " ".join(_label(f) for f in CHAT_THIRDS)}))
         lines.append(tr("report-chat-average", {"curve": _curve(thirds_db(an.grid_hz, an.avg_db))}))
         lines.append(
-            tr("report-chat-spread", {"curve": _curve(thirds_db(an.grid_hz, an.spread_db))})
+            tr(
+                "report-chat-spread",
+                {"curve": _curve(thirds_db(an.grid_hz, an.spread_db, energy=False))},
+            )
         )
         for name, curve in list(an.norm_db.items())[:MAX_CHAT_POINTS]:
             lines.append(f"  {name}: {_curve(thirds_db(an.grid_hz, curve))}")

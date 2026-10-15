@@ -19,6 +19,7 @@ from churchtune.report.findings import (
     bass_ratio,
     edt_ratio,
     findings,
+    mid_edt_s,
     mid_rt60_s,
     mid_spread_db,
     rt60_verdict,
@@ -223,14 +224,14 @@ def _decay_notes(an: Analysis) -> list[Msg]:
     notes: list[Msg] = []
     rt60 = mid_rt60_s(an)
     if rt60 is not None:
-        verdict = rt60_verdict(round(rt60, 2))
+        verdict = rt60_verdict(rt60)
         notes += [
-            Msg(f"report-decay-speech-{verdict}", {"rt60_s": round(rt60, 2)}),
+            Msg(f"report-decay-speech-{verdict}", {"rt60_s": rt60}),
             Msg(f"report-decay-music-{verdict}"),
         ]
     ratio = edt_ratio(an)
-    if ratio is not None and rt60 is not None:
-        edt_s = round(ratio * rt60, 2)
+    edt_s = mid_edt_s(an)
+    if ratio is not None and edt_s is not None:
         kind = (
             "short" if ratio < EDT_SHORT_RATIO else "long" if ratio > EDT_LONG_RATIO else "normal"
         )
@@ -278,9 +279,11 @@ def _changes(data: ReportData) -> Section:
         )
         rows = tuple((c.what, c.before, c.after) for c in data.changes)
         blocks += [Paragraph(Msg("report-changes-what")), Table(head, rows)]
+        if data.changes_incomplete:
+            blocks.append(Paragraph(Msg("report-changes-incomplete")))
         if any(c.path.endswith("/type") for c in data.changes):
             blocks.append(Paragraph(Msg("report-changes-types")))
-        if data.undo_file is not None:
+        if data.undo_command is not None:
             blocks.append(Paragraph(Msg("report-changes-undo")))
     if data.advice:
         blocks += [Paragraph(Msg("report-changes-advice")), Bullets(data.advice)]
@@ -353,7 +356,7 @@ def _acoustics(an: Analysis | None) -> Section:
     if an is not None:
         rt60 = mid_rt60_s(an)
         if rt60 is not None:
-            verdict = rt60_verdict(round(rt60, 2))
+            verdict = rt60_verdict(rt60)
             dry = verdict == "dry"
             items.append(Msg(f"report-acoustics-{verdict}"))
         if mid_spread_db(an) > LARGE_SPREAD_DB:
@@ -370,8 +373,8 @@ def _checklist(data: ReportData) -> Section:
     if applied:
         items.append(Msg("report-check-scene"))
     items.append(Msg("report-check-listen"))
-    if applied and data.undo_file is not None:
-        items.append(Msg("report-check-undo", {"command": f"ctune undo {data.undo_file}"}))
+    if applied and data.undo_command is not None:
+        items.append(Msg("report-check-undo", {"command": data.undo_command}))
     if data.audit:
         items.append(Msg("report-check-channels"))
     blocks = (Bullets(tuple(items), checklist=True),)

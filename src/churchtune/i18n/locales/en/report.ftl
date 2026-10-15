@@ -110,13 +110,14 @@ report-decay-music-boomy = For music: full and lively; fast songs and dense arra
 report-decay-music-treatment = For music: very washy. Use little or no console reverb, and keep bass and kick drum short and not too loud.
 report-decay-edt-short = Early decay (EDT { $edt_s } s) is clearly shorter than RT60: at the places the speakers’ direct sound is strong, so words are clearer than RT60 alone suggests.
 report-decay-edt-normal = Early decay (EDT { $edt_s } s) is close to RT60: what you hear at the places matches the reverberation time.
-report-decay-edt-long = Early decay (EDT { $edt_s } s) is as long as RT60 or longer: the places get mostly reflected sound. Speakers aimed more precisely at the people help speech here more than EQ.
+report-decay-edt-long = Early decay (EDT { $edt_s } s) is longer than RT60: the places get mostly reflected sound. Speakers aimed more precisely at the people help speech here more than EQ.
 report-decay-bass-long = The bass rings longer than the mids (bass ratio { $ratio }): low-mid “mud” for speech and music. A broad gentle cut around 100–300 Hz makes it less muddy but does not shorten the ringing; thick absorbers or bass traps in the corners do.
 report-decay-bass-ok = The bass does not ring much longer than the mids (bass ratio { $ratio }).
 report-decay-limits = The hall was measured empty; with people in it the reverberation is shorter and the highs a little softer. Speech intelligibility (STI) was not measured: RT60 and EDT are only a rough guide, so judge clarity by ear at the next service. Values marked ≈ are approximate.
 report-figure-decay = Reverberation time (T20) and early decay (EDT) per octave, averaged over the places.
 
 report-changes-what = These settings were written to the console (each one was read back and confirmed).
+report-changes-incomplete = The writing stopped before the end: the table shows only what reached the console; the rest was not written.
 report-changes-undo = How to put the old values back is in “What to do next”.
 report-changes-none = Nothing was written to the console.
 report-changes-nothing = Nothing was written to the console.

@@ -618,18 +618,20 @@ def _rows(planned: Sequence[PlannedChange]) -> tuple[PlannedWrite, ...]:
 def describe_undo(undo_path: Path) -> tuple[PlannedWrite, ...]:
     """What an undo file's writes changed, for the report: one row per parameter.
 
-    Read only. A parameter written several times (a brief mute and back, a band moved through a
+    Read only. Only parameters that were sent count (a plan stopped midway lists what reached the
+    console). A parameter written several times (a brief mute and back, a band moved through a
     safe order) shows its first old value and its last new value; one that ends where it began is
-    left out. Addresses the driver cannot describe are left out too.
+    left out. Addresses the driver cannot describe are left out too (and logged).
 
     Raises:
         ValueError: The undo file is damaged.
         OSError: It cannot be read.
     """
     undo = files.read_undo(undo_path)
+    sent = {result.path for result in undo.results if result.sent}
     first: dict[str, ChangeModel] = {}
     last: dict[str, ChangeModel] = {}
-    for change in undo.changes:
+    for change in (c for c in undo.changes if c.path in sent):  # only what reached the console
         first.setdefault(change.path, change)
         last[change.path] = change
     rows = []
@@ -640,7 +642,7 @@ def describe_undo(undo_path: Path) -> tuple[PlannedWrite, ...]:
         try:
             strip, band, param = describe_path(path)
             before, after = plain_value(param, begin.old_value), plain_value(param, end.new_value)
-        except (ValueError, KeyError, IndexError):
+        except (ValueError, KeyError, IndexError, UnsafeWrite):
             logger.warning("a write of %s cannot be described for the report: %s", undo_path, path)
             continue
         rows.append(
