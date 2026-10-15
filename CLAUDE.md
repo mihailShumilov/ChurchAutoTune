@@ -59,17 +59,17 @@ State after M6 (applying, undo, verify, temporary mutes and the junction; the se
 - `cli/` Typer expert CLI, transitional, Russian literals (ADR 0003): `main` (app, `run()`), `context`, `records`,
   `check`, `measure`, `analyze`, `apply` (apply/undo), `apply_packages` (`apply-packages` and the package
   undo, terminal side), `package_writes` (plan, check, re-plan and send package plans; `X32WritePort` for the
-  wizard; with `apply` the only places that send a plan), `mute_writes` (temporary matrix mutes, pending
-  restore), `demo` (`--emulator` hall link), `sub`, `hwcheck`,
+  wizard, incl. the read-only `describe_undo` for the report; with `apply` the only places that send a plan), `mute_writes` (temporary matrix mutes, pending
+  restore), `demo` (`--emulator` hall link), `sub`, `hwcheck`, `report` (a session's report again, `--for-chat`),
   `console` (`doctor`, `snapshot`, `emulator`; global `--emulator`), `mics` (`devices`, `mics map|calibrate`,
   `noise`, `pathcheck`), `wizard` (plain `ctune`, `wizard`, `resume`; console/audio ports, line UI)
 - `wizard/` UI-agnostic engine (ADR 0008): `protocol` (serializable `Prompt`/`Answer`, `Prompter`), `state`, `engine`,
   `services` (ports incl. `WritePort`, stop flag), `ui` (prompt helpers), `run` (start/resume), `labels` (console
   words as texts), `proposals` (plan/packages ↔ files), `applying` (proposal → ordered steps from a fresh read),
   `steps/` `setup`, `measure`, `junction` (S10b), `proposal` (S11 packages, audit), `apply` (S12), `verify` (S13),
-  `finish`
+  `finish` (S14, writes the report); `reporting` (a session's report data and files, ADR 0014)
 - `app/` Textual UI: `app` (`WizardApp`, `TuiPrompter` queue bridge, sound keys), `widgets` (header, prompt, meter)
-- `i18n/` `Translator` (Fluent), `locales/{en,ru,uk}/*.ftl`
+- `i18n/` `Translator` (Fluent), `locales/{en,ru,uk}/*.ftl` (`report.ftl`: the session report)
 - `domain/` pure models: `eq`, `eq_model` (band responses, ADR 0002), `changes`, `console`, `venue`, `levels`, `arrays`,
   `snapshot` (console-neutral `ConsoleSnapshot`, USB map), `topology` (`TopologyGuess`, roles, variants, `with_roles`),
   `console_paths` (snapshot → `ConsoleState`/`Roles` for the design code),

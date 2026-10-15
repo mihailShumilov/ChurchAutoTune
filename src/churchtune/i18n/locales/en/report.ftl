@@ -125,6 +125,9 @@ report-changes-applied = The changes were written; their list is in the undo fil
 report-changes-advice = During the tuning ChurchTune also advised setting these by hand (the program does not write them):
 
 report-verify-not-done = There was no check measurement.
+report-verify-result-better = The check measurement showed: the sound got better.
+report-verify-result-no-change = The check measurement showed: no clear difference at the measured places.
+report-verify-result-worse = The check measurement showed: the sound got worse.
 report-verify-what = The same places were measured again after the changes. “Deviation” is how far the average is from the target curve: lower is better. “Better” needs the deviation to drop by at least 0.5 dB with no place or band getting clearly worse; smaller differences are within what two measurements of the same thing differ by.
 report-verify-m-before = Deviation from the target before
 report-verify-m-after = Deviation from the target after
