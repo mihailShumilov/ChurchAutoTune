@@ -102,10 +102,13 @@ def effect_text(package: Package) -> Text | None:
         if effect.before_db >= 0:
             return t("effect-sub-louder", db=db)
         return t("effect-sub-quieter", db=db)
+    after_db = effect.after_db
+    if effect.metric == EffectMetric.MAX_EXCESS:
+        after_db = max(0.0, after_db)  # a hump cut below the target sticks out by nothing
     return t(
         f"effect-{effect.metric}",
         before_db=round(effect.before_db, 1),
-        after_db=round(effect.after_db, 1),
+        after_db=round(after_db, 1),
     )
 
 

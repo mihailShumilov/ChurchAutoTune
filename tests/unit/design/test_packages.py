@@ -246,6 +246,10 @@ def test_package_tables_and_effects_for_delays_faders_and_polarity():
     assert quieter is not None
     assert quieter.key == "effect-sub-quieter"
     assert quieter.args["db"] == 3.0
+    gone = effect_text(replace(package, effect=Effect(EffectMetric.MAX_EXCESS, 2.1, -0.3)))
+    assert gone is not None
+    assert gone.key == "effect-max-excess"
+    assert gone.args == {"before_db": 2.1, "after_db": 0.0}  # a hump never sticks out by -0.3 dB
 
 
 def test_a_prediction_needs_junction_points_from_the_analysis(hall, analysis):
