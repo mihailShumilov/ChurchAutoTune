@@ -15,6 +15,7 @@ from scipy import signal
 from churchtune.analysis.points import PointResponse, analyze_points
 from churchtune.analysis.response import GRID_HZ
 from churchtune.audio.fake.defects import Defects, PointIrs, defect_hall, shifted
+from churchtune.design import system_eq_opt
 from churchtune.design.alignment import JunctionPoint, analyze_alignment
 from churchtune.design.packages import (
     DesignContext,
@@ -288,3 +289,23 @@ def test_floating_point_noise_does_not_change_the_proposal(flat_case):
         for band, ref in zip(bands, reference, strict=True):
             assert abs(np.log2(band.freq_hz / ref.freq_hz)) < 1 / 12, (seed, band, ref)
             assert abs(band.gain_db - ref.gain_db) <= 0.5, (seed, band, ref)
+
+
+@pytest.mark.parametrize(
+    ("gain_cost_db", "band_cost_db"), [(0.0, 0.05), (0.002, 0.05), (0.001, 0.03), (0.001, 0.08)]
+)
+def test_the_proposal_does_not_hinge_on_the_score_prices(
+    flat_case, monkeypatch, gain_cost_db, band_cost_db
+):
+    """The room-mode cut and the hump cut must not sit on a knife edge of the score's prices."""
+    snapshot, hall, packages, _after = flat_case
+    monkeypatch.setattr(system_eq_opt, "GAIN_COST_DB", gain_cost_db)
+    monkeypatch.setattr(system_eq_opt, "BAND_COST_DB", band_cost_db)
+    analysis = analyze_points({p: PointResponse(h.both, FS) for p, h in hall.items()})
+    junction = {p: JunctionPoint(sub=h.sub, tops=h.tops, both=h.both) for p, h in hall.items()}
+    context = DesignContext(analysis, snapshot, infer_topology(snapshot), GRID, FS, junction)
+    bands = sorted(eq_bands(build_packages(context)), key=lambda b: b.freq_hz)
+    reference = sorted(eq_bands(packages), key=lambda b: b.freq_hz)
+    assert len(bands) == len(reference)
+    for band, ref in zip(bands, reference, strict=True):
+        assert abs(np.log2(band.freq_hz / ref.freq_hz)) < 1 / 12, (band, ref)
