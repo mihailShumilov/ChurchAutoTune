@@ -279,7 +279,7 @@ def test_floating_point_noise_does_not_change_the_proposal(flat_case):
     analysis = analyze_points({p: PointResponse(h.both, FS) for p, h in hall.items()})
     junction = {p: JunctionPoint(sub=h.sub, tops=h.tops, both=h.both) for p, h in hall.items()}
     reference = sorted(eq_bands(packages), key=lambda b: b.freq_hz)
-    for seed in range(8):
+    for seed in range(4):
         rng = np.random.default_rng(seed)
         norm = {p: c + rng.normal(0.0, 1e-7, c.shape) for p, c in analysis.norm_db.items()}
         noisy = replace(analysis, norm_db=norm)

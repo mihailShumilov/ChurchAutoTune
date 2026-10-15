@@ -89,7 +89,8 @@ def resonance_hz(seed: int) -> float:
     return float(np.random.default_rng(900 + seed).uniform(150, 2000))
 
 
-@pytest.mark.parametrize("seed", [0, 1, 2, 4, 5, 7, 9, 11, 12, 19])  # 1-19: flagged in review
+# Seeds 1, 4, 5, 7, 9, 11, 12 and 19 got two cuts on one resonance in earlier versions.
+@pytest.mark.parametrize("seed", [0, 1, 2, 4, 5, 7, 9, 11, 12, 19])
 def test_one_resonance_gets_one_cut_at_its_centre(seed):
     """A second cut on one resonance must buy more than a band costs (DSP review)."""
     proposal = optimize_design(analyze_points(random_hall(seed)), FLAT, X32EqGrid(), FS)
