@@ -68,6 +68,7 @@ MODE_COMMON = 0.5
 # Rounds of moving an idle band to the largest remaining excess and solving again.
 RESEED_ROUNDS = 3
 RESEED_Q = 2.0
+MODE_PAIR = 2  # two cuts on one room mode
 # A reseeded solution must lower the cost by at least this share to replace the current one.
 BETTER_COST = 1e-3
 _SKIPS_KEPT_FROM_GREEDY = frozenset({SkipCode.NARROW_DIP, SkipCode.LOCAL_PEAK})
@@ -157,7 +158,8 @@ def _spare_slot(
     """A cut slot that can be put to work elsewhere, and the solution without it.
 
     A slot that does nothing in the corrected range, else the shallower of two cuts in the mode
-    zone (a room mode gets one compromise cut): its gain goes to the deeper one.
+    zone (a room mode gets one compromise cut): its gain goes to the deeper one, as far as the
+    cut limit allows.
     """
     cuts = [i for i, n in enumerate(problem.slots) if problem.kinds[n] == _Kind.CUT]
     for i in cuts:
@@ -167,7 +169,7 @@ def _spare_slot(
     modes = [
         i for i in cuts if x[3 * i + 1] <= -MIN_GAIN_DB and math.exp(x[3 * i]) < modes_below_hz
     ]
-    if len(modes) < 2:  # noqa: PLR2004 - a pair
+    if len(modes) < MODE_PAIR:
         return None
     deep, shallow = sorted(modes, key=lambda i: (x[3 * i + 1], i))[:2]
     gain = x[3 * deep + 1] + x[3 * shallow + 1]
@@ -175,10 +177,9 @@ def _spare_slot(
     return shallow, _moved(merged, shallow, (x[3 * shallow], 0.0, x[3 * shallow + 2]), problem)
 
 
-def _reseed_starts(  # noqa: PLR0913 - one move set over the whole solution
-    x: FloatArray,
-    slot: int,
-    left: FloatArray,
+def _reseed_starts(
+    spare: tuple[int, FloatArray],
+    excess_db: FloatArray,
     grid_hz: FloatArray,
     problem: _Problem,
     *,
@@ -189,13 +190,16 @@ def _reseed_starts(  # noqa: PLR0913 - one move set over the whole solution
     First at the largest remaining excess above the mode zone; then splitting each active cut
     (deepest first) into two halves a quarter of its width below and above, which reaches the
     "two narrower cuts" minima a single wide cut hides. The mode zone gets neither: a room mode
-    gets one compromise cut.
+    gets one compromise cut. ``excess_db`` is the weighted excess (weights up to 1), so the
+    start gain is no deeper than the real excess; the solver takes it from there.
     """
+    slot, x = spare
     starts = []
-    left = np.where(grid_hz >= modes_below_hz, left, 0.0)
-    if np.any(left > 0):
-        peak = int(np.argmax(left))
-        values = (math.log(float(grid_hz[peak])), -float(left[peak]), math.log(RESEED_Q))
+    above_modes_db = np.where(grid_hz >= modes_below_hz, excess_db, 0.0)
+    if np.any(above_modes_db > 0):
+        peak = int(np.argmax(above_modes_db))
+        gain = -float(above_modes_db[peak])
+        values = (math.log(float(grid_hz[peak])), gain, math.log(RESEED_Q))
         starts.append(_moved(x, slot, values, problem))
     cuts = [
         i
@@ -237,10 +241,9 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
         spare = _spare_slot(best, problem, low_hz, high_hz, modes_below_hz)
         if spare is None:
             break
-        slot, freed = spare
         improved = False
         for start in _reseed_starts(
-            freed, slot, excess(freed), grid_hz, problem, modes_below_hz=modes_below_hz
+            spare, excess(spare[1]), grid_hz, problem, modes_below_hz=modes_below_hz
         ):
             solution = least_squares(residual, start, bounds=bounds)
             if float(solution.cost) < best_cost * (1 - BETTER_COST):
@@ -483,14 +486,13 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
         return np.asarray(np.where(mask, np.maximum(after_of(x), 0.0) * weight, 0.0))
 
     if problem.slots:
-        high_hz = cfg.approx_above_hz
         x = _solve(
             residual,
             excess,
             problem,
             grid_hz=grid,
             low_hz=data.f_correct_from_hz,
-            high_hz=high_hz,
+            high_hz=cfg.approx_above_hz,
             modes_below_hz=cfg.mode_below_hz,
         )
         optimised = _eq_from(x, problem, eq_meas)

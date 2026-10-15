@@ -91,7 +91,7 @@ def used_keys() -> set[str]:
     keys |= {f"risk-{r.value}" for r in Risk}
     keys |= {f"audit-{a.value}" for a in AuditCode}
     keys |= {f"note-{c.value}" for c in PackageNoteCode}
-    keys |= {f"effect-{m}" for m in ("junction-score", "rms-deviation")}
+    keys |= {f"effect-{m}" for m in ("junction-score", "rms-deviation", "max-excess")}
     keys |= {f"audio-problem-{p}" for p in ("channels", "sample-rate")}
     keys |= {f"verify-{v}" for v in ("better", "no-change", "worse")}
     keys |= {"apply-word", "undo-word", "apply-word-mismatch", "undo-word-mismatch"}
