@@ -11,8 +11,11 @@ from churchtune.audio.fake.room import synthetic_room
 from churchtune.design.alignment import JunctionPoint
 from churchtune.design.packages import (
     DesignContext,
+    Effect,
+    EffectMetric,
     PackageKind,
     Risk,
+    _worth_a_screen,
     build_packages,
     choose_fc,
     eq_paths,
@@ -251,3 +254,18 @@ def test_a_prediction_needs_junction_points_from_the_analysis(hall, analysis):
     junction = {f"other{i}": j for i, j in enumerate(junction_of(hall).values())}
     with pytest.raises(ValueError, match="not points of the analysis"):
         predicted_analysis(analysis, junction, {k: j.both for k, j in junction.items()}, FS)
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "peak_gain", "worth"),
+    [
+        (1.96, 1.76, 0.0, True),  # exactly 0.2 dB, despite 1.96 - 1.76 < 0.2 in floating point
+        (1.96, 1.77, 0.0, False),
+        (1.96, 1.80, 3.04, True),  # a hump fixed: the largest excess drops by 3 dB
+        (1.96, 1.97, 3.04, False),  # never when the overall deviation gets worse
+        (1.96, 1.96, 0.99, False),
+    ],
+)
+def test_a_system_eq_is_worth_a_screen(before, after, peak_gain, worth):
+    effect = Effect(EffectMetric.RMS_DEVIATION, before, after)
+    assert _worth_a_screen(effect, peak_gain) is worth

@@ -263,3 +263,28 @@ def test_without_a_junction_measurement_nothing_gets_worse(defects, near_target_
         for freq_hz in (250, 300):
             assert abs(over_target(after, freq_hz)) < 2.5
     assert over_target(after, 50.0) < over_target(hall, 50.0)
+
+
+def eq_bands(packages: Packages) -> list[Band]:
+    eq = packages.of(PackageKind.SYSTEM_EQ)
+    assert eq is not None
+    return [b for path in eq.eq for b in path.after.bands if b.adjustable and b.gain_db]
+
+
+def test_floating_point_noise_does_not_change_the_proposal(flat_case):
+    """The objective has near-equal minima: noise of 1e-7 dB (another platform's floating point)
+    must still give the same system EQ, at most one console grid step apart."""
+    snapshot, hall, packages, _after = flat_case
+    analysis = analyze_points({p: PointResponse(h.both, FS) for p, h in hall.items()})
+    junction = {p: JunctionPoint(sub=h.sub, tops=h.tops, both=h.both) for p, h in hall.items()}
+    reference = sorted(eq_bands(packages), key=lambda b: b.freq_hz)
+    for seed in range(8):
+        rng = np.random.default_rng(seed)
+        norm = {p: c + rng.normal(0.0, 1e-7, c.shape) for p, c in analysis.norm_db.items()}
+        noisy = replace(analysis, norm_db=norm)
+        context = DesignContext(noisy, snapshot, infer_topology(snapshot), GRID, FS, junction)
+        bands = sorted(eq_bands(build_packages(context)), key=lambda b: b.freq_hz)
+        assert len(bands) == len(reference), seed
+        for band, ref in zip(bands, reference, strict=True):
+            assert abs(np.log2(band.freq_hz / ref.freq_hz)) < 1 / 12, (seed, band, ref)
+            assert abs(band.gain_db - ref.gain_db) <= 0.5, (seed, band, ref)

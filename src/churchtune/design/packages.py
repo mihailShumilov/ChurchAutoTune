@@ -61,8 +61,11 @@ EQ_CHANGE_LIMIT_DB = 24.0
 ZONE_OCTAVES = 1.0  # the junction zone is fc / 2 .. 2 fc
 TINY = 1e-12
 MAIN_LR_LABEL = "main_lr"
-# A system EQ that improves the modelled deviation by less than this is not proposed.
+# A system EQ is proposed when it improves the modelled RMS deviation by at least this much, or
+# lowers the largest excess above the target by at least MIN_EQ_PEAK_GAIN_DB (a hump or a mode
+# corrected well can move the RMS over the whole range very little).
 MIN_EQ_GAIN_DB = 0.2
+MIN_EQ_PEAK_GAIN_DB = 1.0
 TINY_MOVE_OCT = 1 / 12
 TINY_MOVE_DB = 0.5
 MAIN_SOURCES = (SourceKind.MAIN_L, SourceKind.MAIN_R)
@@ -637,6 +640,19 @@ def _eq_label(ref: SignalRef) -> str:
     return MAIN_LR_LABEL if ref.kind is SourceKind.MAIN_L else ref.label()
 
 
+def _worth_a_screen(effect: Effect, peak_gain_db: float) -> bool:
+    """True when the modelled improvement of a system EQ is worth proposing.
+
+    A better peak alone counts only when the RMS deviation does not get worse. The predictions
+    are rounded to 0.01 dB; the differences are rounded the same way so that a
+    gain of exactly the threshold is not lost to floating-point noise.
+    """
+    rms_gain_db = round(effect.before_db - effect.after_db, 2)
+    if rms_gain_db >= MIN_EQ_GAIN_DB:
+        return True
+    return rms_gain_db >= 0 and round(peak_gain_db, 2) >= MIN_EQ_PEAK_GAIN_DB
+
+
 def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the packages before it
     ctx: DesignContext,
     fc_hz: float,
@@ -650,6 +666,7 @@ def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the package
     analysis = replace(base, f_low_hz=f_low_hz)
     eq: list[PathEq] = []
     effect = None
+    peak_gain_db = 0.0
     for ref in paths:  # every path is designed on its own: locked bands may differ per path
         start = _eq_of(ctx, ref, crossover)
         proposal = optimize_design(analysis, start, ctx.quantizer, ctx.fs_hz, target=ctx.target)
@@ -661,8 +678,9 @@ def _system_eq(  # noqa: PLR0913 - the EQ needs the whole picture of the package
                 prediction.rms_dev_before_db,
                 prediction.rms_dev_after_db,
             )
+            peak_gain_db = prediction.max_dev_before_db - prediction.max_dev_after_db
     changed = tuple(p for p in eq if p.changed)
-    if not changed or effect is None or effect.before_db - effect.after_db < MIN_EQ_GAIN_DB:
+    if not changed or effect is None or not _worth_a_screen(effect, peak_gain_db):
         return None  # nothing worth a screen: no real improvement expected
     notes = [Note(NoteCode.SYSTEM_EQ_ON, {"path": _eq_label(p.path)}) for p in changed]
     if f_low_hz > ctx.analysis.f_low_hz:

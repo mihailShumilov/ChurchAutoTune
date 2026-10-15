@@ -4,11 +4,16 @@ Frequency, gain and Q of all adjustable bands are optimised together. Objective:
 the target counts fully, shortfall half (nulls are not chased); points that disagree (spread)
 and frequencies below 70 Hz weigh less; a small penalty on gain. Bounds keep the rules: cuts
 -9..0 dB, boosts 0..+3 dB with Q up to 1.4, narrow existing notches keep at least half their
-depth and stay where they are. After the optimisation every changed band must still address a
-problem common to the points, or it is put back.
+depth and stay where they are. The objective has several local minima of almost the same
+cost, and which one the solver reaches can hinge on floating-point noise (another platform). So a
+band the solution leaves idle (no gain, or outside the corrected range), or a second cut on a room
+mode, is put to work on what is left and the solver runs again; a lower cost is kept. After the
+optimisation every changed band must still address a problem common to the points, or it is put
+back.
 """
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -60,6 +65,11 @@ MIN_GAIN_DB = 0.5
 ZONE_HALF_OCT = 1 / 3
 MIN_ZONE_HALF_OCT = 1 / 12
 MODE_COMMON = 0.5
+# Rounds of moving an idle band to the largest remaining excess and solving again.
+RESEED_ROUNDS = 3
+RESEED_Q = 2.0
+# A reseeded solution must lower the cost by at least this share to replace the current one.
+BETTER_COST = 1e-3
 _SKIPS_KEPT_FROM_GREEDY = frozenset({SkipCode.NARROW_DIP, SkipCode.LOCAL_PEAK})
 
 
@@ -128,6 +138,117 @@ def _problem(
         lower += [math.log(freq_low), gain_low, math.log(q_low)]
         upper += [math.log(freq_high), max(gain_high, gain_low + MIN_BOUND_WIDTH), math.log(q_high)]
     return _Problem(slots, kinds, tuple(x0), tuple(lower), tuple(upper))
+
+
+def _moved(
+    x: FloatArray, slot: int, values: tuple[float, float, float], problem: _Problem
+) -> FloatArray:
+    """``x`` with one slot set to (log frequency, gain, log Q), strictly inside its bounds."""
+    moved = np.array(x, dtype=np.float64)
+    for k, value in enumerate(values):
+        j = 3 * slot + k
+        moved[j] = _inside(value, problem.lower[j], problem.upper[j])
+    return moved
+
+
+def _spare_slot(
+    x: FloatArray, problem: _Problem, low_hz: float, high_hz: float, modes_below_hz: float
+) -> tuple[int, FloatArray] | None:
+    """A cut slot that can be put to work elsewhere, and the solution without it.
+
+    A slot that does nothing in the corrected range, else the shallower of two cuts in the mode
+    zone (a room mode gets one compromise cut): its gain goes to the deeper one.
+    """
+    cuts = [i for i, n in enumerate(problem.slots) if problem.kinds[n] == _Kind.CUT]
+    for i in cuts:
+        freq = math.exp(x[3 * i])
+        if abs(x[3 * i + 1]) < MIN_GAIN_DB or not low_hz <= freq <= high_hz:
+            return i, x
+    modes = [
+        i for i in cuts if x[3 * i + 1] <= -MIN_GAIN_DB and math.exp(x[3 * i]) < modes_below_hz
+    ]
+    if len(modes) < 2:  # noqa: PLR2004 - a pair
+        return None
+    deep, shallow = sorted(modes, key=lambda i: (x[3 * i + 1], i))[:2]
+    gain = x[3 * deep + 1] + x[3 * shallow + 1]
+    merged = _moved(x, deep, (x[3 * deep], gain, x[3 * deep + 2]), problem)
+    return shallow, _moved(merged, shallow, (x[3 * shallow], 0.0, x[3 * shallow + 2]), problem)
+
+
+def _reseed_starts(  # noqa: PLR0913 - one move set over the whole solution
+    x: FloatArray,
+    slot: int,
+    left: FloatArray,
+    grid_hz: FloatArray,
+    problem: _Problem,
+    *,
+    modes_below_hz: float,
+) -> list[FloatArray]:
+    """Starts with the spare slot put to work, in a fixed order.
+
+    First at the largest remaining excess above the mode zone; then splitting each active cut
+    (deepest first) into two halves a quarter of its width below and above, which reaches the
+    "two narrower cuts" minima a single wide cut hides. The mode zone gets neither: a room mode
+    gets one compromise cut.
+    """
+    starts = []
+    left = np.where(grid_hz >= modes_below_hz, left, 0.0)
+    if np.any(left > 0):
+        peak = int(np.argmax(left))
+        values = (math.log(float(grid_hz[peak])), -float(left[peak]), math.log(RESEED_Q))
+        starts.append(_moved(x, slot, values, problem))
+    cuts = [
+        i
+        for i, n in enumerate(problem.slots)
+        if problem.kinds[n] == _Kind.CUT
+        and i != slot
+        and x[3 * i + 1] <= -MIN_GAIN_DB
+        and math.exp(x[3 * i]) >= modes_below_hz
+    ]
+    for i in sorted(cuts, key=lambda i: (x[3 * i + 1], i)):
+        log_freq, gain, log_q = x[3 * i : 3 * i + 3]
+        shift = math.log(2) / (4 * math.exp(log_q))
+        half = (log_freq - shift, gain / 2, log_q + math.log(2))
+        split = _moved(x, i, half, problem)
+        starts.append(_moved(split, slot, (log_freq + shift, gain / 2, half[2]), problem))
+    return starts
+
+
+def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected range
+    residual: Callable[[FloatArray], FloatArray],
+    excess: Callable[[FloatArray], FloatArray],
+    problem: _Problem,
+    *,
+    grid_hz: FloatArray,
+    low_hz: float,
+    high_hz: float,
+    modes_below_hz: float,
+) -> FloatArray:
+    """Solve from the greedy start, then put spare bands to work and solve again.
+
+    ``excess`` gives the weighted excess above the target (zero outside the corrected range) for
+    a solution. A new solution is kept only at a clearly lower cost, so the result never gets
+    worse than the plain solve, and the whole procedure is deterministic.
+    """
+    bounds = (problem.lower, problem.upper)
+    solution = least_squares(residual, problem.x0, bounds=bounds)
+    best, best_cost = np.asarray(solution.x, dtype=np.float64), float(solution.cost)
+    for _ in range(RESEED_ROUNDS):
+        spare = _spare_slot(best, problem, low_hz, high_hz, modes_below_hz)
+        if spare is None:
+            break
+        slot, freed = spare
+        improved = False
+        for start in _reseed_starts(
+            freed, slot, excess(freed), grid_hz, problem, modes_below_hz=modes_below_hz
+        ):
+            solution = least_squares(residual, start, bounds=bounds)
+            if float(solution.cost) < best_cost * (1 - BETTER_COST):
+                best, best_cost = np.asarray(solution.x, dtype=np.float64), float(solution.cost)
+                improved = True
+        if not improved:
+            break
+    return best
 
 
 def _eq_from(x: FloatArray, problem: _Problem, eq_meas: SystemEq) -> SystemEq:
@@ -348,16 +469,31 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
     norm = math.sqrt(max(int(mask.sum()), 1))
     n_slots = len(problem.slots)
 
-    def residual(x: FloatArray) -> FloatArray:
+    def after_of(x: FloatArray) -> FloatArray:
         response = eq_response_db(_eq_from(x, problem, eq_meas), grid, fs_hz)
-        after = dev + response - data.old_response_db
+        return np.asarray(dev + response - data.old_response_db, dtype=np.float64)
+
+    def residual(x: FloatArray) -> FloatArray:
+        after = after_of(x)
         weighted = np.where(after > 0, after, SHORTFALL_WEIGHT * after) * weight
         penalty = GAIN_PENALTY * np.array([x[3 * i + 1] for i in range(n_slots)])
         return np.concatenate([weighted[mask] / norm * RESIDUAL_SCALE, penalty])
 
+    def excess(x: FloatArray) -> FloatArray:
+        return np.asarray(np.where(mask, np.maximum(after_of(x), 0.0) * weight, 0.0))
+
     if problem.slots:
-        solution = least_squares(residual, problem.x0, bounds=(problem.lower, problem.upper))
-        optimised = _eq_from(solution.x, problem, eq_meas)
+        high_hz = cfg.approx_above_hz
+        x = _solve(
+            residual,
+            excess,
+            problem,
+            grid_hz=grid,
+            low_hz=data.f_correct_from_hz,
+            high_hz=high_hz,
+            modes_below_hz=cfg.mode_below_hz,
+        )
+        optimised = _eq_from(x, problem, eq_meas)
     else:
         optimised = SystemEq(True, eq_meas.bands)
     bands = _snap(optimised, problem, quantizer)
