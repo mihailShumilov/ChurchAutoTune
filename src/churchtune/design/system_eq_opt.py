@@ -2,7 +2,9 @@
 
 Frequency, gain and Q of all adjustable bands are optimised together. Objective: excess above
 the target counts fully, shortfall half (nulls are not chased); points that disagree (spread)
-and frequencies below 70 Hz weigh less; a small penalty on gain. Bounds keep the rules: cuts
+and frequencies below 70 Hz weigh less; a small penalty on gain, and one on two working cuts
+closer than half the wider one's width (at least 1/6 octave), which would otherwise spread one
+cut over several identical bands. Bounds keep the rules: cuts
 -9..0 dB, boosts 0..+3 dB with Q up to 1.4, narrow existing notches keep at least half their
 depth and stay where they are. The objective has several local minima of almost the same
 cost, and which one the solver reaches can hinge on floating-point noise (another platform). So a
@@ -75,15 +77,21 @@ RESEED_Q = 2.0
 MODE_PAIR = 2  # two cuts on one room mode
 # A reseeded solution must lower the score of the finished proposal by this much to be kept.
 BETTER_SCORE = 1e-3
-# Gain in the score counts linearly, per dB (about what the solver's quadratic penalty gives for
-# a typical 5 dB cut): splitting a band into two halves gains nothing by itself.
+# Gain in the score counts linearly, per dB, so two half bands score no better than one; a split
+# that fits better is stopped by the overlap penalty instead.
 SCORE_GAIN_WEIGHT = 0.06
+# A proposal with fewer stacked cuts may score this much (relative) worse and still be kept.
+UNSTACK_TOLERANCE = 0.02
 # A reseeded proposal may not be worse than the plain solve's by more than this (RMS, peak).
 NO_WORSE_DB = 0.01
 # Solver evaluations for a reseeded start (the plain solve keeps scipy's default).
-RESEED_MAX_NFEV = 300
-# A reseeded proposal with two new cuts closer than this is refused (one problem cut twice).
+RESEED_MAX_NFEV = 100
+# Two cuts closer than this act on one problem: the solver is penalised for it.
 MIN_CUT_SPACING_OCT = 1 / 6
+# On the console grid (about 1/20 octave a step) two such cuts may come one step closer; closer
+# than this they count as stacked, and a reseeded proposal may not have more than the plain one.
+STACKED_OCT = 1 / 8
+OVERLAP_PENALTY = 2.0
 _SKIPS_KEPT_FROM_GREEDY = frozenset({SkipCode.NARROW_DIP, SkipCode.LOCAL_PEAK})
 
 
@@ -102,6 +110,26 @@ class _Problem:
     x0: tuple[float, ...]
     lower: tuple[float, ...]
     upper: tuple[float, ...]
+
+
+def _spacing_oct(q: float) -> float:
+    """How far apart two cuts must be to act on different problems: half the wider one's width."""
+    return max(MIN_CUT_SPACING_OCT, 1 / (2 * q))
+
+
+def _overlap_residuals(x: FloatArray, pairs: list[tuple[int, int]]) -> FloatArray:
+    """Residuals that grow as two working cuts come closer than ``_spacing_oct``.
+
+    Two cuts on one spot do what one deeper cut does, and the solver would happily spread a cut
+    over several bands; scaled by both gains, so a flat (idle) band may sit anywhere.
+    """
+    values = np.zeros(len(pairs))
+    for k, (i, j) in enumerate(pairs):
+        distance_oct = abs(x[3 * i] - x[3 * j]) / math.log(2)
+        spacing_oct = _spacing_oct(math.exp(min(x[3 * i + 2], x[3 * j + 2])))
+        closeness = max(0.0, spacing_oct - distance_oct) / spacing_oct
+        values[k] = OVERLAP_PENALTY * closeness * math.sqrt(abs(x[3 * i + 1] * x[3 * j + 1]))
+    return values
 
 
 def _inside(value: float, low: float, high: float) -> float:
@@ -165,36 +193,37 @@ def _moved(
     return moved
 
 
+def _merged(x: FloatArray, deep: int, shallow: int, problem: _Problem) -> FloatArray:
+    """``x`` with the shallow cut folded into the deep one (as far as the cut limit allows)."""
+    gain = x[3 * deep + 1] + x[3 * shallow + 1]
+    merged = _moved(x, deep, (x[3 * deep], gain, x[3 * deep + 2]), problem)
+    return _moved(merged, shallow, (x[3 * shallow], 0.0, x[3 * shallow + 2]), problem)
+
+
 def _spare_slot(
     x: FloatArray,
     problem: _Problem,
     active: Callable[[FloatArray, int], bool],
     modes_below_hz: float,
-) -> tuple[int, FloatArray] | None:
-    """A cut slot that can be put to work elsewhere, and the solution without it.
+) -> tuple[int, FloatArray, bool] | None:
+    """A cut slot to put to work elsewhere: (slot, solution without it, two cuts were merged).
 
-    A slot that does nothing in the corrected range, else the shallower of two cuts within a third
-    of an octave in the mode zone (one room mode gets one compromise cut): its gain goes to the
-    deeper one, as far as the cut limit allows.
+    A slot that does nothing in the corrected range; else the shallower of two cuts that act on
+    one problem: closer than ``MIN_CUT_SPACING_OCT``, or within a third of an octave in the mode
+    zone (one room mode gets one compromise cut). Its gain goes to the deeper one.
     """
     cuts = [i for i, n in enumerate(problem.slots) if problem.kinds[n] == _Kind.CUT]
     for i in cuts:
         if not active(x, i):
-            return i, x
-    modes = [
-        i for i in cuts if x[3 * i + 1] <= -MIN_GAIN_DB and math.exp(x[3 * i]) < modes_below_hz
-    ]
-    pairs = [
-        (deep, shallow) if x[3 * deep + 1] <= x[3 * shallow + 1] else (shallow, deep)
-        for deep, shallow in itertools.combinations(modes, MODE_PAIR)
-        if abs(x[3 * deep] - x[3 * shallow]) < math.log(2) * ZONE_HALF_OCT
-    ]
-    if not pairs:
-        return None
-    deep, shallow = pairs[0]
-    gain = x[3 * deep + 1] + x[3 * shallow + 1]
-    merged = _moved(x, deep, (x[3 * deep], gain, x[3 * deep + 2]), problem)
-    return shallow, _moved(merged, shallow, (x[3 * shallow], 0.0, x[3 * shallow + 2]), problem)
+            return i, x, False
+    working = [i for i in cuts if x[3 * i + 1] <= -MIN_GAIN_DB]
+    for one, two in itertools.combinations(working, MODE_PAIR):
+        distance_oct = abs(x[3 * one] - x[3 * two]) / math.log(2)
+        in_modes = max(x[3 * one], x[3 * two]) < math.log(modes_below_hz)
+        if distance_oct < MIN_CUT_SPACING_OCT or (in_modes and distance_oct < ZONE_HALF_OCT):
+            deep, shallow = (one, two) if x[3 * one + 1] <= x[3 * two + 1] else (two, one)
+            return shallow, _merged(x, deep, shallow, problem), True
+    return None
 
 
 def _reseed_starts(
@@ -246,36 +275,49 @@ class _Score:
         value: Weighted fit plus linearly counted gain (lower is better).
         rms_db: RMS deviation from the target after the proposal.
         max_db: Largest excess above the target after the proposal.
-        stacked: New cuts sit on top of each other (never kept).
+        stacked: How often new cuts sit on top of each other (``_stacked``).
     """
 
     value: float
     rms_db: float
     max_db: float
-    stacked: bool
+    stacked: int
 
     def better_than(self, best: "_Score", plain: "_Score") -> bool:
-        """Clearly better than ``best`` and no worse than the plain solve on either measure."""
+        """Clearly better than ``best``, and no worse than the plain solve on any measure.
+
+        Measures: RMS deviation, largest excess, and stacked cuts (a candidate may keep what the
+        plain solve already stacked, never add to it). A candidate with fewer stacked cuts than
+        ``best`` may score up to ``UNSTACK_TOLERANCE`` worse: the same correction in fewer bands.
+        """
         no_worse = (
-            self.rms_db <= plain.rms_db + NO_WORSE_DB and self.max_db <= plain.max_db + NO_WORSE_DB
+            self.rms_db <= plain.rms_db + NO_WORSE_DB
+            and self.max_db <= plain.max_db + NO_WORSE_DB
+            and self.stacked <= plain.stacked
         )
-        return not self.stacked and no_worse and self.value < best.value - BETTER_SCORE
+        if not no_worse:
+            return False
+        if self.stacked < best.stacked:
+            return self.value <= best.value * (1 + UNSTACK_TOLERANCE)
+        return self.stacked == best.stacked and self.value < best.value - BETTER_SCORE
 
 
-def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: float) -> bool:
-    """True when new bands sit on top of each other.
+def _stacked(bands: list[Band], grid_hz: FloatArray, fs_hz: float, max_cut_db: float) -> int:
+    """How many times new cuts sit on top of each other.
 
-    Two cuts closer than ``MIN_CUT_SPACING_OCT`` read as one problem done twice, and together they
-    must not cut deeper than one band may (``max_cut_db``).
+    Each pair of neighbouring cuts closer than ``STACKED_OCT`` counts (one problem cut
+    twice), and one more when together they cut deeper than one band may (``max_cut_db``).
     """
     cuts = sorted((b for b in bands if b.gain_db < 0), key=lambda b: b.freq_hz)
-    for low, high in itertools.pairwise(cuts):
-        if math.log2(high.freq_hz / low.freq_hz) < MIN_CUT_SPACING_OCT:
-            return True
+    close = sum(
+        1
+        for low, high in itertools.pairwise(cuts)
+        if math.log2(high.freq_hz / low.freq_hz) < STACKED_OCT
+    )
     if not cuts:
-        return False
+        return 0
     total = sum(band_response_db(b, grid_hz, fs_hz) for b in cuts)
-    return bool(np.min(total) < max_cut_db - MIN_GAIN_DB)
+    return close + int(np.min(total) < max_cut_db - MIN_GAIN_DB)
 
 
 def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected range
@@ -305,10 +347,13 @@ def _solve(  # noqa: PLR0913 - the solver needs the problem and the corrected ra
         spare = _spare_slot(best, problem, active, modes_below_hz)
         if spare is None:
             break
+        slot, freed, merged = spare
+        starts = [freed] if merged else []
+        starts += _reseed_starts(
+            (slot, freed), excess(freed), grid_hz, problem, modes_below_hz=modes_below_hz
+        )
         improved = False
-        for start in _reseed_starts(
-            spare, excess(spare[1]), grid_hz, problem, modes_below_hz=modes_below_hz
-        ):
+        for start in starts:
             solution = least_squares(residual, start, bounds=bounds, max_nfev=RESEED_MAX_NFEV)
             candidate = np.asarray(solution.x, dtype=np.float64)
             candidate_score = score(candidate)
@@ -538,6 +583,8 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
     problem = _problem(greedy.to_eq(), eq_meas, data.f_correct_from_hz, cfg, keep_notches)
     norm = math.sqrt(max(int(mask.sum()), 1))
     n_slots = len(problem.slots)
+    cuts = [i for i, n in enumerate(problem.slots) if problem.kinds[n] == _Kind.CUT]
+    cut_pairs = [(i, j) for i, j in itertools.combinations(cuts, MODE_PAIR)]
 
     def after_of(x: FloatArray) -> FloatArray:
         response = eq_response_db(_eq_from(x, problem, eq_meas), grid, fs_hz)
@@ -546,8 +593,10 @@ def optimize_design(  # noqa: PLR0913 - explicit inputs instead of globals
     def residual(x: FloatArray) -> FloatArray:
         after = after_of(x)
         weighted = np.where(after > 0, after, SHORTFALL_WEIGHT * after) * weight
-        penalty = GAIN_PENALTY * np.array([x[3 * i + 1] for i in range(n_slots)])
-        return np.concatenate([weighted[mask] / norm * RESIDUAL_SCALE, penalty])
+        gains = np.array([x[3 * i + 1] for i in range(n_slots)])
+        penalty = GAIN_PENALTY * gains
+        overlap = _overlap_residuals(x, cut_pairs)
+        return np.concatenate([weighted[mask] / norm * RESIDUAL_SCALE, penalty, overlap])
 
     def excess(x: FloatArray) -> FloatArray:
         return np.asarray(np.where(mask, np.maximum(after_of(x), 0.0) * weight, 0.0))
