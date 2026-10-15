@@ -86,8 +86,9 @@ uv sync</code></pre>
 <pre><code>CTUNE_DEV_SAFE=1 uv run pytest -q                # all tests: console emulator + simulated audio
 CTUNE_DEV_SAFE=1 uv run pytest tests/golden -q   # the real hall session of 2026-10-02</code></pre>
 <h3 id="emulator">3. Try the expert command line on the emulator</h3>
-<p>Everything up to M5 is on the <code>main</code> branch. The report (M6) is still in review: until it is merged, <code>ctune report</code> and the report at the end of the wizard live only on the <code>m6-report</code> branch. To try them, in your clone:</p>
-<pre><code>git checkout m6-report
+<p>Everything up to M6, the report included, is on the <code>main</code> branch. In your clone:</p>
+<pre><code>git checkout main
+git pull
 uv sync</code></pre>
 <p>The quickest way is the global <code>--emulator</code> option: it starts a console emulator inside the program for
 that one command.</p>
@@ -108,7 +109,7 @@ stays as a tool for developers next to the wizard.</p>
 simulated hall. Nothing leaves your computer: no console is touched and no sound is played.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> The steps that write to the console have been tested only against the emulator and a simulated hall. Do not run them on your church's console until people have done the hardware checks in a real hall (rows 22–28 of the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/docs/hardware-checklist.md">hardware checklist</a>).</p></div>
 <h3 id="try-wizard-start">Start it</h3>
-<p>From a clone with uv installed, on the <code>main</code> branch (or <code>m6-report</code> for the report; see <a href="#install">Install</a> and
+<p>From a clone with uv installed, on the <code>main</code> branch (see <a href="#install">Install</a> and
 <a href="#emulator">step 3</a>):</p>
 <pre><code>uv sync
 CTUNE_DEV_SAFE=1 uv run ctune --emulator --audio fake --home /tmp/ctune-demo                                  # full-screen wizard
@@ -253,8 +254,6 @@ Without a session folder it takes the newest session:</p>
 CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --lang uk     # write it again in Ukrainian
 CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report --for-chat    # print the short text for a chat
 CTUNE_DEV_SAFE=1 uv run ctune --home /tmp/ctune-demo report SESSION       # the report of one particular session</code></pre>
-<p>The report is still in review (M6). Until it is merged, it is only on the <code>m6-report</code> branch (see
-<a href="#emulator">step 3</a>).</p>
 <h3 id="try-wizard-cli">Apply and undo from the terminal</h3>
 <p>The expert command line does the same: <code>ctune apply-packages</code> writes the chosen packages of a saved <code>proposal.json</code>, and <code>ctune undo</code> puts the old values back. Use them only with the emulator and <code>CTUNE_DEV_SAFE=1</code>. They need a <code>proposal.json</code> from a wizard session (in the session folder, <code>&lt;home&gt;/venues/&lt;hall&gt;/sessions/&lt;time&gt;-&lt;goal&gt;/</code>). The easiest way to get one is to run the emulator demo up to the proposals (see <a href="#try-wizard-demo">below</a>).</p>
 <p>First look without writing anything. <code>--dry-run</code> shows the settings it would write, in order, and stops:</p>
@@ -291,7 +290,7 @@ it waits until you do it.</p>
 <ul>
 <li>It never writes output delay or polarity: they stay values for you to set by hand until they are checked on a real console.</li>
 <li>The speaker-by-speaker check is not in the wizard yet. Today it exists only as an expert command.</li>
-<li>The report is still in review (M6), so for now it is only on the <code>m6-report</code> branch (see <a href="#try-wizard-report">The report</a>).</li>
+
 <li>It has not been run at a real console yet, and writing to a real console is not verified on hardware. That needs the hardware checks and the pilot (M7).</li>
 </ul>
 </div></section>
@@ -323,7 +322,7 @@ firmware, the ChurchTune commit (<code>git rev-parse --short HEAD</code>) and wh
 systems. Remove names and anything personal first; the <a href="https://github.com/mihailShumilov/ChurchAutoTune/blob/main/CONTRIBUTING.md">contributing guide</a> explains
 how.</p></div></section>
 <section class="section" id="volunteer-workflow"><div class="wrap prose"><h2>Coming later: tuning your system <span class="tag">Coming later</span></h2>
-<p>This is how the complete wizard is planned to work in a real hall once the hardware checks and the pilot (M7) are done. All six steps are already in the wizard (see <a href="#try-wizard">above</a>; the <a href="#try-wizard-report">report</a> is still in review), but they have been tried only on the emulator and a simulated hall.</p>
+<p>This is how the complete wizard is planned to work in a real hall once the hardware checks and the pilot (M7) are done. All six steps are already in the wizard (see <a href="#try-wizard">above</a>; the <a href="#try-wizard-report">report</a> too), but they have been tried only on the emulator and a simulated hall.</p>
 <div class="notice" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><p><strong>Writing to a real console is not verified on hardware yet.</strong> Applying, undo, the short mutes and the check measurement have been tested only against the emulator and a simulated hall. Wait until the hardware checks are done before you use them on your church's system.</p></div>
 <ol>
 <li id="workflow-read"><strong>Read the console.</strong> ChurchTune finds the console and shows what it found, for
