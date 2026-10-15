@@ -209,6 +209,17 @@ def two_slots() -> system_eq_opt._Problem:
     )
 
 
+@pytest.mark.xfail(
+    strict=True, reason="ADR 0013 open: the guard mends cuts only, not a boost moved elsewhere"
+)
+def test_a_boost_moved_from_the_halls_correction_keeps_seats_within_the_guard():
+    base = SystemEq(True, tuple(proposal(Band(5, EqType.PEQ, 3000.0, 3.0, 1.0))))
+    seats = [np.zeros_like(AUDIO_GRID) for _ in range(5)]  # flat, measured with the boost on
+    moved = proposal(Band(5, EqType.PEQ, 300.0, 3.0, 1.0), base=base)
+    out = guarded(moved, design_input(seats), base)
+    assert worst_seat_db(out, design_input(seats), base) <= BLIND.seat_guard_db
+
+
 def test_a_flat_slot_takes_part_in_the_matching():
     """The 500 Hz slot went flat and its correction moved to the 50 Hz slot: matched back."""
     base = SystemEq(

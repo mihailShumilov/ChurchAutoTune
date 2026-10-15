@@ -44,7 +44,7 @@ When the topology has a sub and the junction was not measured, `optimize_design`
 ## Consequences
 
 - On the defect hall with the reference hall's EQ, the worst seat (level-aligned thirds, as the
-  check measurement aligns) is at most 1.85 dB worse in 63 Hz – 2 kHz across five junction
+  check measurement aligns) is at most 1.91 dB worse in 63 Hz – 2 kHz across five junction
   variants (was up to 3.25 dB); the golden 2026-10-02 proposal is unchanged.
 - The slot matching of 4 and the idle boost of 5 change designs with a measured junction too: on
   the defect hall's "bad" junction a system EQ is now proposed where none was. Covered by the
@@ -53,10 +53,16 @@ When the topology has a sub and the junction was not measured, `optimize_design`
   that the hall's 500 Hz cut stays.
 - Open: the optimiser may move an existing correction of the hall to another frequency, and the
   guard mends only cuts. On the defect hall the reference EQ's single boost band (2790 Hz
-  +2.5 dB) is moved to about 300 Hz in two variants, so one seat loses up to 2.3 dB at 3.15 kHz;
-  `main` does the same. Pinning the existing bands was tried and left almost no system EQ to
+  +2.5 dB) is moved to about 300 Hz, so one seat loses up to 2.3 dB at 3.15 kHz, and the moved
+  boost (+3 dB at 340 Hz) brings one seat to 1.91 dB at 400 Hz, 0.09 dB under the guard's limit:
+  a small change of the optimiser can fail the seat test because of this, not of the zone rule.
+  `main` does the same. A strict xfail unit test keeps it visible. Pinning the existing bands was tried and left almost no system EQ to
   propose (the 50 Hz mode cut could no longer deepen); this belongs to the optimiser, not to
   the blind junction rule.
+- Open: a cut the solver moved more than about 1.4 octaves away from the correction it displaced
+  is not matched back; the zeroed correction then comes back (in the zone) next to the moved cut,
+  and the change can go the other way from what the solver wanted (bounded by −3 dB and the
+  guard). Pricing a flat band in its own correction's slot like any other would match it back.
 - Open: the report does not yet say "kept as it was: seat guard" when the guard gives an existing
   correction back.
 - The guard judges the corrected range from its lower end, room modes included: a mode cut is
