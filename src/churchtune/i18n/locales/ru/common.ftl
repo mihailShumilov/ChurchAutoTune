@@ -76,3 +76,17 @@ output-aux = aux-выход { $number }
 alignment-delay = { $where }: задержка { $ms } мс
 alignment-polarity = { $where }: перевёрнута полярность
 signal-main-lr = Main LR
+
+# The self-check of the installed program
+selftest-start = Самопроверка ChurchTune { $version }: весь мастер проходит на встроенном в программу эмуляторе пульта и на имитации зала. Настоящий пульт и звуковая карта не используются, ничего не звучит. Это займёт не больше минуты.
+selftest-ok = ✓ { $what }
+selftest-failed = ✗ { $what }
+selftest-what-wizard = Мастер прошёл все шаги.
+selftest-what-junction = Сабвуфер и основные колонки измерены по отдельности.
+selftest-what-apply = Изменения записаны в эмулятор и проверены.
+selftest-what-verify = Проверочный замер сделан.
+selftest-what-report = Отчёт записан.
+selftest-error = Самопроверка остановилась с ошибкой ({ $error }).
+selftest-passed = Самопроверка пройдена за { $seconds } с. ChurchTune установлен правильно.
+selftest-not-passed = Самопроверка не пройдена. Пожалуйста, создайте issue на GitHub и вставьте туда этот вывод.
+selftest-kept = Файлы самопроверки лежат в { $path }

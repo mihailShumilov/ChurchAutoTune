@@ -18,6 +18,7 @@ from churchtune.cli import (
     measure,
     mics,
     report,
+    selftest,
     sub,
     wizard,
 )
@@ -117,6 +118,7 @@ app.add_typer(mics.mics_app, name="mics")
 app.command("wizard")(wizard.wizard_command)
 app.command("resume")(wizard.resume_command)
 app.command("report")(report.report_command)
+app.command("selftest")(selftest.selftest_command)
 
 
 def run() -> None:
