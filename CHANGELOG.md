@@ -134,7 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounding.
 - System EQ no longer spreads one cut over several near-identical bands: the optimiser is penalised for two
   working cuts closer than half the wider one's width, so the table stays short and two bands never add up
-  to more than the −9 dB one band may cut. A second band on one problem is kept only when it buys at least
-  0.05 dB of overall deviation or 0.25 dB of the largest excess; a band that stays flat is not moved.
+  to more than the −9 dB one band may cut. Every candidate proposal gets one number (weighted deviation, a small
+  price per dB of gain, 0.05 dB for each second cut within half an octave of another) and the lowest wins, so a
+  second cut on one problem stays only when it buys more than that; a band that stays flat is not moved.
 - `sub align --level-match` no longer writes the delay and polarity it found when the predicted gain is
   below 1 dB and it reports "delay not changed".

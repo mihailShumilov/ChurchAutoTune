@@ -1,6 +1,7 @@
 """The optimiser's commonness rule judges a band where it acts, not over a fixed wide zone."""
 
 import itertools
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -84,15 +85,30 @@ def random_hall(seed: int) -> dict[str, PointResponse]:
     return points
 
 
-@pytest.mark.parametrize("seed", range(6))
-def test_spare_bands_never_make_the_proposal_worse_or_stacked(seed, monkeypatch):
+def resonance_hz(seed: int) -> float:
+    return float(np.random.default_rng(900 + seed).uniform(150, 2000))
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 4, 5, 7, 9, 11, 12, 19])  # 1-19: flagged in review
+def test_one_resonance_gets_one_cut_at_its_centre(seed):
+    """A second cut on one resonance must buy more than a band costs (DSP review)."""
+    proposal = optimize_design(analyze_points(random_hall(seed)), FLAT, X32EqGrid(), FS)
+    f0 = resonance_hz(seed)
+    near = [b for b in proposed_cuts(proposal) if abs(np.log2(b.freq_hz / f0)) < 1 / 3]
+    assert len(near) == 1, near
+    assert abs(np.log2(near[0].freq_hz / f0)) < 1 / 12
+    assert_no_stacked_cuts(proposal)
+
+
+@pytest.mark.parametrize("seed", [4, 6, 8])
+def test_noise_does_not_change_the_number_of_cuts(seed):
     analysis = analyze_points(random_hall(seed))
-    with_reseed = optimize_design(analysis, FLAT, X32EqGrid(), FS)
-    assert_no_stacked_cuts(with_reseed)
-    monkeypatch.setattr(system_eq_opt, "RESEED_ROUNDS", 0)
-    plain = optimize_design(analysis, FLAT, X32EqGrid(), FS)
-    assert with_reseed.prediction.rms_dev_after_db <= plain.prediction.rms_dev_after_db + 0.01
-    assert with_reseed.prediction.max_dev_after_db <= plain.prediction.max_dev_after_db + 0.01
+    reference = optimize_design(analysis, FLAT, X32EqGrid(), FS)
+    for k in range(3):
+        rng = np.random.default_rng(k)
+        norm = {p: c + rng.normal(0.0, 1e-7, c.shape) for p, c in analysis.norm_db.items()}
+        noisy = optimize_design(replace(analysis, norm_db=norm), FLAT, X32EqGrid(), FS)
+        assert len(proposed_cuts(noisy)) == len(proposed_cuts(reference)), k
 
 
 def test_the_optimisation_is_deterministic():
@@ -101,38 +117,33 @@ def test_the_optimisation_is_deterministic():
     assert optimize_design(analysis, FLAT, X32EqGrid(), FS) == first
 
 
-def score(value=10.0, rms=1.0, peak=2.0, stacked=0, bands=2):
-    return system_eq_opt._Score(value=value, rms_db=rms, max_db=peak, stacked=stacked, bands=bands)
+def score(rms=1.0, gain=10.0, stacked=0, crowded=0):
+    return system_eq_opt._Score(weighted_rms_db=rms, gain_db=gain, stacked=stacked, crowded=crowded)
+
+
+def test_a_second_cut_on_one_problem_must_buy_more_than_a_band_costs():
+    one = score(rms=1.0)
+    cost = system_eq_opt.BAND_COST_DB
+    assert score(rms=1.0 - cost / 2, crowded=1).total_db > one.total_db
+    assert score(rms=1.0 - 2 * cost, crowded=1).total_db < one.total_db
+
+
+def test_a_stacked_pair_costs_like_a_band():
+    assert score(stacked=1).total_db == pytest.approx(score(crowded=1).total_db)
+
+
+def test_gain_is_only_a_tie_break():
+    assert score(gain=10.0).total_db < score(gain=11.0).total_db
+    assert score(rms=0.99, gain=15.0).total_db < score(rms=1.0, gain=10.0).total_db
 
 
 @pytest.mark.parametrize(
-    ("candidate", "better"),
-    [
-        (score(value=9.0), True),
-        (score(value=10.0 - system_eq_opt.BETTER_SCORE), False),  # not clearly better
-        (score(value=9.0, rms=1.01), True),  # within NO_WORSE_DB of the plain solve
-        (score(value=9.0, rms=1.02), False),
-        (score(value=9.0, peak=2.02), False),
-        (score(value=9.0, stacked=1), False),  # adds a stacked cut
-        (score(value=9.0, bands=3, rms=0.97), False),  # an extra band for 0.03 dB
-        (score(value=9.0, bands=3, rms=0.95), True),
-        (score(value=9.0, bands=3, peak=1.75), True),
-    ],
+    ("freqs", "crowded"),
+    [([400.0, 1000.0], 0), ([400.0, 520.0], 1), ([400.0, 520.0, 650.0], 2), ([400.0], 0)],
 )
-def test_a_reseeded_solution_is_kept_only_when_better_and_no_worse(candidate, better):
-    plain = score()
-    assert candidate.better_than(plain, plain) is better
-
-
-def test_a_candidate_may_keep_what_the_plain_solve_stacked():
-    plain = score(stacked=1)
-    assert score(value=9.0, stacked=1).better_than(plain, plain)
-
-
-@pytest.mark.parametrize(("value", "better"), [(10.15, True), (10.25, False)])
-def test_fewer_stacked_cuts_may_score_slightly_worse(value, better):
-    plain = score(stacked=1)
-    assert score(value=value, stacked=0).better_than(plain, plain) is better
+def test_crowded_cuts(freqs, crowded):
+    cuts = [Band(n + 1, EqType.PEQ, f, -3.0, 4.0) for n, f in enumerate(freqs)]
+    assert system_eq_opt._crowded(cuts) == crowded
 
 
 @pytest.mark.parametrize(
@@ -140,7 +151,7 @@ def test_fewer_stacked_cuts_may_score_slightly_worse(value, better):
     [
         ([(400.0, -4.0, 4.0), (1000.0, -4.0, 4.0)], 0),
         ([(400.0, -4.0, 4.0), (430.0, -4.0, 4.0)], 1),  # 0.10 octave apart
-        ([(400.0, -3.0, 6.0), (445.0, -3.0, 6.0)], 0),  # 0.15 octave: one grid step from 1/6
+        ([(400.0, -3.0, 6.0), (445.0, -3.0, 6.0)], 0),  # 0.15 octave: on the console grid
         ([(400.0, -8.0, 2.0), (520.0, -8.0, 2.0)], 1),  # far enough, but -9 dB is exceeded
         ([(400.0, 3.0, 1.0), (420.0, 3.0, 1.0)], 0),  # boosts are not cuts
         ([], 0),
@@ -152,7 +163,7 @@ def test_stacked_cuts(bands, stacked):
     assert system_eq_opt._stacked(peq, grid, FS, -9.0) == stacked
 
 
-def mode_problem() -> system_eq_opt._Problem:
+def cut_problem() -> system_eq_opt._Problem:
     slots = (1, 2, 3)
     kinds = dict.fromkeys(slots, system_eq_opt._Kind.CUT)
     lower = (np.log(20.0), -9.0, np.log(0.5)) * 3
@@ -166,35 +177,42 @@ def x_of(*bands):
 
 def test_an_idle_band_is_spare():
     x = x_of((50.0, -5.0, 6.0), (500.0, -3.0, 2.0), (900.0, -0.1, 2.0))
-    spare = system_eq_opt._spare_slot(x, mode_problem(), lambda x, i: i != 2, 120.0)
-    assert spare is not None
-    assert spare[0] == 2
-    assert np.array_equal(spare[1], x)
-    assert spare[2] is False
+    assert system_eq_opt._spare_slot(x, cut_problem(), lambda x, i: i != 2) == 2
+    assert system_eq_opt._spare_slot(x, cut_problem(), lambda x, i: True) is None
 
 
-def test_two_cuts_on_one_mode_become_one():
-    x = x_of((50.0, -5.0, 6.0), (54.0, -3.0, 6.0), (500.0, -3.0, 2.0))
-    spare = system_eq_opt._spare_slot(x, mode_problem(), lambda x, i: True, 120.0)
-    assert spare is not None
-    slot, merged, was_merged = spare
-    assert slot == 1
-    assert was_merged
-    assert merged[1] == pytest.approx(-8.0)  # the deeper cut takes both gains
-    assert merged[4] > -0.2  # the spare band is (almost) flat
+def held(bounds, slot):
+    lower, upper = bounds
+    return upper[3 * slot + 1] == 0.0 and lower[3 * slot + 1] > -1e-5
 
 
-def test_two_close_cuts_above_the_modes_become_one():
-    x = x_of((50.0, -5.0, 6.0), (500.0, -3.0, 6.0), (530.0, -2.0, 6.0))
-    spare = system_eq_opt._spare_slot(x, mode_problem(), lambda x, i: True, 120.0)
-    assert spare is not None
-    assert spare[0] == 2
-    assert spare[1][4] == pytest.approx(-5.0)
+def test_one_band_fewer_holds_the_removed_and_the_idle_cuts_flat():
+    """Holding only the removed band would let the solver move the cut into the idle one."""
+    x = x_of((300.0, -5.0, 6.0), (1500.0, -3.0, 2.0), (900.0, -0.1, 2.0))
+    starts = system_eq_opt._fewer_band_starts(x, cut_problem(), 120.0)
+    assert len(starts) == 2  # no pair on one problem: each cut taken out, the shallowest first
+    (first, first_bounds), (_, second_bounds) = starts
+    assert [held(first_bounds, slot) for slot in range(3)] == [False, True, True]
+    assert [held(second_bounds, slot) for slot in range(3)] == [True, False, True]
+    assert first[4] > -1e-5
 
 
-def test_cuts_on_two_modes_stay_apart():
-    x = x_of((60.0, -6.0, 2.0), (121.0 * 0.95, -6.0, 5.0), (500.0, -3.0, 2.0))
-    assert system_eq_opt._spare_slot(x, mode_problem(), lambda x, i: True, 120.0) is None
+def test_two_close_cuts_are_merged_between_them():
+    x = x_of((500.0, -3.0, 6.0), (530.0, -1.0, 6.0), (2000.0, -2.0, 4.0))
+    merged, bounds = system_eq_opt._fewer_band_starts(x, cut_problem(), 120.0)[0]
+    assert merged[1] == pytest.approx(-4.0)  # both gains
+    assert 500.0 < np.exp(merged[0]) < 515.0  # centred by gain, nearer the deeper cut
+    assert np.exp(merged[2]) < 6.0  # widened
+    assert held(bounds, 1)
+
+
+def test_two_cuts_on_one_mode_are_merged_and_two_modes_are_not():
+    one_mode = x_of((50.0, -5.0, 6.0), (60.0, -3.0, 6.0), (500.0, -3.0, 2.0))
+    merged, _ = system_eq_opt._fewer_band_starts(one_mode, cut_problem(), 120.0)[0]
+    assert merged[1] == pytest.approx(-8.0)
+    two_modes = x_of((60.0, -6.0, 2.0), (115.0, -6.0, 5.0), (500.0, -3.0, 2.0))
+    starts = system_eq_opt._fewer_band_starts(two_modes, cut_problem(), 120.0)
+    assert len(starts) == 3  # only the three take-outs
 
 
 @pytest.mark.parametrize("points", [lambda: hall(3), lambda: random_hall(1)])
