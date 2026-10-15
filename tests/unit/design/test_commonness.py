@@ -66,8 +66,7 @@ def test_a_single_resonance_gets_a_single_cut():
     """One cut, not the same cut spread over several bands (the solver did that before)."""
     proposal = optimize_design(analyze_points(hall(8)), FLAT, X32EqGrid(), FS)
     near = [b for b in proposed_cuts(proposal) if abs(np.log2(b.freq_hz / 400.0)) < 1 / 3]
-    deep = [b for b in near if b.gain_db <= -3.0]
-    assert len(deep) == 1
+    assert len(near) == 1
     assert sum(b.gain_db for b in near) >= -9.0
     assert_no_stacked_cuts(proposal)
 
@@ -102,8 +101,8 @@ def test_the_optimisation_is_deterministic():
     assert optimize_design(analysis, FLAT, X32EqGrid(), FS) == first
 
 
-def score(value=10.0, rms=1.0, peak=2.0, stacked=0):
-    return system_eq_opt._Score(value=value, rms_db=rms, max_db=peak, stacked=stacked)
+def score(value=10.0, rms=1.0, peak=2.0, stacked=0, bands=2):
+    return system_eq_opt._Score(value=value, rms_db=rms, max_db=peak, stacked=stacked, bands=bands)
 
 
 @pytest.mark.parametrize(
@@ -115,6 +114,9 @@ def score(value=10.0, rms=1.0, peak=2.0, stacked=0):
         (score(value=9.0, rms=1.02), False),
         (score(value=9.0, peak=2.02), False),
         (score(value=9.0, stacked=1), False),  # adds a stacked cut
+        (score(value=9.0, bands=3, rms=0.97), False),  # an extra band for 0.03 dB
+        (score(value=9.0, bands=3, rms=0.95), True),
+        (score(value=9.0, bands=3, peak=1.75), True),
     ],
 )
 def test_a_reseeded_solution_is_kept_only_when_better_and_no_worse(candidate, better):
@@ -193,3 +195,13 @@ def test_two_close_cuts_above_the_modes_become_one():
 def test_cuts_on_two_modes_stay_apart():
     x = x_of((60.0, -6.0, 2.0), (121.0 * 0.95, -6.0, 5.0), (500.0, -3.0, 2.0))
     assert system_eq_opt._spare_slot(x, mode_problem(), lambda x, i: True, 120.0) is None
+
+
+@pytest.mark.parametrize("points", [lambda: hall(3), lambda: random_hall(1)])
+def test_a_flat_band_that_stays_flat_is_left_as_it_was(points):
+    """Moving the frequency or Q of a band with no gain would only be a write to the console."""
+    proposal = optimize_design(analyze_points(points()), FLAT, X32EqGrid(), FS)
+    for band in proposal.bands:
+        if band.band.gain_db == 0 and band.was.gain_db == 0:
+            assert band.band == band.was
+            assert band.action.value == "keep"
