@@ -14,14 +14,14 @@ import numpy as np
 
 from churchtune.analysis.points import Analysis, PointResponse, analyze_points
 from churchtune.analysis.response import GRID_HZ
-from churchtune.design.proposal import TargetSpec
+from churchtune.design.system_eq import DEFAULT_TARGET
 from churchtune.design.target import target_curve
 from churchtune.domain.arrays import FloatArray
 from churchtune.report.findings import findings as report_findings
 from churchtune.report.model import Msg
-from churchtune.storage.files import load_points, read_session_mic_calibration
+from churchtune.storage.files import load_points, read_session_mic_calibration, read_undo
 from churchtune.storage.models import MicCalibrationFile, WizardStateFile
-from churchtune.wizard.labels import short_path
+from churchtune.wizard.labels import short_path, undo_command
 from churchtune.wizard.protocol import Text
 from churchtune.wizard.services import WizardContext
 from churchtune.wizard.state import Outcome
@@ -50,7 +50,7 @@ def _point_corrections(
     return curves
 
 
-TARGET = TargetSpec()
+TARGET = DEFAULT_TARGET  # the proposals aim at the same curve
 
 
 def target_of(analysis: Analysis) -> FloatArray:
@@ -158,10 +158,17 @@ class Finish:
                  t("step-finish-mics", count=len(state.mic_inputs))]  # fmt: skip
         if state.applied_state == "applied" and state.applied_undo is not None:
             undo = ctx.services.workspace.root / state.applied_undo
+            try:
+                console = read_undo(undo).ip
+            except (ValueError, OSError):
+                console = None
             lines += [
                 t("step-finish-scene"),
                 t("step-finish-listen"),
-                t("step-finish-undo-later", command=f"ctune undo {short_path(undo)}"),
+                t(
+                    "step-finish-undo-later",
+                    command=undo_command(ctx.services.workspace.root, undo, console),
+                ),
             ]
         elif state.applied_state == "reverted":
             lines += [t("step-finish-reverted"), t("step-finish-listen")]

@@ -67,7 +67,7 @@ def data() -> ReportData:
         ),
         places={"p1": "front rows, left"},
         advice=(Msg("apply-advice-side-delay", {"side": Msg("apply-advice-side-sub"), "ms": 2.5}),),
-        undo_file="venues/test/sessions/1/undo/1.json",
+        undo_command="ctune undo ~/ChurchTune/undo/undo_pkg_1.json",
         audit=(AuditRow("deep-cut", (3, 5), 400.0, -9.0),),
         sweep={"fs_hz": 48000, "sweep_s": 6.0},
         mic_count=4,
@@ -211,3 +211,9 @@ def test_after_the_check_and_the_undo_nothing_asks_to_undo_again(data, verdict):
     assert "the command is in" not in page  # there is no undo command to point to
     assert "Put the old values back" not in page
     assert "ctune undo" not in page
+
+
+def test_a_plan_that_stopped_midway_says_the_rest_was_not_written(data):
+    tr = Translator("en")
+    page = render_html(build_document(replace(data, changes_incomplete=True), tr), tr, "en")
+    assert "only what reached the console" in page

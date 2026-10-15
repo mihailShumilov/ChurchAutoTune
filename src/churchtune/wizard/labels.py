@@ -6,10 +6,12 @@ keys, so the interface shows "матриця 3" instead of "matrix 3".
 """
 
 import re
+import shlex
 from collections.abc import Mapping
 from pathlib import Path
 
 from churchtune.domain.snapshot import OutputKind, SignalRef, SourceKind
+from churchtune.storage.paths import DEFAULT_HOME
 from churchtune.wizard.protocol import ArgValue, Text
 from churchtune.wizard.ui import kebab, t
 
@@ -79,3 +81,25 @@ def short_path(path: Path) -> str:
         return "~/" + str(path.relative_to(Path.home()))
     except ValueError:
         return str(path)
+
+
+def undo_command(root: Path, undo_path: Path, console: str | None) -> str:
+    """The terminal command that puts an undo file's old values back, ready to paste.
+
+    It names the console (the wizard finds it by itself and stores no address) and the data
+    folder when it is not the default one; every part is quoted for the shell, the home folder
+    kept as ``~`` so the command stays short.
+    """
+    parts = ["ctune"]
+    if root.resolve() != DEFAULT_HOME.expanduser().resolve():
+        parts += ["--home", _shell_path(root)]
+    if console:
+        parts += ["--console", shlex.quote(console)]
+    return " ".join([*parts, "undo", _shell_path(undo_path)])
+
+
+def _shell_path(path: Path) -> str:
+    try:
+        return "~/" + shlex.quote(str(path.relative_to(Path.home())))
+    except ValueError:
+        return shlex.quote(str(path))

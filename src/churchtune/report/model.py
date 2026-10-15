@@ -138,7 +138,9 @@ class ReportData:
         alignment: The sub / tops junction, when it was measured apart.
         applied_state: "applied", "nothing" or "reverted"; None when the person never got there.
         changes: What was written.
-        undo_file: The undo file of the writes, as the shell can take it (``ctune undo``).
+        undo_command: The terminal command that puts the old values back, ready to paste.
+        changes_incomplete: The plan stopped before every write was sent; ``changes`` lists
+            what reached the console.
         verify: The check measurement's numbers and verdict.
         verify_analysis: The check measurement's analysis (same points).
         audit: Channel advice.
@@ -163,7 +165,8 @@ class ReportData:
     alignment: AlignmentResult | None = None
     applied_state: str | None = None
     changes: tuple[ChangeRow, ...] = ()
-    undo_file: str | None = None
+    undo_command: str | None = None
+    changes_incomplete: bool = False
     verify: VerifyResult | None = None
     verify_analysis: Analysis | None = None
     audit: tuple[AuditRow, ...] = ()
