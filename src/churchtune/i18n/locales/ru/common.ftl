@@ -78,7 +78,7 @@ alignment-polarity = { $where }: перевёрнута полярность
 signal-main-lr = Main LR
 
 # The self-check of the installed program
-selftest-start = Самопроверка ChurchTune { $version }: весь мастер проходит на встроенном в программу эмуляторе пульта и на имитации зала. Настоящий пульт и звуковая карта не используются, ничего не звучит. Это займёт не больше минуты.
+selftest-start = Самопроверка ChurchTune { $version }: весь мастер настройки проходит на встроенном в программу эмуляторе пульта и на имитации зала. Настоящий пульт и звуковая карта не используются, звук не воспроизводится. Это займёт не больше минуты.
 selftest-ok = ✓ { $what }
 selftest-failed = ✗ { $what }
 selftest-what-wizard = Мастер прошёл все шаги.
@@ -86,7 +86,12 @@ selftest-what-junction = Сабвуфер и основные колонки и�
 selftest-what-apply = Изменения записаны в эмулятор и проверены.
 selftest-what-verify = Проверочный замер сделан.
 selftest-what-report = Отчёт записан.
-selftest-error = Самопроверка остановилась с ошибкой ({ $error }).
-selftest-passed = Самопроверка пройдена за { $seconds } с. ChurchTune установлен правильно.
-selftest-not-passed = Самопроверка не пройдена. Пожалуйста, создайте issue на GitHub и вставьте туда этот вывод.
-selftest-kept = Файлы самопроверки лежат в { $path }
+selftest-error = Самопроверка прервалась из-за внутренней ошибки ({ $error }).
+selftest-passed = Самопроверка пройдена за { $seconds } с. ChurchTune установлен и работает. Связь с вашим пультом и звуковой картой мастер проверит позже.
+selftest-not-passed = Самопроверка не пройдена. Сообщите нам: откройте https://github.com/mihailShumilov/ChurchAutoTune/issues, нажмите «New issue» и вставьте весь текст из этого окна.
+selftest-kept = Файлы самопроверки сохранены в { $path }
+selftest-fail-wizard = Мастер не дошёл до конца.
+selftest-fail-junction = Сабвуфер и основные колонки не удалось измерить по отдельности.
+selftest-fail-apply = Изменения не записались в эмулятор или не прошли проверку после записи.
+selftest-fail-verify = Проверочный замер не сделан.
+selftest-fail-report = Отчёт не записан.

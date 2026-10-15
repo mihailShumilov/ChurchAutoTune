@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   self-check. `ctune selftest [--lang] [--keep]` runs the whole wizard on the built-in emulator and the simulated
   hall with a scripted volunteer, in dev-safe mode, and says whether the installation works. CI installs the built
   wheel with the script on macOS.
+- `--emulator` switches dev-safe mode on for the whole run, so the wizard's console search cannot list a real console
+  next to the emulator; its help text now offers it as the safe way to try the program.
 - README in English, Russian and Ukrainian, with the install, the first steps and the current status.
 - Session report (M6, ADR 0014): at the end of the wizard, `report.html` (one file, opens offline, light and dark
   theme, prints), `report.md` with its charts, `report.json` and a short text for a chat, in the interface language

@@ -7,6 +7,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from churchtune.audio.fake.hall import CALIBRATION_POINT, FakeHall
+from churchtune.errors import DevSafeViolation
+from churchtune.platform.devsafe import is_dev_safe
 from churchtune.wizard.protocol import Answer, Nav, Prompt, StepHeader, Text
 
 Rule = str | Answer | Callable[[Prompt], Answer]
@@ -16,6 +18,7 @@ Rule = str | Answer | Callable[[Prompt], Answer]
 class ScriptedPrompter:
     """Answers by the keys in a prompt; Enter (the default) for everything else.
 
+    The members ``mute``, ``headers``, ``meters`` and ``shown_keys`` serve the end-to-end tests.
     It also acts as the person in the hall: scratches the next microphone when asked, puts the
     microphones together for the calibration and on the named points for each round.
     """
@@ -28,6 +31,11 @@ class ScriptedPrompter:
     headers: list[StepHeader] = field(default_factory=list)
     prompts: list[Prompt] = field(default_factory=list)
     meters: list[Mapping[str, float]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # It types the confirmation words by itself: never outside the emulator and the simulator.
+        if not is_dev_safe():
+            raise DevSafeViolation("the scripted volunteer works only in dev-safe mode")
 
     def header(self, header: StepHeader) -> None:
         """Remember the step header."""
@@ -43,8 +51,9 @@ class ScriptedPrompter:
             if text.key == "step-points-place":
                 mic = text.args["mic"]
                 usb = mic.args["usb"] if isinstance(mic, Text) else None
-                if isinstance(usb, int | str):
-                    self.hall.place(int(usb), f"p{text.args['point']}")
+                if not isinstance(usb, int | str):
+                    raise TypeError(f"step-points-place without a microphone input: {mic!r}")
+                self.hall.place(int(usb), f"p{text.args['point']}")
             if text.key in ("step-mics-mute-channels", "step-mics-still-open") and self.mute:
                 for channel in str(text.args["channels"]).split(", "):
                     self.mute(int(channel))
@@ -66,7 +75,6 @@ class ScriptedPrompter:
 
     def progress(self, label: Text, done: int, total: int) -> None:
         """Progress is not shown."""
-        pass
 
     def meter(self, levels_dbfs: Mapping[str, float]) -> None:
         """Remember the meter readings."""

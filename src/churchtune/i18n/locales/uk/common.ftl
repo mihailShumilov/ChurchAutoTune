@@ -78,15 +78,20 @@ alignment-polarity = { $where }: перевернута полярність
 signal-main-lr = Main LR
 
 # The self-check of the installed program
-selftest-start = Самоперевірка ChurchTune { $version }: увесь майстер проходить на вбудованому в програму емуляторі пульта й на імітації залу. Справжній пульт і звукова карта не використовуються, нічого не звучить. Це займе не більше хвилини.
+selftest-start = Самоперевірка ChurchTune { $version }: увесь майстер налаштування проходить на вбудованому в програму емуляторі пульта й на імітації залу. Справжній пульт і звукова карта не використовуються, звук не відтворюється. Це займе не більше хвилини.
 selftest-ok = ✓ { $what }
 selftest-failed = ✗ { $what }
 selftest-what-wizard = Майстер пройшов усі кроки.
 selftest-what-junction = Сабвуфер і основні колонки виміряно окремо.
 selftest-what-apply = Зміни записано в емулятор і перевірено.
-selftest-what-verify = Контрольний замір зроблено.
+selftest-what-verify = Перевірний замір зроблено.
 selftest-what-report = Звіт записано.
-selftest-error = Самоперевірка зупинилася з помилкою ({ $error }).
-selftest-passed = Самоперевірку пройдено за { $seconds } с. ChurchTune встановлено правильно.
-selftest-not-passed = Самоперевірку не пройдено. Будь ласка, створіть issue на GitHub і вставте туди цей вивід.
-selftest-kept = Файли самоперевірки лежать у { $path }
+selftest-error = Самоперевірка перервалася через внутрішню помилку ({ $error }).
+selftest-passed = Самоперевірку пройдено за { $seconds } с. ChurchTune встановлено, і він працює. Зв'язок із вашим пультом і звуковою картою майстер перевірить пізніше.
+selftest-not-passed = Самоперевірку не пройдено. Повідомте нам: відкрийте https://github.com/mihailShumilov/ChurchAutoTune/issues, натисніть «New issue» і вставте весь текст із цього вікна.
+selftest-kept = Файли самоперевірки збережено в { $path }
+selftest-fail-wizard = Майстер не дійшов до кінця.
+selftest-fail-junction = Сабвуфер і основні колонки не вдалося виміряти окремо.
+selftest-fail-apply = Зміни не записалися в емулятор або не пройшли перевірку після запису.
+selftest-fail-verify = Перевірний замір не зроблено.
+selftest-fail-report = Звіт не записано.

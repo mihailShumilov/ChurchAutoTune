@@ -56,6 +56,7 @@ jobs:
       - run: uv build --wheel
       # The install script as a person runs it, but from the wheel just built and into a
       # throwaway tool folder; it ends with the self-check (emulator and simulated hall only).
+      # CTUNE_DEV_SAFE is set for the whole workflow; that selftest sets it by itself is a unit test.
       - name: scripts/install.sh
         run: |
           CHURCHTUNE_SOURCE="$(ls "$PWD"/dist/*.whl)" \

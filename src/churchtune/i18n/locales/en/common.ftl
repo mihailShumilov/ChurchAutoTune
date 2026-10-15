@@ -78,15 +78,20 @@ alignment-polarity = { $where }: polarity inverted
 signal-main-lr = Main LR
 
 # The self-check of the installed program
-selftest-start = Self-check of ChurchTune { $version }: the whole wizard runs on a console emulator built into the program and a simulated hall. No real console and no sound card are used, and nothing is played. It takes up to a minute.
+selftest-start = Self-check of ChurchTune { $version }: the whole setup wizard runs on a console emulator built into the program and a simulated hall. No real console and no sound card are used, and no sound is played. It takes up to a minute.
 selftest-ok = ✓ { $what }
 selftest-failed = ✗ { $what }
 selftest-what-wizard = The wizard went through every step.
 selftest-what-junction = The subwoofer and the main speakers were measured separately.
 selftest-what-apply = The changes were written to the emulator and checked.
-selftest-what-verify = The check measurement was made.
+selftest-what-verify = The second measurement (to check the result) was made.
 selftest-what-report = The report was written.
-selftest-error = The self-check stopped with an error ({ $error }).
-selftest-passed = Self-check passed in { $seconds } s. ChurchTune is installed correctly.
-selftest-not-passed = Self-check failed. Please open an issue on GitHub and paste this output.
-selftest-kept = The self-check files are in { $path }
+selftest-error = The self-check stopped because of an internal error ({ $error }).
+selftest-passed = Self-check passed in { $seconds } s. ChurchTune is installed and works. The connection to your console and sound card is checked later by the wizard.
+selftest-not-passed = Self-check failed. Please tell us: open https://github.com/mihailShumilov/ChurchAutoTune/issues, press “New issue” and paste all the text from this window.
+selftest-kept = The self-check files are kept in { $path }
+selftest-fail-wizard = The wizard did not reach the end.
+selftest-fail-junction = The subwoofer and the main speakers could not be measured separately.
+selftest-fail-apply = The changes were not written to the emulator, or failed the check after writing.
+selftest-fail-verify = The second measurement (to check the result) was not made.
+selftest-fail-report = The report was not written.
